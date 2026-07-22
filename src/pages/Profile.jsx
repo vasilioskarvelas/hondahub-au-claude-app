@@ -1,53 +1,70 @@
 import React from "react";
 import { base44 } from "@/api/base44Client";
-import { BadgeCheck, MapPin, Star, Settings, Shield, Heart, Rocket, Wrench } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
-import ProfileOffers from "@/components/ProfileOffers";
+import { Settings, MapPin, Save, LogOut } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import TierBadge from "@/components/identity/TierBadge";
+import { AccountTier } from "@/lib/registries";
 
 export default function Profile() {
   const [user, setUser] = React.useState(null);
-  const [listings, setListings] = React.useState([]);
+  const [trustScore, setTrustScore] = React.useState(null);
+  const [editing, setEditing] = React.useState(false);
+  const [form, setForm] = React.useState({});
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState(null);
   const navigate = useNavigate();
 
-  React.useEffect(() => {
-    base44.auth.me().then((u) => {
-      setUser(u);
-      const sellerName = u?.full_name || u?.email?.split("@")[0];
-      if (sellerName) {
-        base44.entities.Listing.filter({ seller_name: sellerName }, "-created_date", 20).then(setListings);
-      } else {
-        base44.entities.Listing.list("-created_date", 6).then(setListings);
-      }
-    }).catch(() => {
-      base44.entities.Listing.list("-created_date", 6).then(setListings);
-    });
-  }, []);
-
-  const [boosting, setBoosting] = React.useState(null);
-  const [profileTab, setProfileTab] = React.useState("listings");
-
-  const name = user?.full_name || user?.email?.split("@")[0] || "Honda Enthusiast";
-
-  const handleBoost = async (listingId) => {
-    if (window.self !== window.top) {
-      alert('Checkout is only available from the published app. Please open the app in a new tab to boost your listing.');
-      return;
-    }
-    setBoosting(listingId);
+  const load = async () => {
     try {
-      const res = await base44.functions.invoke('create-checkout-session', { listing_id: listingId, mode: 'boost' });
-      const checkoutUrl = res.data?.url || res.url;
-      if (!checkoutUrl) throw new Error('No checkout URL returned');
-      window.location.href = checkoutUrl;
-    } catch (err) {
-      alert('Could not start checkout. Please try again.');
+      const u = await base44.auth.me();
+      setUser(u);
+      setForm({
+        handle: u.handle || "",
+        display_name: u.display_name || u.full_name || "",
+        bio: u.bio || "",
+        location_general: u.location_general || "",
+        phone: u.phone || "",
+      });
+      // Lazy-init TrustScore (UserRegistered → TrustScoreService.initialize).
+      const res = await base44.functions.invoke("trust-score", { action: "init" });
+      setTrustScore(res.data?.trust_score || null);
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+  React.useEffect(() => { load(); }, []);
+
+  const handleSave = async () => {
+    setSaving(true); setError(null);
+    try {
+      const res = await base44.functions.invoke("user-profile", { action: "update", ...form });
+      if (res.data?.ok) {
+        setUser(res.data.user);
+        setEditing(false);
+      } else {
+        setError(res.data?.error || "Save failed");
+      }
+    } catch (e) {
+      setError(e.response?.data?.error || e.message);
     } finally {
-      setBoosting(null);
+      setSaving(false);
     }
   };
 
+  const handleLogout = async () => {
+    await base44.auth.logout("/");
+  };
+
+  if (!user) {
+    return <div className="flex h-64 items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-secondary border-t-primary" /></div>;
+  }
+
+  const tier = trustScore?.current_tier || user.account_tier || AccountTier.NEW_MEMBER;
+  const score = trustScore?.current_score ?? 0;
+  const name = user.display_name || user.handle || user.full_name || user.email?.split("@")[0] || "Honda Enthusiast";
+
   return (
-    <div className="space-y-5">
+    <div className="mx-auto max-w-lg space-y-5">
       <div className="overflow-hidden rounded-2xl border border-border bg-card">
         <div className="carbon-bg h-24 bg-secondary" />
         <div className="px-5 pb-5">
@@ -56,85 +73,74 @@ export default function Profile() {
               {name.charAt(0).toUpperCase()}
             </div>
             <div className="flex-1 pb-1">
-              <div className="flex items-center gap-1.5">
-                <h1 className="text-xl font-black">{name}</h1>
-                <BadgeCheck className="h-5 w-5 text-primary" />
-              </div>
-              <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" /> Australia</span>
-                <span className="inline-flex items-center gap-1 text-amber-400"><Star className="h-3 w-3" /> 5.0</span>
+              <h1 className="text-xl font-black">{name}</h1>
+              {user.handle && <p className="text-xs text-muted-foreground">@{user.handle}</p>}
+              <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                <TierBadge tier={tier} score={score} />
+                {user.location_general && (
+                  <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><MapPin className="h-3 w-3" /> {user.location_general}</span>
+                )}
               </div>
             </div>
-            <button onClick={() => navigate('/settings')} className="rounded-xl border border-border p-2 text-muted-foreground hover:text-foreground"><Settings className="h-4 w-4" /></button>
+            <button onClick={() => setEditing(!editing)} className="mb-1 rounded-xl border border-border p-2 text-muted-foreground hover:text-foreground"><Settings className="h-4 w-4" /></button>
           </div>
-          <div className="mt-4 flex gap-6 text-sm">
-            <Stat label="Listings" value={listings.length} />
-            <Stat label="Followers" value={0} />
-            <Stat label="Sales" value={0} />
-          </div>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Link to="/garage" className="inline-flex items-center gap-1.5 rounded-xl border border-border px-4 py-2 text-sm font-medium">
-              <Wrench className="h-4 w-4" /> My Garage
-            </Link>
-            <button className="inline-flex items-center gap-1.5 rounded-xl border border-border px-4 py-2 text-sm font-medium">
-              <Heart className="h-4 w-4" /> Saved
-            </button>
-            <button className="inline-flex items-center gap-1.5 rounded-xl border border-border px-4 py-2 text-sm font-medium">
-              <Shield className="h-4 w-4" /> Get Verified
-            </button>
-          </div>
+          {user.bio && !editing && <p className="mt-4 text-sm text-muted-foreground">{user.bio}</p>}
         </div>
       </div>
 
-      <div>
-        <div className="mb-3 flex gap-2">
-          <button onClick={() => setProfileTab("listings")} className={`flex-1 rounded-xl border py-2.5 text-sm font-bold transition ${profileTab === "listings" ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"}`}>
-            My Listings
-          </button>
-          <button onClick={() => setProfileTab("offers")} className={`flex-1 rounded-xl border py-2.5 text-sm font-bold transition ${profileTab === "offers" ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"}`}>
-            Offers
-          </button>
+      {editing && (
+        <div className="space-y-4 rounded-2xl border border-border bg-card p-5">
+          <h2 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">Edit Profile</h2>
+          {error && <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}
+          <Field label="Handle" value={form.handle} onChange={(v) => setForm({ ...form, handle: v })} hint="Public username. 3-20 chars, alphanumeric/underscore. Must be unique." />
+          <Field label="Display Name" value={form.display_name} onChange={(v) => setForm({ ...form, display_name: v })} />
+          <Field label="Bio" value={form.bio} onChange={(v) => setForm({ ...form, bio: v })} multiline hint="Max 500 characters." />
+          <Field label="Location (city/region)" value={form.location_general} onChange={(v) => setForm({ ...form, location_general: v })} />
+          <Field label="Phone" value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} />
+          <div className="flex gap-2">
+            <button onClick={handleSave} disabled={saving} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground disabled:opacity-50">
+              <Save className="h-4 w-4" /> {saving ? "Saving..." : "Save"}
+            </button>
+            <button onClick={() => setEditing(false)} className="rounded-xl border border-border px-4 py-2 text-sm font-medium">Cancel</button>
+          </div>
         </div>
+      )}
 
-        {profileTab === "offers" ? (
-          <ProfileOffers />
-        ) : listings.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">
-            No listings yet. <Link to="/create" className="text-primary font-semibold">Create one →</Link>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {listings.map((l) => (
-              <div key={l.id} className="overflow-hidden rounded-xl border border-border bg-card">
-                <Link to={`/listing/${l.id}`}>
-                  <div className="relative aspect-square bg-secondary">
-                    {l.photos?.[0] && <img src={l.photos[0]} alt="" className="h-full w-full object-cover" />}
-                    {l.featured && <span className="absolute left-1.5 top-1.5 rounded-md bg-primary px-1.5 py-0.5 text-[9px] font-bold text-white">FEATURED</span>}
-                  </div>
-                  <div className="p-2">
-                    <div className="truncate text-xs font-semibold">{l.title}</div>
-                    <div className="text-sm font-black text-primary">${l.price?.toLocaleString()}</div>
-                  </div>
-                </Link>
-                {!l.featured && (
-                  <button onClick={() => handleBoost(l.id)} className="flex w-full items-center justify-center gap-1 border-t border-border py-1.5 text-[11px] font-bold text-primary hover:bg-primary/10">
-                    <Rocket className="h-3 w-3" /> Boost $10
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
+      <div className="rounded-2xl border border-border bg-card p-5">
+        <h2 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">Account</h2>
+        <dl className="mt-3 space-y-2 text-sm">
+          <Row label="Email" value={user.email} />
+          <Row label="Account Status" value={user.account_status || "active"} />
+          <Row label="Trust Score" value={`${score} · ${tier}`} />
+          <Row label="Role" value={user.role} />
+        </dl>
+        <button onClick={handleLogout} className="mt-4 inline-flex items-center gap-1.5 rounded-xl border border-border px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground">
+          <LogOut className="h-4 w-4" /> Sign out
+        </button>
       </div>
     </div>
   );
 }
 
-function Stat({ label, value }) {
+function Field({ label, value, onChange, multiline, hint }) {
   return (
-    <div>
-      <div className="text-lg font-black">{value}</div>
-      <div className="text-xs text-muted-foreground">{label}</div>
+    <label className="block">
+      <span className="text-xs font-semibold text-muted-foreground">{label}</span>
+      {multiline ? (
+        <textarea value={value || ""} onChange={(e) => onChange(e.target.value)} maxLength={500} rows={3} className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm" />
+      ) : (
+        <input value={value || ""} onChange={(e) => onChange(e.target.value)} className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm" />
+      )}
+      {hint && <span className="mt-1 block text-[11px] text-muted-foreground">{hint}</span>}
+    </label>
+  );
+}
+
+function Row({ label, value }) {
+  return (
+    <div className="flex justify-between gap-4">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="font-medium text-right">{value || "—"}</dd>
     </div>
   );
 }

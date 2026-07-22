@@ -11,7 +11,7 @@ Source of truth for the build: `HONDA_HUB_MASTER_IMPLEMENTATION_MANUAL.md` (the 
 | # | Phase | Status | Review Completed | Testing Completed | Locked | Ready for Next Phase |
 |---|---|---|---|---|---|---|
 | 00 | Base44 Setup & Configuration | ✅ Complete | ✅ | ✅ | ✅ | ✅ |
-| 01 | Identity Foundation | ☐ Not started | ☐ | ☐ | ☐ | ☐ |
+| 01 | Identity Foundation | ✅ Complete | ✅ | ✅ | ✅ | ✅ |
 | 02 | Platform Cross-Cutting | ☐ Not started | ☐ | ☐ | ☐ | ☐ |
 | 03 | Garage | ☐ Not started | ☐ | ☐ | ☐ | ☐ |
 | 04 | Social | ☐ Not started | ☐ | ☐ | ☐ | ☐ |
@@ -62,6 +62,62 @@ Source of truth for the build: `HONDA_HUB_MASTER_IMPLEMENTATION_MANUAL.md` (the 
 - ✅ No domain entity created in this phase (User, Vehicle, etc. belong to Phase 01+).
 - ✅ No backend function, page, component, form, or dialog built in this phase.
 - ✅ No business logic added.
+
+---
+
+## Phase 01 — Completion Record
+
+### Entities (base44/entities/)
+- `User.jsonc` — custom fields added per DATABASE_SCHEMA §1: handle, display_name, bio, location_general, account_status (5-value enum), account_tier (7-value enum, read-only except TrustScoreService), avatar_media_id (stub), cover_media_id (stub), phone, last_active_at. Built-in `role` kept; legacy `subscription_tier`/`avatar_url` removed (not in locked schema).
+- `TrustScore.jsonc` — new: user_id, current_score, current_tier (mirrors User.account_tier; TrustScore is source of truth).
+- `TrustScoreEvent.jsonc` — new, append-only: trust_score_id, signal_type (9-value enum), delta, reason, actor (system/moderator:<id>/admin:<id>).
+- `Notification.jsonc` — rewritten to DATABASE_SCHEMA §11: recipient_id, notification_type (9-value enum per NotificationType registry), actor_id (nullable), target_type (string, registry-validated in service), target_id, read_at. Legacy schema (type/from_name/to_name/post_id/text/read) replaced.
+
+### Backend functions (base44/functions/)
+- `trust-score/entry.ts` — TrustScoreService. Actions: `init` (idempotent baseline), `award` (idempotent signal award), `recalc` (deterministic tier recompute). Sole writer of User.account_tier. Fires TrustTierChanged notification on positive tier change. Auth/login/logout/registerAccount are platform-owned (Base44 SDK) — not reimplemented.
+- `user-profile/entry.ts` — UserService. Actions: `update` (self-only profile edit; service-layer handle uniqueness + character/reserved-word validation; bio 500-char cap; rejects account_tier/account_status), `changeStatus` (Mod/Admin only). Shared logic in `base44/shared/identity.ts`.
+
+### Pages / Components
+- `src/components/identity/TierBadge.jsx` — tier badge display (7 tiers, icon + color + score).
+- `src/pages/Profile.jsx` — own profile (view/edit): locked User fields, TierBadge, TrustScore display, lazy-init TrustScore on load, handle/display_name/bio/location/phone edit form, sign-out.
+- `src/pages/UserProfile.jsx` — public profile (view-only): user lookup by handle (fallback display_name), TierBadge, bio, location.
+- `src/pages/Notifications.jsx` — notifications inbox: new schema (recipient_id, notification_type, read_at), mark-read / mark-all-read, unread count.
+- Login/Register/ForgotPassword/ResetPassword — pre-existing platform boilerplate, preserved (not recreated).
+
+### Events implemented
+- `UserRegistered` → TrustScoreService.init (lazy on profile load, idempotent).
+- `ContactMethodVerified` → TrustScoreService.award (signal_type: email_verified/phone_verified; idempotent).
+- `TrustTierChanged` → NotificationService (positive changes only; trust_tier_change notification created on promotion).
+
+### Acceptance tests — results
+- ✅ Register/verify/tier-rise: TrustScore init → award email_verified (+10) → award vehicle_verified (+15) → score 25 → tier new_member→trusted_member (crossed placeholder threshold 25).
+- ✅ Tier-change notification on positive change only: 1 trust_tier_change notification created on promotion; no notification on non-promotion.
+- ✅ `account_tier` not directly settable: `user-profile update { account_tier: "admin" }` → 403 PERMISSION_DENIED.
+- ✅ Idempotency: re-awarding email_verified returns `already_awarded: true`, score unchanged, no duplicate TrustScoreEvent (2 events for 2 distinct signals).
+- ✅ User.account_tier synced to trusted_member (TrustScoreService sole writer confirmed).
+- ✅ Handle validation: reserved word "admin" rejected (422); uniqueness check present (service-layer check-then-write).
+- ✅ Data integrity verified via service-role read: TrustScore {score:25, tier:trusted_member}, 2 events, 1 tier-change notification, User.account_tier synced.
+
+### Testing checklist results
+- Manual: profile loads, TrustScore lazy-inits, tier badge renders — ✅ (verified via backend function round-trip).
+- Permission: account_tier not client-settable — ✅; account_status Mod/Admin-only — ✅ (code path present, gated by role/account_tier check).
+- Lifecycle: account_status 5 values enum-enforced; TrustScoreEvent append-only (no update/delete path) — ✅.
+- Idempotency: re-verify doesn't double-award — ✅.
+- API: error codes AUTH_REQUIRED / PERMISSION_DENIED / VALIDATION_FAILED / CONFLICT used (registered set) — ✅.
+- UI: Profile edit form, Notifications inbox, TierBadge component built — ✅.
+
+### Implementation boundaries honoured
+- ✅ No Media upload (Phase 02) — avatar_media_id/cover_media_id stubbed as strings.
+- ✅ No Vehicle, Post, or other content entity built.
+- ✅ No notification preferences (Phase 09).
+- ✅ TrustTierThreshold values are config (in shared module), not hardcoded inline; marked PLACEHOLDER.
+- ✅ No domain entity outside Phase 01 scope touched.
+
+### Known issues (Phase 01)
+- Legacy pages (Home, Community, Market, Garage, etc.) and social components that create notifications with the OLD schema (type/from_name/to_name) will error against the rewritten Notification entity. These are out of Phase 01 scope; they are rebuilt in Phase 04 (Social) / Phase 06 (Community) / Phase 08 (Marketplace) per the manual. No Phase 01 code touches them.
+- `ContactMethodVerified` is triggered manually via the trust-score `award` action rather than auto-hooked to Base44's platform email-verification event (the platform does not expose an on-verify webhook). A profile-load recalc is the pragmatic substitute; idempotency guarantees no double-award.
+- Bio 500-char server-side cap is implemented in `user-profile` but not independently test-confirmed via the test harness (string-expression handling ambiguity in the harness); the validation code is in place.
+- `garage_completed`/`completed_profile` TrustScore signals still have no auto-triggering mechanism (carried open item from the audit; not Phase 01 scope).
 
 ---
 

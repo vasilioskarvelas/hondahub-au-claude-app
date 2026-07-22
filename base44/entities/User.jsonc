@@ -4,26 +4,70 @@
   "properties": {
     "role": {
       "type": "string",
-      "description": "The role of the user in the app",
+      "description": "Platform role (admin/user) \u2014 built-in, controls admin-only operations. Distinct from account_tier (ADR-040).",
       "enum": [
         "admin",
         "user"
       ]
     },
-    "subscription_tier": {
+    "handle": {
       "type": "string",
-      "enum": [
-        "free",
-        "pro",
-        "dealer"
-      ],
-      "default": "free"
+      "description": "Public username/URL slug. Unique (service-layer enforced). Mutable but rate-limited; moderation flag on frequent changes."
+    },
+    "display_name": {
+      "type": "string",
+      "description": "Display name. Defaults to handle initially."
     },
     "bio": {
-      "type": "string"
+      "type": "string",
+      "description": "Profile bio. Max 500 chars (enforced at validation)."
     },
-    "avatar_url": {
-      "type": "string"
+    "location_general": {
+      "type": "string",
+      "description": "City/region only. No precise address collected on the User entity."
+    },
+    "account_status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "suspended",
+        "banned",
+        "deactivated_by_user",
+        "pending_deletion"
+      ],
+      "default": "active",
+      "description": "Account lifecycle state. Changes audit-logged with actor + reason."
+    },
+    "account_tier": {
+      "type": "string",
+      "enum": [
+        "guest",
+        "new_member",
+        "trusted_member",
+        "verified_member",
+        "business_verified",
+        "moderator",
+        "admin"
+      ],
+      "default": "new_member",
+      "description": "Read-only from every caller except TrustScoreService. Derived from TrustScore (source of truth); User is the read cache."
+    },
+    "avatar_media_id": {
+      "type": "string",
+      "description": "Stubbed \u2014 Media entity built in Phase 02. Selector pointer into the user's own Media."
+    },
+    "cover_media_id": {
+      "type": "string",
+      "description": "Stubbed \u2014 Media entity built in Phase 02."
+    },
+    "phone": {
+      "type": "string",
+      "description": "Phone number. Verification status tracked separately by the platform."
+    },
+    "last_active_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Used for account-age and engagement signals feeding TrustScore."
     }
   },
   "required": [

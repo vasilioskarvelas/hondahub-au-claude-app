@@ -1,0 +1,32 @@
+{
+  "name": "TrustScore",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string",
+      "description": "FK\u2192User. 1:1 with User. TrustScore is the source of truth for account_tier."
+    },
+    "current_score": {
+      "type": "number",
+      "default": 0,
+      "description": "Additive score (0\u2013100 placeholder scale). Recalculated on every qualifying TrustScoreEvent."
+    },
+    "current_tier": {
+      "type": "string",
+      "enum": [
+        "guest",
+        "new_member",
+        "trusted_member",
+        "verified_member",
+        "business_verified",
+        "moderator",
+        "admin"
+      ],
+      "default": "new_member",
+      "description": "Mirrors User.account_tier. Moderator/Admin are role-assigned, not score-derived."
+    }
+  },
+  "required": [
+    "user_id"
+  ]
+}

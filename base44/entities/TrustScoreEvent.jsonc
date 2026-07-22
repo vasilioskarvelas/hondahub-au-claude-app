@@ -1,0 +1,44 @@
+{
+  "name": "TrustScoreEvent",
+  "type": "object",
+  "properties": {
+    "trust_score_id": {
+      "type": "string",
+      "description": "FK\u2192TrustScore."
+    },
+    "signal_type": {
+      "type": "string",
+      "enum": [
+        "email_verified",
+        "phone_verified",
+        "garage_completed",
+        "vehicle_verified",
+        "quality_post",
+        "marketplace_success",
+        "report_received",
+        "moderator_action",
+        "business_verified"
+      ],
+      "description": "Fixed enum \u2014 keeps the scoring model auditable and prevents silent drift."
+    },
+    "delta": {
+      "type": "number",
+      "description": "Score delta. Can be negative (e.g. report_received with upheld outcome, moderator_action)."
+    },
+    "reason": {
+      "type": "string",
+      "description": "Human-readable, shown to the user on request. Required."
+    },
+    "actor": {
+      "type": "string",
+      "description": "system | moderator:<id> | admin:<id>. Never AI directly."
+    }
+  },
+  "required": [
+    "trust_score_id",
+    "signal_type",
+    "delta",
+    "reason",
+    "actor"
+  ]
+}

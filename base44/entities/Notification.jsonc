@@ -2,39 +2,45 @@
   "name": "Notification",
   "type": "object",
   "properties": {
-    "type": {
+    "recipient_id": {
+      "type": "string",
+      "description": "FK\u2192User. The user who receives this notification."
+    },
+    "notification_type": {
       "type": "string",
       "enum": [
-        "like",
-        "comment",
-        "reply",
-        "follow",
+        "new_follower",
+        "new_comment",
+        "new_like",
         "mention",
-        "story_reaction",
-        "marketplace_message"
+        "business_tag",
+        "event_reminder",
+        "moderation_outcome",
+        "report_update",
+        "trust_tier_change"
       ],
-      "default": "like"
+      "description": "Validated against the NotificationType registry. Open to registry-controlled growth \u2014 every value used must be added to the registry first, never accepted as an arbitrary string."
     },
-    "from_name": {
-      "type": "string"
+    "actor_id": {
+      "type": "string",
+      "description": "FK\u2192User, nullable. Who caused it (null for system-generated notifications, e.g. trust_tier_change)."
     },
-    "to_name": {
-      "type": "string"
+    "target_type": {
+      "type": "string",
+      "description": "Polymorphic target type, validated against the ReferenceTypes registry in service code (not a DB enum). Nullable."
     },
-    "post_id": {
-      "type": "string"
+    "target_id": {
+      "type": "string",
+      "description": "Polymorphic target ID. Nullable."
     },
-    "text": {
-      "type": "string"
-    },
-    "read": {
-      "type": "boolean",
-      "default": false
+    "read_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Null = unread."
     }
   },
   "required": [
-    "type",
-    "from_name",
-    "to_name"
+    "recipient_id",
+    "notification_type"
   ]
 }
