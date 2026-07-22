@@ -2,7 +2,7 @@
   "name": "ModerationAction",
   "type": "object",
   "properties": {
-    "case_id": {
+    "moderation_case_id": {
       "type": "string",
       "description": "FK\u2192ModerationCase."
     },
@@ -19,33 +19,34 @@
         "content_restored",
         "other"
       ],
-      "description": "Validated against the ModerationActionType registry. AI may never create a row here \u2014 enforced structurally."
-    },
-    "actor_id": {
-      "type": "string",
-      "description": "FK\u2192User (the mod/admin who applied the action). Mirrors created_by_id; explicit."
+      "description": "ModerationActionType registry. AI may NEVER create a row here \u2014 enforced structurally, not just by convention. Append-only: no update or delete path exists, ever."
     },
     "target_type": {
       "type": "string",
-      "description": "Polymorphic target the action was applied to."
+      "description": "What was actually acted upon \u2014 usually the case's own target, but may be a specific piece of content within a broader case."
     },
     "target_id": {
       "type": "string"
     },
+    "actor": {
+      "type": "string",
+      "description": "system | moderator:<id> | admin:<id> \u2014 same pattern as TrustScoreEvent.actor. `system` means a human pre-approved this exact automated rule; never an AI live judgment call."
+    },
     "reason": {
       "type": "string",
-      "description": "Human-readable reason for the action."
+      "description": "Human-readable reason. Required."
     },
     "appeal_status": {
       "type": "string",
       "enum": [
         "none",
-        "pending",
-        "approved",
-        "rejected"
+        "requested",
+        "under_review",
+        "upheld",
+        "overturned"
       ],
       "default": "none",
-      "description": "Appeal lifecycle. none \u2192 pending \u2192 approved/rejected. A reversal is always a NEW ModerationAction row (reversal_of_action_id), never an edit."
+      "description": "Appeal lifecycle: none \u2192 requested \u2192 under_review \u2192 upheld/overturned. A reversal is always a NEW ModerationAction row, never an edit to the original."
     },
     "appealed_at": {
       "type": "string",
@@ -57,16 +58,13 @@
     },
     "appeal_resolved_by": {
       "type": "string",
-      "description": "FK\u2192User (admin who resolved the appeal)."
-    },
-    "reversal_of_action_id": {
-      "type": "string",
-      "description": "FK\u2192ModerationAction. Set when this action reverses a prior one. Always a new row \u2014 the original is never edited."
+      "description": "FK\u2192User (Admin). Set when an Admin resolves the appeal. Appeals are reviewed at a higher bar than the original action."
     }
   },
   "required": [
-    "case_id",
+    "moderation_case_id",
     "action_type",
+    "actor",
     "reason"
   ]
 }

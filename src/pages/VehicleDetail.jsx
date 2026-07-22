@@ -11,6 +11,7 @@ import ModificationForm from "@/components/garage/ModificationForm";
 import MaintenanceForm from "@/components/garage/MaintenanceForm";
 import PerformanceForm from "@/components/garage/PerformanceForm";
 import TimelineEntryForm from "@/components/garage/TimelineEntryForm";
+import { ReportButton } from "@/components/moderation/ReportDialog";
 
 const TABS = ["specs", "mods", "timeline", "maintenance", "performance"];
 
@@ -110,6 +111,14 @@ export default function VehicleDetail() {
             <p className="mt-0.5 text-xs text-muted-foreground">{v.chassis_code}{v.chassis_code && v.engine_code && " · "}{v.engine_code}</p>
           )}
           {v.build_description && <p className="mt-2 text-sm text-muted-foreground">{v.build_description}</p>}
+
+          {!isOwner && (
+            <div className="mt-3">
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                <ReportButton targetType="vehicle" targetId={v.id} /> Report this vehicle
+              </span>
+            </div>
+          )}
 
           {isOwner && (
             <div className="mt-3 flex flex-wrap gap-2">

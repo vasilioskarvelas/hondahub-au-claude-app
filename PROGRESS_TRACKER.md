@@ -15,7 +15,7 @@ Source of truth for the build: `HONDA_HUB_MASTER_IMPLEMENTATION_MANUAL.md` (the 
 | 02 | Platform Cross-Cutting | ✅ Complete | ✅ | ✅ | ✅ | ✅ |
 | 03 | Garage | ✅ Complete | ✅ | ✅ | ✅ | ✅ |
 | 04 | Social | ✅ Complete | ✅ | ✅ | ✅ | ✅ |
-| 05 | Moderation & Governance | ☐ Not started | ☐ | ☐ | ☐ | ☐ |
+| 05 | Moderation & Governance | ✅ Built & tested | ☐ | ✅ | ☐ | ☐ |
 | 06 | Community | ☐ Not started | ☐ | ☐ | ☐ | ☐ |
 | 07 | Business | ☐ Not started | ☐ | ☐ | ☐ | ☐ |
 | 08 | Marketplace | ☐ Not started | ☐ | ☐ | ☐ | ☐ |
@@ -198,7 +198,7 @@ Items the architecture flagged as "confirm before finalizing." Findings recorded
 
 | Date | Phase | Note |
 |---|---|---|
-| 2026-07-22 | 00 | Registries file (`src/lib/registries.js`) verified to match the manual exactly — all 8 registries present with exact values; `TrustTierThreshold` values marked PLACEHOLDER per spec. |
+| 2026-07-23 | 05 | Phase 05 (Moderation & Governance) built & backend-tested against the self-contained Phase 05 Architecture Pack. Five entities reconciled to the pack exactly (Report: reason→category, details→description, case_id→moderation_case_id, dropped resolved_at/resolved_by; ModerationCase: priority urgent→critical, severity serious→severe, added ai_priority_score, dropped resolved_by/escalated_at; ModerationCaseNote: case_id→moderation_case_id, note→body; ModerationAction: case_id→moderation_case_id, actor_id→actor string, appeal enum→none/requested/under_review/upheld/overturned, dropped reversal_of_action_id; AuditLog: added actor_type, details→context). ModerationService + AuditLogService implemented; applyAction delegates to content-moderation (Single-Writer preserved); AI-originated applyAction hard-rejected (MODERATION_ACTION_REQUIRES_HUMAN). VehicleVerified consumer wiring confirmed in VehicleService (trust signal + notification + audit log). UI built: Report Dialog (embedded on Post/Comment/Vehicle/User), Moderator Queue, Case Detail, Audit Log Browser. Verified via backend function tests: fileReport, DUPLICATE_OPEN_REPORT, consolidateReportsIntoCase, applyAction (actor=admin:<id>), getCase, resolveCase (resolved_upheld). Appeal ownership gate verified (PERMISSION_DENIED). Review/Lock steps (02-Review.md / 03-Lock.md) remain the user's gated steps. |
 | 2026-07-22 | 00 | Secrets management confirmed functional via existing `STRIPE_PUBLISHABLE_KEY`. No new secret created — Phase 00 requires no real secret. |
 | 2026-07-22 | 00 | Scheduled jobs confirmed to exist and run (`auto-sweep`, `daily-executive-report`, `test-runner`). Exact frequency limits deferred to Phase 11 confirmation. |
 

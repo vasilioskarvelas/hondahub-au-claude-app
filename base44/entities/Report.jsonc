@@ -19,19 +19,30 @@
         "listing",
         "marketplace_message"
       ],
-      "description": "The reported content type. Validated against the Report target subset of ReferenceTypes."
+      "description": "Reportable subset of ReferenceTypes (DATABASE_SCHEMA \u00a722). REPORT and MODERATION_CASE exist in the platform-wide registry but are NOT reportable targets."
     },
     "target_id": {
       "type": "string",
-      "description": "FK\u2192 the backing entity per target_type."
+      "description": "FK\u2192 the backing entity per target_type. Validated via ReferenceResolverService."
     },
-    "reason": {
+    "category": {
       "type": "string",
-      "description": "Free-text reason from the reporter at MVP."
+      "enum": [
+        "spam",
+        "scam",
+        "harassment",
+        "hate_speech",
+        "illegal",
+        "copyright",
+        "fake_listing",
+        "dangerous_behaviour",
+        "other"
+      ],
+      "description": "Fixed report category enum (\u00a72.1). Reused as-is; no new categories."
     },
-    "details": {
+    "description": {
       "type": "string",
-      "description": "Optional additional context from the reporter."
+      "description": "Reporter's optional free-text account of the issue."
     },
     "status": {
       "type": "string",
@@ -44,23 +55,15 @@
       "default": "open",
       "description": "open = newly filed. consolidated = folded into a ModerationCase. resolved = actioned. dismissed = no action."
     },
-    "case_id": {
+    "moderation_case_id": {
       "type": "string",
-      "description": "FK\u2192ModerationCase. Set when the report is consolidated into a case."
-    },
-    "resolved_at": {
-      "type": "string",
-      "format": "date-time"
-    },
-    "resolved_by": {
-      "type": "string",
-      "description": "FK\u2192User (mod/admin who resolved the report)."
+      "description": "FK\u2192ModerationCase. Set when this report is consolidated into a case."
     }
   },
   "required": [
     "reporter_id",
     "target_type",
     "target_id",
-    "reason"
+    "category"
   ]
 }

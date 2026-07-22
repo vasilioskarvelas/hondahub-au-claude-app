@@ -35,6 +35,9 @@ import ResetPassword from '@/pages/ResetPassword';
 import Feed from '@/pages/Feed';
 import PostDetail from '@/pages/PostDetail';
 import Connections from '@/pages/Connections';
+import ModerationQueue from '@/pages/ModerationQueue';
+import CaseDetail from '@/pages/CaseDetail';
+import AuditLogBrowser from '@/pages/AuditLogBrowser';
 
 import Notifications from '@/pages/Notifications';
 import UserProfile from '@/pages/UserProfile';
@@ -92,6 +95,9 @@ const AuthenticatedApp = () => {
         <Route path="/post/:id" element={<PostDetail />} />
         <Route path="/connections" element={<Connections />} />
         <Route path="/connections/:name" element={<Connections />} />
+        <Route path="/moderation" element={<ModerationQueue />} />
+        <Route path="/moderation/case/:id" element={<CaseDetail />} />
+        <Route path="/admin/audit" element={<AuditLogBrowser />} />
 
         <Route path="/notifications" element={<Notifications />} />
         <Route path="/user/:name" element={<UserProfile />} />

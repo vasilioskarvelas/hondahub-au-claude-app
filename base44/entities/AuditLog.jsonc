@@ -2,6 +2,20 @@
   "name": "AuditLog",
   "type": "object",
   "properties": {
+    "actor_type": {
+      "type": "string",
+      "enum": [
+        "user",
+        "moderator",
+        "admin",
+        "system"
+      ],
+      "description": "The kind of actor that performed the action. `system` entries carry actor_id = null."
+    },
+    "actor_id": {
+      "type": "string",
+      "description": "FK\u2192User. Null when actor_type = system."
+    },
     "action": {
       "type": "string",
       "enum": [
@@ -11,25 +25,24 @@
         "trust_tier_overridden",
         "financial_change_approved"
       ],
-      "description": "Validated against the AuditActionType registry. Never a free-text string. Append-only \u2014 no update or delete path."
-    },
-    "actor_id": {
-      "type": "string",
-      "description": "FK\u2192User. Mirrors created_by_id. Nullable for system-generated entries."
+      "description": "AuditActionType registry \u2014 never a free-text string. Append-only: no update or delete path, ever."
     },
     "target_type": {
       "type": "string",
-      "description": "Polymorphic target, validated against ReferenceTypes. Nullable."
+      "description": "Polymorphic target, validated against ReferenceTypes."
     },
     "target_id": {
       "type": "string"
     },
-    "details": {
+    "context": {
       "type": "string",
-      "description": "Human-readable context. Free text."
+      "description": "Additional structured detail (e.g. old/new value for a status change). Nullable."
     }
   },
   "required": [
-    "action"
+    "actor_type",
+    "action",
+    "target_type",
+    "target_id"
   ]
 }

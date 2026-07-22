@@ -5,7 +5,7 @@
  * Also writes: AuditLog (via AuditLogService shared delegate).
  * Never writes: Post, Comment, Vehicle, User — applyAction calls the
  *   content-moderation delegate (the owning service's moderation-write path),
- *   never the target entity table directly.
+ *   never the target entity table directly (Single-Writer Rule, §3.5).
  *
  * Public methods (actions):
  *   fileReport, consolidateReportsIntoCase, createCase, assignCase, addCaseNote,
@@ -13,7 +13,7 @@
  *   resolveAppeal, authorisePrivateMessageAccess,
  *   listQueue, getCase, viewReportedContent, listAuditLog.
  *
- * Hard rules enforced:
+ * Hard rules enforced (§6):
  *  - AI may NEVER create a ModerationAction. applyAction requires an authenticated
  *    human moderator/admin; an AI-originated call (no user identity / non-mod) is
  *    hard-rejected with MODERATION_ACTION_REQUIRES_HUMAN + an alert logged.
@@ -23,25 +23,28 @@
  *    effect on fileReport().
  *  - Unique on (reporter_id, target_type, target_id) while Report.status=open.
  *  - ModerationAction is append-only — no update or delete path exists, ever.
+ *    A reversal is a NEW row, never an edit.
  *  - ModerationCaseNote is append-only — never edited or deleted.
  *  - resolveAppeal (and escalated-case resolution) is Admin-only.
  *  - A Moderator can view otherwise-restricted content only via viewReportedContent
  *    while an active Report references it.
  *
- * Events (per EVENT_CATALOG.md):
- *   ContentReported       → report_update notification to the reporter (filed).
- *   ModerationActionApplied → moderation_outcome notification to the content author.
- *   BusinessVerified      → consumer wiring (trust signal + notification) — Phase 07.
- *   VehicleVerified        → approval audit-log entry added here (Phase 05 wiring).
+ * Events (per the Phase 05 Architecture Pack §5):
+ *   ContentReported        → report_update notification to the reporter (filed).
+ *   ModerationActionApplied → moderation_outcome notification to the content author
+ *                             (+ audit-log mirror for listing_removed).
+ *   VehicleVerified         → consumer wiring lives in VehicleService (trust signal
+ *                             + notification + audit log); Phase 05 completed that wiring.
+ *   BusinessVerified        → no trigger until Phase 07; consumer (business_verified
+ *                             trust signal) is already a valid TrustScoreEvent signal_type.
  */
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.40";
-import { validateReference, ReferenceTypes } from "../../shared/reference-resolver.ts";
 import { createNotification } from "../../shared/notifications.ts";
 import { NotificationType } from "../../shared/identity.ts";
 import {
-  ModerationActionType, AuditActionType, REPORT_TARGET_TYPES,
+  ModerationActionType, AuditActionType, REPORT_TARGET_TYPES, REPORT_CATEGORY_VALUES,
   CASE_STATUS, CASE_PRIORITY, PRIORITY_RANK, CASE_SEVERITY, APPEAL_STATUS, REPORT_STATUS,
-  isModeratorOrAdmin, isAdmin,
+  ACTOR_TYPE, isModeratorOrAdmin, isAdmin, actorString,
 } from "../../shared/moderation.ts";
 import { writeAuditLog } from "../../shared/audit-log.ts";
 import { applyContentAction } from "../../shared/content-moderation.ts";
@@ -62,56 +65,55 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const action = body.action;
 
-    // ---- fileReport (any authenticated user) ----
+    // ---- fileReport (any authenticated user, not tier-gated) ----
     if (action === "fileReport") {
       if (!user) return err("AUTH_REQUIRED", 401);
       const target_type = body.target_type;
       const target_id = body.target_id;
-      const reason = (body.reason || "").trim();
+      const category = (body.category || "").trim();
       if (!REPORT_TARGET_TYPES.includes(target_type)) return err("VALIDATION_FAILED", 422, { target_type: "invalid" });
       if (!target_id) return err("VALIDATION_FAILED", 422, { target_id: "required" });
-      if (!reason) return err("VALIDATION_FAILED", 422, { reason: "required" });
+      if (!REPORT_CATEGORY_VALUES.includes(category)) return err("VALIDATION_FAILED", 422, { category: "invalid" });
       // Reports never prevent filing — blocking has zero effect (hard rule).
-      // Duplicate open report from the SAME reporter against the SAME target is rejected.
+      // Duplicate OPEN report from the SAME reporter against the SAME target is rejected.
       const existing = await base44.entities.Report.filter({
         reporter_id: user.id, target_type, target_id, status: REPORT_STATUS.OPEN,
       });
       if (existing.length > 0) return err("DUPLICATE_OPEN_REPORT", 409, { report: "already reported by you" });
+      const description = (body.description || "").trim() || null;
       const report = await base44.entities.Report.create({
-        reporter_id: user.id, target_type, target_id, reason, details: body.details || null, status: REPORT_STATUS.OPEN,
+        reporter_id: user.id, target_type, target_id, category, description, status: REPORT_STATUS.OPEN,
       });
       // ContentReported event → report_update notification to the reporter (filed confirmation).
       await createNotification(base44, {
         recipient_id: user.id, notification_type: NotificationType.REPORT_UPDATE,
-        actor_id: user.id, target_type: ReferenceTypes.REPORT, target_id: report.id,
+        actor_id: user.id, target_type: "report", target_id: report.id,
       }).catch(() => {});
       return json({ ok: true, report });
     }
 
-    // All remaining actions require mod/admin (except recordAppeal which any user may call on their own action).
-    // ---- recordAppeal (the affected content author appeals a ModerationAction applied to them) ----
+    // ---- recordAppeal (the affected user appeals a ModerationAction applied to them) ----
     if (action === "recordAppeal") {
       if (!user) return err("AUTH_REQUIRED", 401);
       const modAction = await base44.asServiceRole.entities.ModerationAction.get(body.action_id).catch(() => null);
       if (!modAction) return err("RESOURCE_NOT_FOUND", 404);
-      // Resolve the target author: for post/comment, the author is the content's created_by_id.
+      // Only the affected content author may appeal (own enforcement record).
       const authorId = await resolveContentAuthor(base44, modAction.target_type, modAction.target_id);
       if (!authorId || authorId !== user.id) {
-        return err("PERMISSION_DENIED", 403, { appeal: "only the affected content author may appeal" });
+        return err("PERMISSION_DENIED", 403, { appeal: "only the affected user may appeal" });
       }
       if (modAction.appeal_status !== APPEAL_STATUS.NONE) {
         return err("VALIDATION_FAILED", 422, { appeal: "appeal already recorded" });
       }
-      // Append-only: we DO NOT edit the original action's appeal fields via a generic update of content.
-      // Appeal status lives ON the ModerationAction row — recording an appeal is the one sanctioned update
-      // to appeal fields (not the action_type/reason/actor). This is the documented appeal-readiness update.
+      // Appeal-status update is the sanctioned appeal-field mutation (not action_type/actor/reason).
       const updated = await base44.asServiceRole.entities.ModerationAction.update(body.action_id, {
-        appeal_status: APPEAL_STATUS.PENDING,
+        appeal_status: APPEAL_STATUS.REQUESTED,
         appealed_at: new Date().toISOString(),
       });
       return json({ ok: true, action: updated });
     }
 
+    // All remaining actions require Mod/Admin.
     if (!user || !isModeratorOrAdmin(user)) {
       return err("PERMISSION_DENIED", 403);
     }
@@ -129,11 +131,11 @@ Deno.serve(async (req) => {
       const theCase = await base44.asServiceRole.entities.ModerationCase.create({
         status: CASE_STATUS.OPEN,
         priority: body.priority || CASE_PRIORITY.MEDIUM,
-        severity: body.severity || CASE_SEVERITY.MODERATE,
+        severity: body.severity || CASE_SEVERITY.MINOR,
         target_type, target_id,
       });
       for (const r of openReports) {
-        await base44.asServiceRole.entities.Report.update(r.id, { status: REPORT_STATUS.CONSOLIDATED, case_id: theCase.id });
+        await base44.asServiceRole.entities.Report.update(r.id, { status: REPORT_STATUS.CONSOLIDATED, moderation_case_id: theCase.id });
       }
       return json({ ok: true, case: theCase, consolidated_count: openReports.length });
     }
@@ -149,8 +151,9 @@ Deno.serve(async (req) => {
       const theCase = await base44.asServiceRole.entities.ModerationCase.create({
         status: CASE_STATUS.OPEN,
         priority: body.priority || CASE_PRIORITY.MEDIUM,
-        severity: body.severity || CASE_SEVERITY.MODERATE,
+        severity: body.severity || CASE_SEVERITY.MINOR,
         target_type, target_id,
+        ai_priority_score: typeof body.ai_priority_score === "number" ? body.ai_priority_score : null,
       });
       return json({ ok: true, case: theCase });
     }
@@ -159,7 +162,7 @@ Deno.serve(async (req) => {
     if (action === "assignCase") {
       const theCase = await base44.asServiceRole.entities.ModerationCase.get(body.case_id).catch(() => null);
       if (!theCase) return err("RESOURCE_NOT_FOUND", 404);
-      const next = { assigned_moderator_id: body.assigned_moderator_id || null };
+      const next: any = { assigned_moderator_id: body.assigned_moderator_id || null };
       if (!theCase.assigned_moderator_id) next.status = CASE_STATUS.ASSIGNED;
       const updated = await base44.asServiceRole.entities.ModerationCase.update(body.case_id, next);
       return json({ ok: true, case: updated });
@@ -167,15 +170,15 @@ Deno.serve(async (req) => {
 
     // ---- addCaseNote (append-only) ----
     if (action === "addCaseNote") {
-      const note = (body.note || "").trim();
-      if (!note) return err("VALIDATION_FAILED", 422, { note: "required" });
+      const noteBody = (body.body || body.note || "").trim();
+      if (!noteBody) return err("VALIDATION_FAILED", 422, { body: "required" });
       const theCase = await base44.asServiceRole.entities.ModerationCase.get(body.case_id).catch(() => null);
       if (!theCase) return err("RESOURCE_NOT_FOUND", 404);
-      const created = await base44.asServiceRole.entities.ModerationCaseNote.create({ case_id: body.case_id, note });
+      const created = await base44.asServiceRole.entities.ModerationCaseNote.create({ moderation_case_id: body.case_id, body: noteBody });
       return json({ ok: true, note: created });
     }
 
-    // ---- setCasePriority (priority and/or severity) ----
+    // ---- setCasePriority (priority and/or severity; AI may set ai_priority_score advisory only) ----
     if (action === "setCasePriority") {
       const theCase = await base44.asServiceRole.entities.ModerationCase.get(body.case_id).catch(() => null);
       if (!theCase) return err("RESOURCE_NOT_FOUND", 404);
@@ -188,16 +191,16 @@ Deno.serve(async (req) => {
         if (!Object.values(CASE_SEVERITY).includes(body.severity)) return err("VALIDATION_FAILED", 422, { severity: "invalid" });
         update.severity = body.severity;
       }
+      if (typeof body.ai_priority_score === "number") update.ai_priority_score = body.ai_priority_score;
       const updated = await base44.asServiceRole.entities.ModerationCase.update(body.case_id, update);
       return json({ ok: true, case: updated });
     }
 
-    // ---- applyAction (Mod/Admin ONLY — AI hard-rejected) ----
+    // ---- applyAction (Mod/Admin ONLY — AI hard-rejected structurally) ----
     if (action === "applyAction") {
       // Structural AI boundary: requires an authenticated HUMAN moderator/admin.
-      // An AI-integration credential has no human user identity → hard reject.
+      // An AI-integration credential has no human user identity → hard reject + alert.
       if (!user || !isModeratorOrAdmin(user)) {
-        // Alert: log the attempted AI-originated call.
         console.error(`[MODERATION_ALERT] AI-originated applyAction attempt rejected — target ${body.target_type}:${body.target_id} action ${body.action_type}`);
         return err("MODERATION_ACTION_REQUIRES_HUMAN", 403, { action: "only a human moderator/admin may apply a moderation action" });
       }
@@ -214,27 +217,32 @@ Deno.serve(async (req) => {
 
       const theCase = await base44.asServiceRole.entities.ModerationCase.get(case_id).catch(() => null);
       if (!theCase) return err("RESOURCE_NOT_FOUND", 404);
+      if (theCase.status === CASE_STATUS.RESOLVED_UPHELD || theCase.status === CASE_STATUS.RESOLVED_DISMISSED) {
+        return err("CASE_ALREADY_RESOLVED", 409, { case: "this case has already been resolved" });
+      }
 
-      // 1. Create the append-only ModerationAction row (never updated/deleted).
+      // 1. Create the append-only ModerationAction row (actor = moderator:<id> / admin:<id>).
       const modAction = await base44.asServiceRole.entities.ModerationAction.create({
-        case_id, action_type, actor_id: user.id, target_type, target_id, reason,
+        moderation_case_id: case_id, action_type, actor: actorString(user),
+        target_type, target_id, reason,
         appeal_status: APPEAL_STATUS.NONE,
-        reversal_of_action_id: body.reversal_of_action_id || null,
       });
 
       // 2. Call the owning service's delegate to change the content status —
       //    NEVER write to the target entity table directly from here.
       const contentResult = await applyContentAction(base44, target_type, target_id, action_type);
 
-      // 3. Audit log (for listing_removed — the AuditActionType value exists).
+      // 3. ModerationActionApplied → audit-log mirror for listing_removed (the AuditActionType value).
       if (action_type === ModerationActionType.LISTING_REMOVED) {
         await writeAuditLog(base44, {
-          action: AuditActionType.LISTING_REMOVED_BY_MODERATION, actor_id: user.id,
-          target_type, target_id, details: reason,
+          action: AuditActionType.LISTING_REMOVED_BY_MODERATION,
+          actor_type: isAdmin(user) ? ACTOR_TYPE.ADMIN : ACTOR_TYPE.MODERATOR,
+          actor_id: user.id,
+          target_type, target_id, context: reason,
         }).catch(() => {});
       }
 
-      // 4. ModerationActionApplied event → moderation_outcome notification to the content author.
+      // 4. ModerationActionApplied → moderation_outcome notification to the content author.
       const authorId = await resolveContentAuthor(base44, target_type, target_id);
       if (authorId) {
         await createNotification(base44, {
@@ -250,6 +258,9 @@ Deno.serve(async (req) => {
     if (action === "resolveCase") {
       const theCase = await base44.asServiceRole.entities.ModerationCase.get(body.case_id).catch(() => null);
       if (!theCase) return err("RESOURCE_NOT_FOUND", 404);
+      if (theCase.status === CASE_STATUS.RESOLVED_UPHELD || theCase.status === CASE_STATUS.RESOLVED_DISMISSED) {
+        return err("CASE_ALREADY_RESOLVED", 409, { case: "already resolved" });
+      }
       // Escalated cases require Admin to resolve.
       if (theCase.status === CASE_STATUS.ESCALATED && !isAdmin(user)) {
         return err("PERMISSION_DENIED", 403, { case: "only an admin may resolve an escalated case" });
@@ -258,14 +269,13 @@ Deno.serve(async (req) => {
       if (!["upheld", "dismissed"].includes(outcome)) return err("VALIDATION_FAILED", 422, { outcome: "must be upheld or dismissed" });
       const newStatus = outcome === "upheld" ? CASE_STATUS.RESOLVED_UPHELD : CASE_STATUS.RESOLVED_DISMISSED;
       const updated = await base44.asServiceRole.entities.ModerationCase.update(body.case_id, {
-        status: newStatus, resolved_at: new Date().toISOString(), resolved_by: user.id,
+        status: newStatus, resolved_at: new Date().toISOString(),
       });
-      // Update linked reports to resolved/dismissed.
-      const reports = await base44.asServiceRole.entities.Report.filter({ case_id: body.case_id, status: REPORT_STATUS.CONSOLIDATED });
+      // Update linked reports to resolved/dismissed (kept in sync by ModerationService).
+      const reports = await base44.asServiceRole.entities.Report.filter({ moderation_case_id: body.case_id, status: REPORT_STATUS.CONSOLIDATED });
       for (const r of reports) {
         await base44.asServiceRole.entities.Report.update(r.id, {
           status: outcome === "upheld" ? REPORT_STATUS.RESOLVED : REPORT_STATUS.DISMISSED,
-          resolved_at: new Date().toISOString(), resolved_by: user.id,
         });
       }
       return json({ ok: true, case: updated });
@@ -276,7 +286,7 @@ Deno.serve(async (req) => {
       const theCase = await base44.asServiceRole.entities.ModerationCase.get(body.case_id).catch(() => null);
       if (!theCase) return err("RESOURCE_NOT_FOUND", 404);
       const updated = await base44.asServiceRole.entities.ModerationCase.update(body.case_id, {
-        status: CASE_STATUS.OPEN, resolved_at: null, resolved_by: null,
+        status: CASE_STATUS.OPEN, resolved_at: null,
       });
       return json({ ok: true, case: updated });
     }
@@ -288,28 +298,27 @@ Deno.serve(async (req) => {
       }
       const modAction = await base44.asServiceRole.entities.ModerationAction.get(body.action_id).catch(() => null);
       if (!modAction) return err("RESOURCE_NOT_FOUND", 404);
-      if (modAction.appeal_status !== APPEAL_STATUS.PENDING) {
+      if (modAction.appeal_status !== APPEAL_STATUS.REQUESTED && modAction.appeal_status !== APPEAL_STATUS.UNDER_REVIEW) {
         return err("VALIDATION_FAILED", 422, { appeal: "no pending appeal on this action" });
       }
-      const decision = body.decision; // "approved" | "rejected"
-      if (!["approved", "rejected"].includes(decision)) return err("VALIDATION_FAILED", 422, { decision: "must be approved or rejected" });
-      // Update the appeal fields on the original action (sanctioned appeal-field update).
+      const decision = body.decision; // "upheld" | "overturned"
+      if (!["upheld", "overturned"].includes(decision)) return err("VALIDATION_FAILED", 422, { decision: "must be upheld or overturned" });
+      // Sanctioned appeal-field mutation on the original row.
       const updated = await base44.asServiceRole.entities.ModerationAction.update(body.action_id, {
-        appeal_status: decision === "approved" ? APPEAL_STATUS.APPROVED : APPEAL_STATUS.REJECTED,
+        appeal_status: decision === "upheld" ? APPEAL_STATUS.UPHELD : APPEAL_STATUS.OVERTURNED,
         appeal_resolved_at: new Date().toISOString(), appeal_resolved_by: user.id,
       });
-      // If approved (reversal), create a NEW ModerationAction row (content_restored) — never edit the original's action_type.
-      let reversal = null;
-      if (decision === "approved") {
+      // If overturned, create a NEW ModerationAction row (content_restored) — never edit the original's action_type.
+      let reversal: any = null;
+      if (decision === "overturned") {
         reversal = await base44.asServiceRole.entities.ModerationAction.create({
-          case_id: modAction.case_id,
+          moderation_case_id: modAction.moderation_case_id,
           action_type: ModerationActionType.CONTENT_RESTORED,
-          actor_id: user.id,
+          actor: actorString(user),
           target_type: modAction.target_type,
           target_id: modAction.target_id,
-          reason: `Appeal approved — reversing action ${modAction.id}`,
+          reason: `Appeal overturned — reversing action ${modAction.id}`,
           appeal_status: APPEAL_STATUS.NONE,
-          reversal_of_action_id: modAction.id,
         });
         // Call the delegate to restore the content.
         await applyContentAction(base44, modAction.target_type, modAction.target_id, ModerationActionType.CONTENT_RESTORED);
@@ -326,8 +335,9 @@ Deno.serve(async (req) => {
     }
 
     // ---- authorisePrivateMessageAccess (Mod/Admin) ----
-    // Grants access to a marketplace message's content only while an active Report references it.
-    // Marketplace messages land in Phase 08; the authorization decision is implemented now.
+    // Grants scoped, temporary access to Marketplace message content only while an
+    // active Report references the message. Marketplace messages land in Phase 08;
+    // the authorization decision is implemented now.
     if (action === "authorisePrivateMessageAccess") {
       const target_type = body.target_type || "marketplace_message";
       const target_id = body.target_id;
@@ -338,12 +348,10 @@ Deno.serve(async (req) => {
       if (activeReports.length === 0) {
         return json({ ok: true, authorised: false, reason: "no active report references this message" });
       }
-      // Authorised for this moderator, scoped to the active report. The actual
-      // message content fetch is implemented in Phase 08 when MarketplaceMessage exists.
       return json({ ok: true, authorised: true, report_id: activeReports[0].id });
     }
 
-    // ---- listQueue (mod queue, sorted by priority then created_at) ----
+    // ---- listQueue (mod queue, sorted by priority DESC then created_at ASC) ----
     if (action === "listQueue") {
       const cases = await base44.asServiceRole.entities.ModerationCase.filter(
         { status: { $in: [CASE_STATUS.OPEN, CASE_STATUS.ASSIGNED, CASE_STATUS.IN_REVIEW, CASE_STATUS.ESCALATED] } },
@@ -353,7 +361,7 @@ Deno.serve(async (req) => {
         const pa = PRIORITY_RANK[a.priority] ?? 99;
         const pb = PRIORITY_RANK[b.priority] ?? 99;
         if (pa !== pb) return pa - pb;
-        return (b.created_date || "").localeCompare(a.created_date || "");
+        return (a.created_date || "").localeCompare(b.created_date || "");
       });
       // Enrich with open-report counts.
       const enriched = await Promise.all(cases.map(async (c: any) => {
@@ -363,14 +371,14 @@ Deno.serve(async (req) => {
       return json({ ok: true, cases: enriched });
     }
 
-    // ---- getCase (case detail with notes + actions + appeal) ----
+    // ---- getCase (case detail with notes + actions + appeal + consolidated reports) ----
     if (action === "getCase") {
       const theCase = await base44.asServiceRole.entities.ModerationCase.get(body.case_id).catch(() => null);
       if (!theCase) return err("RESOURCE_NOT_FOUND", 404);
       const [notes, actions, reports] = await Promise.all([
-        base44.asServiceRole.entities.ModerationCaseNote.filter({ case_id: body.case_id }, "created_date", 200),
-        base44.asServiceRole.entities.ModerationAction.filter({ case_id: body.case_id }, "-created_date", 200),
-        base44.asServiceRole.entities.Report.filter({ case_id: body.case_id }, "-created_date", 200),
+        base44.asServiceRole.entities.ModerationCaseNote.filter({ moderation_case_id: body.case_id }, "created_date", 200),
+        base44.asServiceRole.entities.ModerationAction.filter({ moderation_case_id: body.case_id }, "created_date", 200),
+        base44.asServiceRole.entities.Report.filter({ moderation_case_id: body.case_id }, "-created_date", 200),
       ]);
       return json({ ok: true, case: theCase, notes, actions, reports });
     }
@@ -396,6 +404,9 @@ Deno.serve(async (req) => {
       if (!isAdmin(user)) return err("PERMISSION_DENIED", 403, { audit: "admin only" });
       const filter: any = {};
       if (body.action) filter.action = body.action;
+      if (body.actor_id) filter.actor_id = body.actor_id;
+      if (body.target_type) filter.target_type = body.target_type;
+      if (body.target_id) filter.target_id = body.target_id;
       const logs = await base44.asServiceRole.entities.AuditLog.filter(filter, "-created_date", body.limit || 200);
       return json({ ok: true, logs });
     }
@@ -406,7 +417,7 @@ Deno.serve(async (req) => {
   }
 });
 
-// Resolve the content author for a (target_type, target_id) — for notifications.
+// Resolve the content author for a (target_type, target_id) — for moderation notifications.
 async function resolveContentAuthor(base44: any, target_type: string, target_id: string): Promise<string | null> {
   try {
     if (target_type === "post" || target_type === "comment") {
@@ -431,8 +442,7 @@ async function fetchReportedContent(base44: any, target_type: string, target_id:
     if (target_type === "post") {
       const post = await base44.asServiceRole.entities.Post.get(target_id);
       const author = await base44.asServiceRole.entities.User.get(post.created_by_id).catch(() => null);
-      const comments = await base44.asServiceRole.entities.Comment.filter({ post_id: target_id }, "-created_date", 200);
-      return { type: "post", post, author, comments };
+      return { type: "post", post, author };
     }
     if (target_type === "comment") {
       const comment = await base44.asServiceRole.entities.Comment.get(target_id);

@@ -2,6 +2,45 @@
   "name": "ModerationCase",
   "type": "object",
   "properties": {
+    "target_type": {
+      "type": "string",
+      "enum": [
+        "user",
+        "vehicle",
+        "post",
+        "comment",
+        "group",
+        "event",
+        "business",
+        "listing",
+        "marketplace_message"
+      ],
+      "description": "The case's primary subject \u2014 same reportable allow-list as Report."
+    },
+    "target_id": {
+      "type": "string"
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "default": "medium",
+      "description": "Queue ordering weight \u2014 how soon a moderator should look at this. Distinct from severity."
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "minor",
+        "moderate",
+        "severe"
+      ],
+      "default": "minor",
+      "description": "Impact assessment \u2014 how bad the underlying issue is if substantiated. Distinct from priority."
+    },
     "status": {
       "type": "string",
       "enum": [
@@ -15,51 +54,18 @@
       "default": "open",
       "description": "open \u2192 assigned \u2192 in_review \u2192 resolved_upheld/resolved_dismissed; escalated branch requires Admin to resolve."
     },
-    "priority": {
-      "type": "string",
-      "enum": [
-        "low",
-        "medium",
-        "high",
-        "urgent"
-      ],
-      "default": "medium",
-      "description": "Queue ordering weight. Distinct from severity."
-    },
-    "severity": {
-      "type": "string",
-      "enum": [
-        "minor",
-        "moderate",
-        "serious",
-        "critical"
-      ],
-      "default": "moderate",
-      "description": "Impact assessment. Distinct from priority."
-    },
-    "target_type": {
-      "type": "string",
-      "description": "Polymorphic target, same value space as Report.target_type."
-    },
-    "target_id": {
-      "type": "string"
-    },
     "assigned_moderator_id": {
       "type": "string",
-      "description": "FK\u2192User. The queue is a query over this field \u2014 no separate queue/assignment entity (ADR-010)."
+      "description": "FK\u2192User. Must be Moderator/Admin tier (role check, not just existence). The queue is a query over this field \u2014 no separate queue/assignment entity (ADR-010)."
+    },
+    "ai_priority_score": {
+      "type": "number",
+      "description": "AI-suggested priority ranking \u2014 advisory only. A moderator can always override; this never changes priority/status directly. AI may set this; AI never sets priority/severity/status."
     },
     "resolved_at": {
       "type": "string",
-      "format": "date-time"
-    },
-    "resolved_by": {
-      "type": "string",
-      "description": "FK\u2192User (mod/admin who resolved the case)."
-    },
-    "escalated_at": {
-      "type": "string",
       "format": "date-time",
-      "description": "Set when the case is escalated to Admin."
+      "description": "Set when the case transitions to resolved_upheld/resolved_dismissed."
     }
   },
   "required": [

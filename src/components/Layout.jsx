@@ -1,7 +1,8 @@
 import React from "react";
 import { Outlet, Link, useLocation } from "react-router-dom";
-import { Home, CalendarDays, User, MessageCircle, Search, Crown, Users, Gift, ShoppingBag, Bell, MoreHorizontal, Settings as SettingsIcon, Wrench, Cpu, FlaskConical } from "lucide-react";
+import { Home, CalendarDays, User, MessageCircle, Search, Crown, Users, Gift, ShoppingBag, Bell, MoreHorizontal, Settings as SettingsIcon, Wrench, Cpu, FlaskConical, Shield, ScrollText } from "lucide-react";
 import { motion, AnimatePresence } from 'framer-motion';
+import { useAuth } from '@/lib/AuthContext';
 
 const mainNav = [
   { to: "/", label: "Home", icon: Home },
@@ -18,17 +19,22 @@ const moreNav = [
   { to: "/garage", label: "Garage", icon: Wrench },
   { to: "/profile", label: "Profile", icon: User },
   { to: "/settings", label: "Settings", icon: SettingsIcon },
+  { to: "/moderation", label: "Moderation", icon: Shield, modOnly: true },
+  { to: "/admin/audit", label: "Audit Log", icon: ScrollText, modOnly: true },
 ];
 
 export default function Layout() {
   const location = useLocation();
   const [menuOpen, setMenuOpen] = React.useState(false);
+  const { user } = useAuth();
+  const isMod = user?.role === 'admin' || user?.account_tier === 'moderator';
+  const visibleMoreNav = moreNav.filter((item) => !item.modOnly || isMod);
 
   React.useEffect(() => {
     setMenuOpen(false);
   }, [location.pathname]);
 
-  const isMoreActive = moreNav.some((item) => location.pathname === item.to);
+  const isMoreActive = visibleMoreNav.some((item) => location.pathname === item.to);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -42,7 +48,7 @@ export default function Layout() {
             <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-bold text-primary">AU</span>
           </Link>
           <nav className="hidden items-center gap-1 md:flex">
-            {moreNav.map((item) => (
+            {visibleMoreNav.map((item) => (
               <Link key={item.to} to={item.to} className="rounded-lg px-3 py-1.5 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground">{item.label}</Link>
             ))}
           </nav>
@@ -62,7 +68,7 @@ export default function Layout() {
                       transition={{ duration: 0.15 }}
                       className="absolute right-0 top-full z-50 mt-2 w-48 overflow-hidden rounded-2xl border border-border bg-popover/95 shadow-2xl backdrop-blur-xl"
                     >
-                      {moreNav.map((item) => {
+                      {visibleMoreNav.map((item) => {
                         const active = location.pathname === item.to;
                         const Icon = item.icon;
                         return (

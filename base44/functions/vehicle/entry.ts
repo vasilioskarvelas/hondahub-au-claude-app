@@ -212,10 +212,11 @@ Deno.serve(async (req) => {
       try {
         await writeAuditLog(base44, {
           action: AuditActionType.VEHICLE_VERIFICATION_APPROVED,
+          actor_type: user.role === 'admin' ? 'admin' : 'moderator',
           actor_id: user.id,
           target_type: 'vehicle',
           target_id: vehicle_id,
-          details: `Vehicle "${vehicle.nickname || `${vehicle.make} ${vehicle.model}`}" verified by ${user.role === 'admin' ? 'admin' : 'moderator'}`,
+          context: `Vehicle "${vehicle.nickname || `${vehicle.make} ${vehicle.model}`}" verified by ${user.role === 'admin' ? 'admin' : 'moderator'}`,
         });
       } catch (e) { /* non-blocking */ }
       return Response.json({ ok: true, vehicle: updated });

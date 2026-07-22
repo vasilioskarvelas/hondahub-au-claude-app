@@ -2,6 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { Heart, MessageCircle, Car } from "lucide-react";
 import { base44 } from "@/api/base44Client";
+import { ReportButton } from "@/components/moderation/ReportDialog";
 
 export default function PostCard({ post, onLiked, compact }) {
   const [liked, setLiked] = React.useState(!!post.liked);
@@ -82,6 +83,7 @@ export default function PostCard({ post, onLiked, compact }) {
           <MessageCircle className="h-5 w-5" />
           <span>{post.comment_count || 0}</span>
         </Link>
+        <ReportButton targetType="post" targetId={post.id} className="ml-auto" />
       </div>
     </article>
   );

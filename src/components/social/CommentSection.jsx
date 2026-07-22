@@ -2,6 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { Send, EyeOff, Trash2 } from "lucide-react";
+import { ReportButton } from "@/components/moderation/ReportDialog";
 
 export default function CommentSection({ postId, initialComments, isPostAuthor, isModerator, currentUserId }) {
   const [comments, setComments] = React.useState(initialComments || []);
@@ -144,6 +145,7 @@ function CommentRow({ c, currentUserId, isPostAuthor, isModerator, onRemoveOwn, 
           {!removed && !hidden && isPostAuthor && !isOwn && (
             <button onClick={() => onHide(c.id)} className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-amber-500"><EyeOff className="h-3 w-3" /> Hide</button>
           )}
+          {!removed && !isOwn && <ReportButton targetType="comment" targetId={c.id} />}
         </div>
       </div>
     </div>

@@ -5,6 +5,7 @@ import { ArrowLeft, MapPin, Grid3x3, Users } from "lucide-react";
 import TierBadge from "@/components/identity/TierBadge";
 import PostCard from "@/components/social/PostCard";
 import FollowButton from "@/components/social/FollowButton";
+import { ReportButton } from "@/components/moderation/ReportDialog";
 import { AccountTier } from "@/lib/registries";
 
 export default function UserProfile() {
@@ -99,7 +100,10 @@ export default function UserProfile() {
               </div>
             </div>
             {!isOwn && me && (
-              <FollowButton targetType="user" targetId={profileUser.id} initialFollowing={following} onToggle={setFollowing} />
+              <div className="flex items-center gap-2">
+                <FollowButton targetType="user" targetId={profileUser.id} initialFollowing={following} onToggle={setFollowing} />
+                <ReportButton targetType="user" targetId={profileUser.id} />
+              </div>
             )}
           </div>
           {profileUser.bio && <p className="mt-4 text-sm text-muted-foreground">{profileUser.bio}</p>}

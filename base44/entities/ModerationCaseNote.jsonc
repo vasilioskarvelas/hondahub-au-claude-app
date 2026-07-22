@@ -2,17 +2,17 @@
   "name": "ModerationCaseNote",
   "type": "object",
   "properties": {
-    "case_id": {
+    "moderation_case_id": {
       "type": "string",
       "description": "FK\u2192ModerationCase."
     },
-    "note": {
+    "body": {
       "type": "string",
-      "description": "The note body. Append-only \u2014 never edited or deleted. author_id is the built-in created_by_id."
+      "description": "The note body. Append-only \u2014 never edited or deleted. The author is the built-in created_by_id (a Moderator/Admin-tier user)."
     }
   },
   "required": [
-    "case_id",
-    "note"
+    "moderation_case_id",
+    "body"
   ]
 }
