@@ -24,6 +24,8 @@ import Giveaway from '@/pages/Giveaway';
 import Garage from '@/pages/Garage';
 import GarageCarDetail from '@/pages/GarageCarDetail';
 import UserGarage from '@/pages/UserGarage';
+import VehicleDetail from '@/pages/VehicleDetail';
+import VerificationQueue from '@/pages/VerificationQueue';
 import EventDetail from '@/pages/EventDetail';
 import Groups from '@/pages/Groups';
 import Login from '@/pages/Login';
@@ -78,6 +80,9 @@ const AuthenticatedApp = () => {
         <Route path="/giveaway" element={<Giveaway />} />
         <Route path="/garage" element={<Garage />} />
         <Route path="/garage/:id" element={<GarageCarDetail />} />
+        <Route path="/vehicle/create" element={<Garage />} />
+        <Route path="/vehicle/:id" element={<VehicleDetail />} />
+        <Route path="/verification-queue" element={<VerificationQueue />} />
         <Route path="/user/:name/garage" element={<UserGarage />} />
         <Route path="/groups" element={<Groups />} />
 

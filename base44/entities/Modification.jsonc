@@ -1,0 +1,106 @@
+{
+  "name": "Modification",
+  "type": "object",
+  "properties": {
+    "vehicle_id": {
+      "type": "string",
+      "description": "FK\u2192Vehicle."
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "engine",
+        "forced_induction",
+        "fuel_system",
+        "cooling",
+        "intake",
+        "exhaust",
+        "ecu_electronics",
+        "transmission",
+        "drivetrain",
+        "suspension",
+        "brakes",
+        "wheels_tyres",
+        "exterior",
+        "interior",
+        "safety",
+        "audio",
+        "lighting",
+        "other"
+      ]
+    },
+    "brand": {
+      "type": "string",
+      "description": "Free text at MVP."
+    },
+    "product_name": {
+      "type": "string",
+      "description": "Free text at MVP."
+    },
+    "part_number": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "planned",
+        "ordered",
+        "installed",
+        "removed",
+        "sold"
+      ],
+      "default": "installed"
+    },
+    "purchase_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "installation_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "installation_type": {
+      "type": "string",
+      "enum": [
+        "self",
+        "workshop",
+        "dealer",
+        "friend",
+        "unknown"
+      ],
+      "default": "unknown",
+      "description": "Structured answer to 'who installed this'."
+    },
+    "installed_by_business_id": {
+      "type": "string",
+      "description": "FK\u2192Business. Only when installation_type is workshop/dealer AND the Business is verified. Powers the 'tag a business on a mod' feature."
+    },
+    "installed_by_user_id": {
+      "type": "string",
+      "description": "FK\u2192User. Optional, for crediting a platform-user friend installer."
+    },
+    "installer_name_freetext": {
+      "type": "string",
+      "description": "Fallback for a real-world installer not yet a verified Business on the platform."
+    },
+    "cost": {
+      "type": "number",
+      "description": "Private by default."
+    },
+    "notes": {
+      "type": "string"
+    },
+    "product_link": {
+      "type": "string",
+      "description": "External URL. Subject to new-account link-posting restriction."
+    },
+    "replaced_modification_id": {
+      "type": "string",
+      "description": "FK\u2192Modification (self). 'What this replaced.' Optional."
+    }
+  },
+  "required": [
+    "vehicle_id",
+    "category"
+  ]
+}

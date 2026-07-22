@@ -1,0 +1,176 @@
+{
+  "name": "Vehicle",
+  "type": "object",
+  "properties": {
+    "nickname": {
+      "type": "string",
+      "description": "Build name. Optional \u2014 UI falls back to '{year} {make} {model}'."
+    },
+    "make": {
+      "type": "string",
+      "default": "Honda",
+      "description": "Stored explicitly rather than assumed."
+    },
+    "model": {
+      "type": "string"
+    },
+    "year": {
+      "type": "number",
+      "description": "Sane range 1948\u2013current+1 enforced in service."
+    },
+    "generation": {
+      "type": "string",
+      "description": "Model-generation label e.g. '6th Gen Civic'. Free text at MVP."
+    },
+    "chassis_code": {
+      "type": "string",
+      "description": "Manufacturer chassis/platform code e.g. 'EK9'. Distinct from generation."
+    },
+    "body_style": {
+      "type": "string",
+      "enum": [
+        "sedan",
+        "hatchback",
+        "coupe",
+        "wagon",
+        "suv",
+        "ute",
+        "convertible",
+        "van",
+        "other"
+      ]
+    },
+    "colour": {
+      "type": "string"
+    },
+    "ownership_relationship": {
+      "type": "string",
+      "enum": [
+        "current",
+        "previous",
+        "wishlist"
+      ],
+      "default": "current",
+      "description": "What this vehicle is to the user. Independent of build/sale status."
+    },
+    "build_status": {
+      "type": "string",
+      "enum": [
+        "stock",
+        "project",
+        "completed",
+        "retired"
+      ],
+      "default": "stock",
+      "description": "State of the build. Independent of ownership/sale."
+    },
+    "sale_status": {
+      "type": "string",
+      "enum": [
+        "not_for_sale",
+        "considering_offers",
+        "for_sale",
+        "sold"
+      ],
+      "default": "not_for_sale",
+      "description": "Market state. Independent of ownership/build. A vehicle can be current+project+for_sale at once."
+    },
+    "trim": {
+      "type": "string"
+    },
+    "engine_code": {
+      "type": "string"
+    },
+    "engine_capacity": {
+      "type": "number"
+    },
+    "transmission": {
+      "type": "string"
+    },
+    "drivetrain": {
+      "type": "string",
+      "enum": [
+        "fwd",
+        "rwd",
+        "awd",
+        "4wd"
+      ]
+    },
+    "fuel_type": {
+      "type": "string",
+      "enum": [
+        "petrol",
+        "diesel",
+        "hybrid",
+        "electric",
+        "lpg",
+        "other"
+      ]
+    },
+    "odometer_km": {
+      "type": "number",
+      "description": "Stored in km (AU market)."
+    },
+    "power_kw": {
+      "type": "number"
+    },
+    "registration_state": {
+      "type": "string",
+      "enum": [
+        "NSW",
+        "VIC",
+        "QLD",
+        "WA",
+        "SA",
+        "TAS",
+        "ACT",
+        "NT"
+      ],
+      "description": "State only (e.g. VIC). No VIN or registration-number field exists on this entity."
+    },
+    "purchase_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "purchase_price": {
+      "type": "number",
+      "description": "Private by default."
+    },
+    "build_goal": {
+      "type": "string"
+    },
+    "build_description": {
+      "type": "string"
+    },
+    "cover_media_id": {
+      "type": "string",
+      "description": "FK\u2192Media. Nullable \u2014 a vehicle can be created with zero media."
+    },
+    "verification_status": {
+      "type": "string",
+      "enum": [
+        "unverified",
+        "pending",
+        "verified",
+        "rejected"
+      ],
+      "default": "unverified",
+      "description": "Moderator/Admin-only changes via submit/approve/reject workflow."
+    },
+    "visibility": {
+      "type": "string",
+      "enum": [
+        "public",
+        "followers",
+        "approved_connections",
+        "private"
+      ],
+      "default": "public"
+    }
+  },
+  "required": [
+    "make",
+    "model",
+    "year"
+  ]
+}

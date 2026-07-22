@@ -1,0 +1,85 @@
+{
+  "name": "MaintenanceRecord",
+  "type": "object",
+  "properties": {
+    "vehicle_id": {
+      "type": "string",
+      "description": "FK\u2192Vehicle."
+    },
+    "maintenance_type": {
+      "type": "string",
+      "enum": [
+        "scheduled_service",
+        "oil_change",
+        "fluids",
+        "brakes",
+        "tyres",
+        "suspension",
+        "timing",
+        "cooling",
+        "electrical",
+        "inspection",
+        "repair",
+        "recall",
+        "other"
+      ]
+    },
+    "title": {
+      "type": "string",
+      "description": "Optional \u2014 falls back to a generated label from maintenance_type."
+    },
+    "description": {
+      "type": "string"
+    },
+    "service_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "odometer_km": {
+      "type": "number"
+    },
+    "service_provider_type": {
+      "type": "string",
+      "enum": [
+        "self",
+        "business",
+        "other"
+      ],
+      "default": "self"
+    },
+    "serviced_by_business_id": {
+      "type": "string",
+      "description": "FK\u2192Business. Only when service_provider_type = business AND the Business is verified."
+    },
+    "service_provider_name_freetext": {
+      "type": "string",
+      "description": "Fallback for a real-world provider not yet on the platform."
+    },
+    "cost": {
+      "type": "number",
+      "description": "Private by default."
+    },
+    "next_service_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Feeds derived reminders (no stored reminder entity/flag)."
+    },
+    "next_service_odometer_km": {
+      "type": "number"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "removed_by_owner"
+      ],
+      "default": "active",
+      "description": "A maintenance record is a historical log, not a task. No 'pending'/'completed' state."
+    }
+  },
+  "required": [
+    "vehicle_id",
+    "maintenance_type",
+    "service_date"
+  ]
+}

@@ -40,8 +40,7 @@ const BACKING_ENTITY: Record<string, string | null> = {
   [ReferenceTypes.EVENT]: "Event",
   [ReferenceTypes.LISTING]: "Listing",
   [ReferenceTypes.REPORT]: "Report",
-  // Backing entity not yet built — type-validation only.
-  [ReferenceTypes.VEHICLE]: null,
+  [ReferenceTypes.VEHICLE]: "Vehicle", // Phase 03 — Vehicle backing entity now exists.
   [ReferenceTypes.GROUP]: null,
   [ReferenceTypes.BUSINESS]: null,
   [ReferenceTypes.MODERATION_CASE]: null,

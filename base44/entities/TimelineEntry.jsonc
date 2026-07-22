@@ -1,0 +1,76 @@
+{
+  "name": "TimelineEntry",
+  "type": "object",
+  "properties": {
+    "vehicle_id": {
+      "type": "string",
+      "description": "FK\u2192Vehicle."
+    },
+    "entry_type": {
+      "type": "string",
+      "enum": [
+        "modification",
+        "maintenance",
+        "dyno_session",
+        "track_day",
+        "drag_result",
+        "show_event",
+        "ownership_milestone",
+        "general_update"
+      ],
+      "default": "general_update"
+    },
+    "entry_date": {
+      "type": "string",
+      "format": "date",
+      "description": "The date the event happened, not necessarily when the entry was created. Cannot be in the future."
+    },
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "linked_modification_id": {
+      "type": "string",
+      "description": "FK\u2192Modification. Set when entry_type = modification. At most one linked_* FK per entry."
+    },
+    "linked_maintenance_id": {
+      "type": "string",
+      "description": "FK\u2192MaintenanceRecord. Set when entry_type = maintenance."
+    },
+    "linked_performance_id": {
+      "type": "string",
+      "description": "FK\u2192PerformanceRecord. Set when entry_type is a performance-result type."
+    },
+    "linked_post_id": {
+      "type": "string",
+      "description": "FK\u2192Post. Nullable and independently deletable \u2014 deleting the Post sets this null, never cascades."
+    },
+    "origin": {
+      "type": "string",
+      "enum": [
+        "manual",
+        "system_generated"
+      ],
+      "default": "manual",
+      "description": "Manual vs auto-generated. Not a source_type field (ADR-012)."
+    },
+    "visibility": {
+      "type": "string",
+      "enum": [
+        "public",
+        "followers",
+        "approved_connections",
+        "private"
+      ],
+      "default": "public",
+      "description": "Inherits vehicle default; owner can override per entry."
+    }
+  },
+  "required": [
+    "vehicle_id",
+    "entry_date",
+    "title"
+  ]
+}

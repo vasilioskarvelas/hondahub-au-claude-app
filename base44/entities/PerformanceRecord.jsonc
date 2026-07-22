@@ -1,0 +1,102 @@
+{
+  "name": "PerformanceRecord",
+  "type": "object",
+  "properties": {
+    "vehicle_id": {
+      "type": "string",
+      "description": "FK\u2192Vehicle."
+    },
+    "performance_type": {
+      "type": "string",
+      "enum": [
+        "dyno",
+        "quarter_mile",
+        "eighth_mile",
+        "zero_to_hundred",
+        "lap_time",
+        "top_speed",
+        "other"
+      ]
+    },
+    "result_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "venue_name": {
+      "type": "string",
+      "description": "Single location field \u2014 used for a dyno shop, drag strip, or circuit alike. No separate track_name."
+    },
+    "event_id": {
+      "type": "string",
+      "description": "FK\u2192Event. Optional link if the result happened at a platform Event."
+    },
+    "title": {
+      "type": "string",
+      "description": "Optional \u2014 generated fallback from performance_type."
+    },
+    "notes": {
+      "type": "string"
+    },
+    "power_kw": {
+      "type": "number",
+      "description": "Canonical stored power unit. power_hp is NOT stored (computed for display only: kW \u00d7 1.341)."
+    },
+    "torque_nm": {
+      "type": "number"
+    },
+    "quarter_mile_seconds": {
+      "type": "number"
+    },
+    "trap_speed_kmh": {
+      "type": "number"
+    },
+    "eighth_mile_seconds": {
+      "type": "number"
+    },
+    "zero_to_hundred_seconds": {
+      "type": "number"
+    },
+    "lap_time_seconds": {
+      "type": "number"
+    },
+    "dyno_type": {
+      "type": "string",
+      "description": "Free text at MVP e.g. 'Dynapack', 'Mainline'."
+    },
+    "fuel_type_at_test": {
+      "type": "string",
+      "enum": [
+        "petrol",
+        "diesel",
+        "hybrid",
+        "electric",
+        "lpg",
+        "other"
+      ],
+      "description": "Reuses Vehicle.fuel_type enum values \u2014 no new enum invented."
+    },
+    "boost_psi": {
+      "type": "number"
+    },
+    "tyre_description": {
+      "type": "string",
+      "description": "Free text at MVP."
+    },
+    "verification_status": {
+      "type": "string",
+      "enum": [
+        "unverified",
+        "pending",
+        "verified",
+        "rejected"
+      ],
+      "default": "unverified",
+      "description": "Moderator/Admin-only changes via submit/approve/reject. AI never sets this."
+    }
+  },
+  "required": [
+    "vehicle_id",
+    "performance_type",
+    "result_date"
+  ]
+}
