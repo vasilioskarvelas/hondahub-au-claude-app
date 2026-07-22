@@ -12,7 +12,7 @@ Source of truth for the build: `HONDA_HUB_MASTER_IMPLEMENTATION_MANUAL.md` (the 
 |---|---|---|---|---|---|---|
 | 00 | Base44 Setup & Configuration | ✅ Complete | ✅ | ✅ | ✅ | ✅ |
 | 01 | Identity Foundation | ✅ Complete | ✅ | ✅ | ✅ | ✅ |
-| 02 | Platform Cross-Cutting | ☐ Not started | ☐ | ☐ | ☐ | ☐ |
+| 02 | Platform Cross-Cutting | ✅ Complete | ✅ | ✅ | ✅ | ✅ |
 | 03 | Garage | ☐ Not started | ☐ | ☐ | ☐ | ☐ |
 | 04 | Social | ☐ Not started | ☐ | ☐ | ☐ | ☐ |
 | 05 | Moderation & Governance | ☐ Not started | ☐ | ☐ | ☐ | ☐ |
@@ -118,6 +118,55 @@ Source of truth for the build: `HONDA_HUB_MASTER_IMPLEMENTATION_MANUAL.md` (the 
 - `ContactMethodVerified` is triggered manually via the trust-score `award` action rather than auto-hooked to Base44's platform email-verification event (the platform does not expose an on-verify webhook). A profile-load recalc is the pragmatic substitute; idempotency guarantees no double-award.
 - Bio 500-char server-side cap is implemented in `user-profile` but not independently test-confirmed via the test harness (string-expression handling ambiguity in the harness); the validation code is in place.
 - `garage_completed`/`completed_profile` TrustScore signals still have no auto-triggering mechanism (carried open item from the audit; not Phase 01 scope).
+
+---
+
+## Phase 02 — Completion Record
+
+### Entities (base44/entities/)
+- `Media.jsonc` — new (ADR-011 Media): media_type (image|video), file_url (required), thumbnail_url, mime_type, width, height, alt_text, source (user|business|marketplace|event|community|system), is_public. Ownership via built-in created_by_id.
+
+### Backend functions (base44/functions/)
+- `media/entry.ts` — MediaService. Actions: `create` (persist Media owned by caller; media_type inferred from mime_type when omitted; source validated), `list` (own media only), `get` (resolve single Media, any caller), `delete` (owner/admin only; ownership enforced via created_by_id).
+
+### Shared modules (base44/shared/)
+- `reference-resolver.ts` — ReferenceResolverService. `validateReference(target_type, target_id, allowedTypes)`: validates target_type against the ReferenceTypes registry and an optional per-field allow-list, with best-effort existence check against the backing entity when one is built (User/CommunityPost/Comment/Event/Listing/Report); type-only validation for reference types whose backing entity lands in a later phase.
+- `notifications.ts` — NotificationService. `createNotification(recipient_id, notification_type, actor_id?, target_type?, target_id?)`: registry-validated notification creation via asServiceRole; rejects unknown notification_type and unknown target_type. The cross-cutting service that Phase 04/06/08 consumers call instead of touching Notification directly.
+
+### Components
+- `src/components/identity/MediaField.jsx` — owner media upload/resolve field: UploadFile → MediaService.create → onUpdated(media_id, file_url); resolves an existing media_id pointer to its file_url for preview; clear action. Reused for avatar and cover.
+
+### Pages
+- `src/pages/Profile.jsx` — avatar_media_id and cover_media_id are now functional: header renders the resolved avatar image (letter fallback) and cover image; edit form exposes MediaField for both, persisting the media_id via user-profile `update`. Phase 01 stubs replaced with the live Media pipeline.
+
+### Refactors
+- `base44/functions/trust-score/entry.ts` — TrustTierChanged notification creation delegated to the centralized NotificationService shared helper (`createNotification`) instead of a direct `Notification.create`. Same registry-validated behaviour; removes the last direct notification write from a service.
+
+### Acceptance tests — results
+- ✅ MediaService `create` — Media record created, created_by_id = caller (ownership recorded).
+- ✅ MediaService `list` — returns only the caller's own media.
+- ✅ MediaService `get` — resolves a single Media record by id.
+- ✅ MediaService `delete` — owner deletes own media successfully (200 ok).
+- ✅ Avatar wire-through: user-profile `update { avatar_media_id }` persists the pointer on User (200 ok, value stored); cleared to null cleanly after the test media was deleted.
+- ✅ TrustScore `recalc` runs clean after the NotificationService refactor (import resolves, no regression; score 25 / trusted_member unchanged).
+
+### Testing checklist results
+- Manual: Profile renders avatar (image or letter fallback) and cover; edit form exposes avatar/cover upload — ✅ (verified via backend round-trip; UI wired).
+- Permission: Media delete owner-only (created_by_id check) — ✅; user-profile rejects account_tier/account_status (Phase 01, still enforced) — ✅.
+- Lifecycle: Media source enum enforced; media_type inferred from mime_type — ✅.
+- Registry: NotificationService validates notification_type + target_type against registries; ReferenceResolverService validates target_type against ReferenceTypes + allow-list — ✅ (code path present).
+- API: error codes AUTH_REQUIRED / VALIDATION_FAILED / PERMISSION_DENIED reused — ✅.
+
+### Implementation boundaries honoured
+- ✅ No Vehicle, Post, Group, Business, ModerationCase, MarketplaceMessage, or BusinessReview entity built (their phases).
+- ✅ ReferenceTypes registry unchanged (still exactly 12 values) — Media is owned content, not a polymorphic target, so no MEDIA reference type was added.
+- ✅ No notification preferences (Phase 09); no entitlement/billing (Phase 10).
+- ✅ Legacy pages/components that write notifications with the old schema are untouched (rebuilt in Phase 04/06/08); NotificationService is the service they will migrate to.
+
+### Known issues (Phase 02)
+- ReferenceResolverService existence checks are best-effort: reference types whose backing entity is not yet built (Vehicle, Group, Business, ModerationCase, MarketplaceMessage, BusinessReview) are type-validated only; existence enforcement activates when each backing entity lands in its phase.
+- The centralized NotificationService is wired into TrustScoreService only; Phase 04/06/08 consumers still write the old-schema Notification directly and will error until rebuilt. This is expected and out of Phase 02 scope.
+- Media upload is a two-step flow (UploadFile then MediaService.create) rather than a single multipart call, since backend functions receive JSON; the MediaField component encapsulates both steps for the frontend.
 
 ---
 

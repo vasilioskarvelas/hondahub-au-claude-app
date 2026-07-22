@@ -1,0 +1,60 @@
+{
+  "name": "Media",
+  "type": "object",
+  "properties": {
+    "media_type": {
+      "type": "string",
+      "enum": [
+        "image",
+        "video"
+      ],
+      "description": "Detected or upload-declared media kind (ADR-011)."
+    },
+    "file_url": {
+      "type": "string",
+      "description": "Persisted file URL returned by UploadFile. Required."
+    },
+    "thumbnail_url": {
+      "type": "string",
+      "description": "Optional preview/optimized URL (e.g. video poster or resized image)."
+    },
+    "mime_type": {
+      "type": "string",
+      "description": "Original MIME type, when known."
+    },
+    "width": {
+      "type": "number",
+      "description": "Pixel width, when known."
+    },
+    "height": {
+      "type": "number",
+      "description": "Pixel height, when known."
+    },
+    "alt_text": {
+      "type": "string",
+      "description": "Accessibility caption; also used as the display caption."
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "user",
+        "business",
+        "marketplace",
+        "event",
+        "community",
+        "system"
+      ],
+      "default": "user",
+      "description": "Origin context of the upload (ADR-011)."
+    },
+    "is_public": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether non-owners may resolve this Media (e.g. avatar on a public profile)."
+    }
+  },
+  "required": [
+    "file_url",
+    "media_type"
+  ]
+}

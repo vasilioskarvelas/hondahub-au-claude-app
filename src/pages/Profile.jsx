@@ -3,6 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { Settings, MapPin, Save, LogOut } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import TierBadge from "@/components/identity/TierBadge";
+import MediaField from "@/components/identity/MediaField";
 import { AccountTier } from "@/lib/registries";
 
 export default function Profile() {
@@ -10,6 +11,8 @@ export default function Profile() {
   const [trustScore, setTrustScore] = React.useState(null);
   const [editing, setEditing] = React.useState(false);
   const [form, setForm] = React.useState({});
+  const [avatarId, setAvatarId] = React.useState(null);
+  const [coverId, setCoverId] = React.useState(null);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState(null);
   const navigate = useNavigate();
@@ -18,6 +21,8 @@ export default function Profile() {
     try {
       const u = await base44.auth.me();
       setUser(u);
+      setAvatarId(u.avatar_media_id || null);
+      setCoverId(u.cover_media_id || null);
       setForm({
         handle: u.handle || "",
         display_name: u.display_name || u.full_name || "",
@@ -51,6 +56,15 @@ export default function Profile() {
     }
   };
 
+  const saveMediaField = async (field, mediaId) => {
+    try {
+      const res = await base44.functions.invoke("user-profile", { action: "update", [field]: mediaId || null });
+      if (res.data?.ok) setUser(res.data.user);
+    } catch (e) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
   const handleLogout = async () => {
     await base44.auth.logout("/");
   };
@@ -66,12 +80,12 @@ export default function Profile() {
   return (
     <div className="mx-auto max-w-lg space-y-5">
       <div className="overflow-hidden rounded-2xl border border-border bg-card">
-        <div className="carbon-bg h-24 bg-secondary" />
+        <div className="relative carbon-bg h-24 bg-secondary">
+          {coverId && <CoverPreview mediaId={coverId} />}
+        </div>
         <div className="px-5 pb-5">
           <div className="-mt-10 flex items-end gap-4">
-            <div className="flex h-20 w-20 items-center justify-center rounded-full border-4 border-card bg-primary text-2xl font-black text-primary-foreground">
-              {name.charAt(0).toUpperCase()}
-            </div>
+            <AvatarPreview mediaId={avatarId} name={name} />
             <div className="flex-1 pb-1">
               <h1 className="text-xl font-black">{name}</h1>
               {user.handle && <p className="text-xs text-muted-foreground">@{user.handle}</p>}
@@ -92,6 +106,22 @@ export default function Profile() {
         <div className="space-y-4 rounded-2xl border border-border bg-card p-5">
           <h2 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">Edit Profile</h2>
           {error && <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}
+          <MediaField
+            label="Avatar"
+            kind="avatar"
+            source="user"
+            mediaId={avatarId}
+            onUpdated={(id) => { setAvatarId(id); saveMediaField("avatar_media_id", id); }}
+            onCleared={() => { setAvatarId(null); saveMediaField("avatar_media_id", null); }}
+          />
+          <MediaField
+            label="Cover"
+            kind="cover"
+            source="user"
+            mediaId={coverId}
+            onUpdated={(id) => { setCoverId(id); saveMediaField("cover_media_id", id); }}
+            onCleared={() => { setCoverId(null); saveMediaField("cover_media_id", null); }}
+          />
           <Field label="Handle" value={form.handle} onChange={(v) => setForm({ ...form, handle: v })} hint="Public username. 3-20 chars, alphanumeric/underscore. Must be unique." />
           <Field label="Display Name" value={form.display_name} onChange={(v) => setForm({ ...form, display_name: v })} />
           <Field label="Bio" value={form.bio} onChange={(v) => setForm({ ...form, bio: v })} multiline hint="Max 500 characters." />
@@ -143,4 +173,38 @@ function Row({ label, value }) {
       <dd className="font-medium text-right">{value || "—"}</dd>
     </div>
   );
+}
+
+function AvatarPreview({ mediaId, name }) {
+  const [url, setUrl] = React.useState(null);
+  React.useEffect(() => {
+    let active = true;
+    if (!mediaId) { setUrl(null); return; }
+    base44.functions.invoke("media", { action: "get", media_id: mediaId })
+      .then((r) => active && setUrl(r.data?.media?.file_url || null))
+      .catch(() => active && setUrl(null));
+    return () => { active = false; };
+  }, [mediaId]);
+  if (url) {
+    return <img src={url} alt={name} className="h-20 w-20 rounded-full border-4 border-card object-cover" />;
+  }
+  return (
+    <div className="flex h-20 w-20 items-center justify-center rounded-full border-4 border-card bg-primary text-2xl font-black text-primary-foreground">
+      {name.charAt(0).toUpperCase()}
+    </div>
+  );
+}
+
+function CoverPreview({ mediaId }) {
+  const [url, setUrl] = React.useState(null);
+  React.useEffect(() => {
+    let active = true;
+    if (!mediaId) { setUrl(null); return; }
+    base44.functions.invoke("media", { action: "get", media_id: mediaId })
+      .then((r) => active && setUrl(r.data?.media?.file_url || null))
+      .catch(() => active && setUrl(null));
+    return () => { active = false; };
+  }, [mediaId]);
+  if (!url) return null;
+  return <img src={url} alt="Cover" className="absolute inset-0 h-full w-full object-cover opacity-80" />;
 }

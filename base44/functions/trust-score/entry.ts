@@ -7,6 +7,7 @@ import {
   computeTier,
   isTierPromotion,
 } from "../../shared/identity.ts";
+import { createNotification } from "../../shared/notifications.ts";
 
 /**
  * TrustScoreService (Phase 01) — the trust signal engine.
@@ -79,7 +80,7 @@ Deno.serve(async (req) => {
       await base44.entities.User.update(user.id, { account_tier: newTier });
       // TrustTierChanged → NotificationService (positive changes only).
       if (newTier !== oldTier && isTierPromotion(oldTier, newTier)) {
-        await base44.entities.Notification.create({
+        await createNotification(base44, {
           recipient_id: user.id,
           notification_type: NotificationType.TRUST_TIER_CHANGE,
           target_type: 'user',
