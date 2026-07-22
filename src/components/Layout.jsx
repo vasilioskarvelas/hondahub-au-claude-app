@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 const mainNav = [
   { to: "/", label: "Home", icon: Home },
   { to: "/market", label: "Market", icon: ShoppingBag },
-  { to: "/community", label: "Social", icon: Users },
+  { to: "/feed", label: "Feed", icon: Users },
   { to: "/events", label: "Events", icon: CalendarDays },
   { to: "/shop", label: "Shop", icon: ShoppingBag },
   { to: "/giveaway", label: "Rewards", icon: Gift },

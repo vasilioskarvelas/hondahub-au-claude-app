@@ -1,0 +1,56 @@
+{
+  "name": "Post",
+  "type": "object",
+  "properties": {
+    "caption": {
+      "type": "string",
+      "description": "The post body text."
+    },
+    "media_id": {
+      "type": "string",
+      "description": "FK\u2192Media. Optional media attachment (image/video)."
+    },
+    "primary_vehicle_id": {
+      "type": "string",
+      "description": "FK\u2192Vehicle. Must be owned by the post author (ownership enforced via ReferenceResolverService + created_by_id check). Ownership only \u2014 does not support mentioning another user's vehicle (deferred VehicleMention entity)."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "published",
+        "removed_by_user",
+        "removed_by_moderation"
+      ],
+      "default": "published"
+    },
+    "visibility": {
+      "type": "string",
+      "enum": [
+        "public",
+        "followers",
+        "approved_connections",
+        "private"
+      ],
+      "default": "public"
+    },
+    "like_count": {
+      "type": "number",
+      "default": 0,
+      "description": "Denormalized counter. PostLike is the source of truth \u2014 recomputed on every like/unlike."
+    },
+    "comment_count": {
+      "type": "number",
+      "default": 0,
+      "description": "Denormalized counter. Comment (status=published) is the source of truth \u2014 recomputed on every comment lifecycle event."
+    },
+    "hashtags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "caption"
+  ]
+}

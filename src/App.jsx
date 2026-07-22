@@ -32,6 +32,9 @@ import Login from '@/pages/Login';
 import Register from '@/pages/Register';
 import ForgotPassword from '@/pages/ForgotPassword';
 import ResetPassword from '@/pages/ResetPassword';
+import Feed from '@/pages/Feed';
+import PostDetail from '@/pages/PostDetail';
+import Connections from '@/pages/Connections';
 
 import Notifications from '@/pages/Notifications';
 import UserProfile from '@/pages/UserProfile';
@@ -85,6 +88,10 @@ const AuthenticatedApp = () => {
         <Route path="/verification-queue" element={<VerificationQueue />} />
         <Route path="/user/:name/garage" element={<UserGarage />} />
         <Route path="/groups" element={<Groups />} />
+        <Route path="/feed" element={<Feed />} />
+        <Route path="/post/:id" element={<PostDetail />} />
+        <Route path="/connections" element={<Connections />} />
+        <Route path="/connections/:name" element={<Connections />} />
 
         <Route path="/notifications" element={<Notifications />} />
         <Route path="/user/:name" element={<UserProfile />} />

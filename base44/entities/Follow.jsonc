@@ -2,15 +2,27 @@
   "name": "Follow",
   "type": "object",
   "properties": {
-    "follower_name": {
-      "type": "string"
+    "follower_id": {
+      "type": "string",
+      "description": "FK\u2192User. The follower (mirrors created_by_id; explicit for the uniqueness key)."
     },
-    "following_name": {
-      "type": "string"
+    "target_type": {
+      "type": "string",
+      "enum": [
+        "user",
+        "vehicle",
+        "business"
+      ],
+      "description": "Polymorphic follow target. Validated against a subset of ReferenceTypes (user, vehicle, business)."
+    },
+    "target_id": {
+      "type": "string",
+      "description": "FK\u2192User/Vehicle/Business depending on target_type."
     }
   },
   "required": [
-    "follower_name",
-    "following_name"
+    "follower_id",
+    "target_type",
+    "target_id"
   ]
 }

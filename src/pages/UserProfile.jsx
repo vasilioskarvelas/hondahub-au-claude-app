@@ -1,8 +1,10 @@
 import React from "react";
 import { useParams, Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { ArrowLeft, MapPin } from "lucide-react";
+import { ArrowLeft, MapPin, Grid3x3, Users } from "lucide-react";
 import TierBadge from "@/components/identity/TierBadge";
+import PostCard from "@/components/social/PostCard";
+import FollowButton from "@/components/social/FollowButton";
 import { AccountTier } from "@/lib/registries";
 
 export default function UserProfile() {
@@ -10,28 +12,45 @@ export default function UserProfile() {
   const decodedName = decodeURIComponent(name || "");
   const [profileUser, setProfileUser] = React.useState(null);
   const [trustScore, setTrustScore] = React.useState(null);
+  const [me, setMe] = React.useState(null);
+  const [posts, setPosts] = React.useState([]);
+  const [following, setFollowing] = React.useState(false);
+  const [followersCount, setFollowersCount] = React.useState(0);
+  const [followingCount, setFollowingCount] = React.useState(0);
   const [loading, setLoading] = React.useState(true);
   const [notFound, setNotFound] = React.useState(false);
 
+  const load = async (u) => {
+    const ts = await base44.entities.TrustScore.filter({ user_id: u.id });
+    setTrustScore(ts[0] || null);
+    const [postsRes, folRes, folgRes] = await Promise.all([
+      base44.functions.invoke("social", { action: "listProfilePosts", user_id: u.id }).catch(() => ({ data: { posts: [] } })),
+      base44.functions.invoke("social", { action: "listFollowers", user_id: u.id }).catch(() => ({ data: { count: 0 } })),
+      base44.functions.invoke("social", { action: "listFollowing", user_id: u.id }).catch(() => ({ data: { count: 0 } })),
+    ]);
+    setPosts(postsRes.data?.posts || []);
+    setFollowersCount(folRes.data?.count || 0);
+    setFollowingCount(folgRes.data?.count || 0);
+  };
+
   React.useEffect(() => {
     setLoading(true);
+    setNotFound(false);
     (async () => {
       try {
-        // Lookup by handle first, then display_name fallback.
         let users = await base44.entities.User.filter({ handle: decodedName });
-        if (users.length === 0) {
-          users = await base44.entities.User.filter({ display_name: decodedName });
-        }
-        if (users.length === 0) {
-          setNotFound(true);
-          setProfileUser(null);
-        } else {
-          const u = users[0];
-          setProfileUser(u);
-          const ts = await base44.entities.TrustScore.filter({ user_id: u.id });
-          setTrustScore(ts[0] || null);
-        }
-      } catch (e) {
+        if (users.length === 0) users = await base44.entities.User.filter({ display_name: decodedName });
+        if (users.length === 0) { setNotFound(true); setProfileUser(null); return; }
+        const u = users[0];
+        setProfileUser(u);
+        try { const m = await base44.auth.me(); setMe(m);
+          if (m.id !== u.id) {
+            const f = await base44.functions.invoke("social", { action: "isFollowing", target_type: "user", target_id: u.id });
+            setFollowing(!!f.data?.following);
+          }
+        } catch {}
+        await load(u);
+      } catch {
         setNotFound(true);
       } finally {
         setLoading(false);
@@ -39,14 +58,12 @@ export default function UserProfile() {
     })();
   }, [decodedName]);
 
-  if (loading) {
-    return <div className="flex h-64 items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-secondary border-t-primary" /></div>;
-  }
+  if (loading) return <div className="flex h-64 items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-secondary border-t-primary" /></div>;
 
   if (notFound || !profileUser) {
     return (
       <div className="mx-auto max-w-lg space-y-5">
-        <Link to="/community" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" /> Back</Link>
+        <Link to="/feed" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" /> Back</Link>
         <div className="rounded-2xl border border-dashed border-border bg-card p-12 text-center">
           <h3 className="font-bold">User not found</h3>
           <p className="mt-1 text-sm text-muted-foreground">@{decodedName} doesn't exist.</p>
@@ -58,10 +75,12 @@ export default function UserProfile() {
   const tier = trustScore?.current_tier || profileUser.account_tier || AccountTier.NEW_MEMBER;
   const score = trustScore?.current_score ?? 0;
   const displayName = profileUser.display_name || profileUser.handle || profileUser.full_name || decodedName;
+  const isOwn = me?.id === profileUser.id;
+  const connectionsPath = `/connections/${encodeURIComponent(profileUser.handle || displayName)}`;
 
   return (
     <div className="mx-auto max-w-lg space-y-5">
-      <Link to="/community" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" /> Back</Link>
+      <Link to="/feed" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" /> Back to feed</Link>
       <div className="overflow-hidden rounded-2xl border border-border bg-card">
         <div className="carbon-bg h-24 bg-secondary" />
         <div className="px-5 pb-5">
@@ -79,9 +98,30 @@ export default function UserProfile() {
                 )}
               </div>
             </div>
+            {!isOwn && me && (
+              <FollowButton targetType="user" targetId={profileUser.id} initialFollowing={following} onToggle={setFollowing} />
+            )}
           </div>
           {profileUser.bio && <p className="mt-4 text-sm text-muted-foreground">{profileUser.bio}</p>}
+          <div className="mt-4 flex gap-4 text-sm">
+            <Link to={`${connectionsPath}?tab=followers`} className="hover:text-primary"><span className="font-bold">{followersCount}</span> <span className="text-muted-foreground">followers</span></Link>
+            <Link to={`${connectionsPath}?tab=following`} className="hover:text-primary"><span className="font-bold">{followingCount}</span> <span className="text-muted-foreground">following</span></Link>
+          </div>
         </div>
+      </div>
+
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-muted-foreground"><Grid3x3 className="h-4 w-4" /> Posts</div>
+        {posts.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border bg-card p-12 text-center">
+            <Users className="mx-auto h-8 w-8 text-muted-foreground" />
+            <p className="mt-2 text-sm text-muted-foreground">No posts yet.</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {posts.map((p) => <PostCard key={p.id} post={p} />)}
+          </div>
+        )}
       </div>
     </div>
   );

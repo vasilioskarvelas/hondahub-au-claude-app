@@ -35,7 +35,7 @@ const REFERENCE_VALUES = Object.values(ReferenceTypes);
 // at this phase get an existence check; others are type-validated only).
 const BACKING_ENTITY: Record<string, string | null> = {
   [ReferenceTypes.USER]: "User",
-  [ReferenceTypes.POST]: "CommunityPost",
+  [ReferenceTypes.POST]: "Post",
   [ReferenceTypes.COMMENT]: "Comment",
   [ReferenceTypes.EVENT]: "Event",
   [ReferenceTypes.LISTING]: "Listing",

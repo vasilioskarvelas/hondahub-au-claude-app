@@ -3,25 +3,35 @@
   "type": "object",
   "properties": {
     "post_id": {
-      "type": "string"
-    },
-    "author_name": {
-      "type": "string"
+      "type": "string",
+      "description": "FK\u2192Post."
     },
     "text": {
-      "type": "string"
+      "type": "string",
+      "description": "The comment body."
     },
     "parent_comment_id": {
-      "type": "string"
+      "type": "string",
+      "description": "FK\u2192Comment. One level of reply-threading maximum \u2014 the parent comment must itself have no parent."
     },
-    "likes": {
+    "status": {
+      "type": "string",
+      "enum": [
+        "published",
+        "hidden_by_post_author",
+        "removed_by_author",
+        "removed_by_moderation"
+      ],
+      "default": "published",
+      "description": "The post author may hide (hidden_by_post_author) but never hard-delete another user's comment. removed_by_author = the comment's own author removed it. removed_by_moderation = moderator soft-removed it. Content is always retained."
+    },
+    "like_count": {
       "type": "number",
       "default": 0
     }
   },
   "required": [
     "post_id",
-    "author_name",
     "text"
   ]
 }
