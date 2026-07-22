@@ -1,0 +1,69 @@
+{
+  "name": "ModerationCase",
+  "type": "object",
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": [
+        "open",
+        "assigned",
+        "in_review",
+        "resolved_upheld",
+        "resolved_dismissed",
+        "escalated"
+      ],
+      "default": "open",
+      "description": "open \u2192 assigned \u2192 in_review \u2192 resolved_upheld/resolved_dismissed; escalated branch requires Admin to resolve."
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "urgent"
+      ],
+      "default": "medium",
+      "description": "Queue ordering weight. Distinct from severity."
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "minor",
+        "moderate",
+        "serious",
+        "critical"
+      ],
+      "default": "moderate",
+      "description": "Impact assessment. Distinct from priority."
+    },
+    "target_type": {
+      "type": "string",
+      "description": "Polymorphic target, same value space as Report.target_type."
+    },
+    "target_id": {
+      "type": "string"
+    },
+    "assigned_moderator_id": {
+      "type": "string",
+      "description": "FK\u2192User. The queue is a query over this field \u2014 no separate queue/assignment entity (ADR-010)."
+    },
+    "resolved_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "resolved_by": {
+      "type": "string",
+      "description": "FK\u2192User (mod/admin who resolved the case)."
+    },
+    "escalated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Set when the case is escalated to Admin."
+    }
+  },
+  "required": [
+    "target_type",
+    "target_id"
+  ]
+}

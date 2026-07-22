@@ -2,82 +2,65 @@
   "name": "Report",
   "type": "object",
   "properties": {
-    "report_type": {
+    "reporter_id": {
+      "type": "string",
+      "description": "FK\u2192User. The reporter (mirrors created_by_id; explicit for the uniqueness key). Unique on (reporter_id, target_type, target_id) while status=open."
+    },
+    "target_type": {
       "type": "string",
       "enum": [
-        "daily_executive",
-        "weekly_health",
-        "security_scan",
-        "performance",
-        "database_health",
-        "marketplace_safety",
-        "customer_journey",
-        "financial"
+        "user",
+        "vehicle",
+        "post",
+        "comment",
+        "group",
+        "event",
+        "business",
+        "listing",
+        "marketplace_message"
       ],
-      "default": "daily_executive"
+      "description": "The reported content type. Validated against the Report target subset of ReferenceTypes."
     },
-    "title": {
-      "type": "string"
+    "target_id": {
+      "type": "string",
+      "description": "FK\u2192 the backing entity per target_type."
     },
-    "summary": {
-      "type": "string"
+    "reason": {
+      "type": "string",
+      "description": "Free-text reason from the reporter at MVP."
     },
-    "content": {
-      "type": "string"
-    },
-    "health_score": {
-      "type": "number",
-      "default": 0
-    },
-    "customer_experience_score": {
-      "type": "number",
-      "default": 0
-    },
-    "critical_issues": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
-    },
-    "high_priority_issues": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
-    },
-    "revenue_opportunities": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
-    },
-    "security_risks": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
-    },
-    "suggested_improvements": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
-    },
-    "metrics": {
-      "type": "string"
+    "details": {
+      "type": "string",
+      "description": "Optional additional context from the reporter."
     },
     "status": {
       "type": "string",
       "enum": [
-        "active",
-        "archived"
+        "open",
+        "consolidated",
+        "resolved",
+        "dismissed"
       ],
-      "default": "active"
+      "default": "open",
+      "description": "open = newly filed. consolidated = folded into a ModerationCase. resolved = actioned. dismissed = no action."
+    },
+    "case_id": {
+      "type": "string",
+      "description": "FK\u2192ModerationCase. Set when the report is consolidated into a case."
+    },
+    "resolved_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "resolved_by": {
+      "type": "string",
+      "description": "FK\u2192User (mod/admin who resolved the report)."
     }
   },
   "required": [
-    "report_type",
-    "title",
-    "content"
+    "reporter_id",
+    "target_type",
+    "target_id",
+    "reason"
   ]
 }

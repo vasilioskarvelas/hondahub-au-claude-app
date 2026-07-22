@@ -1,0 +1,18 @@
+{
+  "name": "ModerationCaseNote",
+  "type": "object",
+  "properties": {
+    "case_id": {
+      "type": "string",
+      "description": "FK\u2192ModerationCase."
+    },
+    "note": {
+      "type": "string",
+      "description": "The note body. Append-only \u2014 never edited or deleted. author_id is the built-in created_by_id."
+    }
+  },
+  "required": [
+    "case_id",
+    "note"
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "name": "AuditLog",
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": [
+        "vehicle_verification_approved",
+        "business_status_changed",
+        "listing_removed_by_moderation",
+        "trust_tier_overridden",
+        "financial_change_approved"
+      ],
+      "description": "Validated against the AuditActionType registry. Never a free-text string. Append-only \u2014 no update or delete path."
+    },
+    "actor_id": {
+      "type": "string",
+      "description": "FK\u2192User. Mirrors created_by_id. Nullable for system-generated entries."
+    },
+    "target_type": {
+      "type": "string",
+      "description": "Polymorphic target, validated against ReferenceTypes. Nullable."
+    },
+    "target_id": {
+      "type": "string"
+    },
+    "details": {
+      "type": "string",
+      "description": "Human-readable context. Free text."
+    }
+  },
+  "required": [
+    "action"
+  ]
+}

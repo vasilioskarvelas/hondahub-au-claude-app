@@ -1,0 +1,72 @@
+{
+  "name": "ModerationAction",
+  "type": "object",
+  "properties": {
+    "case_id": {
+      "type": "string",
+      "description": "FK\u2192ModerationCase."
+    },
+    "action_type": {
+      "type": "string",
+      "enum": [
+        "warning",
+        "content_removed",
+        "listing_removed",
+        "account_restricted",
+        "account_suspended",
+        "account_banned",
+        "no_action",
+        "content_restored",
+        "other"
+      ],
+      "description": "Validated against the ModerationActionType registry. AI may never create a row here \u2014 enforced structurally."
+    },
+    "actor_id": {
+      "type": "string",
+      "description": "FK\u2192User (the mod/admin who applied the action). Mirrors created_by_id; explicit."
+    },
+    "target_type": {
+      "type": "string",
+      "description": "Polymorphic target the action was applied to."
+    },
+    "target_id": {
+      "type": "string"
+    },
+    "reason": {
+      "type": "string",
+      "description": "Human-readable reason for the action."
+    },
+    "appeal_status": {
+      "type": "string",
+      "enum": [
+        "none",
+        "pending",
+        "approved",
+        "rejected"
+      ],
+      "default": "none",
+      "description": "Appeal lifecycle. none \u2192 pending \u2192 approved/rejected. A reversal is always a NEW ModerationAction row (reversal_of_action_id), never an edit."
+    },
+    "appealed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "appeal_resolved_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "appeal_resolved_by": {
+      "type": "string",
+      "description": "FK\u2192User (admin who resolved the appeal)."
+    },
+    "reversal_of_action_id": {
+      "type": "string",
+      "description": "FK\u2192ModerationAction. Set when this action reverses a prior one. Always a new row \u2014 the original is never edited."
+    }
+  },
+  "required": [
+    "case_id",
+    "action_type",
+    "reason"
+  ]
+}

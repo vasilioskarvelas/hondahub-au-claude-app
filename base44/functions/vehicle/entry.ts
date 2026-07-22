@@ -8,6 +8,8 @@ import { awardSignalToUser } from "../../shared/trust-score.ts";
 import { SignalType } from "../../shared/identity.ts";
 import { createNotification } from "../../shared/notifications.ts";
 import { NotificationType } from "../../shared/identity.ts";
+import { writeAuditLog } from "../../shared/audit-log.ts";
+import { AuditActionType } from "../../shared/moderation.ts";
 
 /**
  * VehicleService (Phase 03) — owns the Garage's central domain object.
@@ -204,6 +206,16 @@ Deno.serve(async (req) => {
           actor_id: user.id,
           target_type: 'vehicle',
           target_id: vehicle_id,
+        });
+      } catch (e) { /* non-blocking */ }
+      // Phase 05 wiring: VehicleVerified approval → AuditLog entry (completes the approval workflow).
+      try {
+        await writeAuditLog(base44, {
+          action: AuditActionType.VEHICLE_VERIFICATION_APPROVED,
+          actor_id: user.id,
+          target_type: 'vehicle',
+          target_id: vehicle_id,
+          details: `Vehicle "${vehicle.nickname || `${vehicle.make} ${vehicle.model}`}" verified by ${user.role === 'admin' ? 'admin' : 'moderator'}`,
         });
       } catch (e) { /* non-blocking */ }
       return Response.json({ ok: true, vehicle: updated });
