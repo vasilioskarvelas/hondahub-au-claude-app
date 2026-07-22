@@ -105,7 +105,7 @@ Deno.serve(async (req) => {
         await base44.entities.TrustScore.update(trustScore.id, { current_tier: newTier });
         await base44.entities.User.update(user.id, { account_tier: newTier });
         if (isTierPromotion(oldTier, newTier)) {
-          await base44.entities.Notification.create({
+          await createNotification(base44, {
             recipient_id: user.id,
             notification_type: NotificationType.TRUST_TIER_CHANGE,
             target_type: 'user',
