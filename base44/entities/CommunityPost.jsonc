@@ -1,0 +1,60 @@
+{
+  "name": "CommunityPost",
+  "type": "object",
+  "properties": {
+    "author_name": {
+      "type": "string"
+    },
+    "caption": {
+      "type": "string"
+    },
+    "photos": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "video_url": {
+      "type": "string"
+    },
+    "vehicle_model": {
+      "type": "string"
+    },
+    "chassis_code": {
+      "type": "string"
+    },
+    "engine_family": {
+      "type": "string",
+      "enum": [
+        "K",
+        "B",
+        "D",
+        "H",
+        "F",
+        "Other"
+      ],
+      "default": "Other"
+    },
+    "likes": {
+      "type": "number",
+      "default": 0
+    },
+    "shares": {
+      "type": "number",
+      "default": 0
+    },
+    "hashtags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "tags": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "author_name",
+    "caption"
+  ]
+}

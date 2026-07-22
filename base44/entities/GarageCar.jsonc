@@ -1,0 +1,93 @@
+{
+  "name": "GarageCar",
+  "type": "object",
+  "properties": {
+    "owner_name": {
+      "type": "string"
+    },
+    "model": {
+      "type": "string"
+    },
+    "chassis_code": {
+      "type": "string"
+    },
+    "engine_code": {
+      "type": "string"
+    },
+    "engine_family": {
+      "type": "string",
+      "enum": [
+        "K",
+        "B",
+        "D",
+        "H",
+        "F",
+        "Other"
+      ],
+      "default": "Other"
+    },
+    "induction_type": {
+      "type": "string",
+      "enum": [
+        "na",
+        "fi"
+      ],
+      "default": "na"
+    },
+    "gearbox": {
+      "type": "string"
+    },
+    "power_kw": {
+      "type": "number"
+    },
+    "year": {
+      "type": "number"
+    },
+    "modifications": {
+      "type": "string"
+    },
+    "photos": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "dyno_kw": {
+      "type": "number"
+    },
+    "track_name": {
+      "type": "string"
+    },
+    "track_time": {
+      "type": "string"
+    },
+    "time_slip_url": {
+      "type": "string"
+    },
+    "time_verified": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "verified",
+        "rejected"
+      ],
+      "default": "pending"
+    },
+    "drag_time": {
+      "type": "string"
+    },
+    "instagram": {
+      "type": "string"
+    },
+    "future_plans": {
+      "type": "string"
+    },
+    "is_featured": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "model"
+  ]
+}

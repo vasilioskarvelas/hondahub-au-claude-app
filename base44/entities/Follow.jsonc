@@ -1,0 +1,16 @@
+{
+  "name": "Follow",
+  "type": "object",
+  "properties": {
+    "follower_name": {
+      "type": "string"
+    },
+    "following_name": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "follower_name",
+    "following_name"
+  ]
+}

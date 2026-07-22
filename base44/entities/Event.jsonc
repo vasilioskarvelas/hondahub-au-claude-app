@@ -1,0 +1,48 @@
+{
+  "name": "Event",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "meet",
+        "cruise",
+        "track_day",
+        "drag_day",
+        "cars_coffee",
+        "workshop_event"
+      ],
+      "default": "meet"
+    },
+    "date": {
+      "type": "string",
+      "format": "date"
+    },
+    "time": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    },
+    "state": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "image_url": {
+      "type": "string"
+    },
+    "organizer_name": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "title",
+    "date",
+    "state"
+  ]
+}

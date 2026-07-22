@@ -1,0 +1,40 @@
+{
+  "name": "Notification",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": [
+        "like",
+        "comment",
+        "reply",
+        "follow",
+        "mention",
+        "story_reaction",
+        "marketplace_message"
+      ],
+      "default": "like"
+    },
+    "from_name": {
+      "type": "string"
+    },
+    "to_name": {
+      "type": "string"
+    },
+    "post_id": {
+      "type": "string"
+    },
+    "text": {
+      "type": "string"
+    },
+    "read": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "type",
+    "from_name",
+    "to_name"
+  ]
+}

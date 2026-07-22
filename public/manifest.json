@@ -1,0 +1,23 @@
+{
+  "name": "HondaHub",
+  "short_name": "HondaHub",
+  "description": "Australia's Honda enthusiast marketplace for cars, parts, and builds.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0b",
+  "theme_color": "#0a0a0b",
+  "icons": [
+    {
+      "src": "https://media.base44.com/images/public/6a4b2077ed97c621f24f7e1f/3c35782c7_generated_image.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://media.base44.com/images/public/6a4b2077ed97c621f24f7e1f/3c35782c7_generated_image.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

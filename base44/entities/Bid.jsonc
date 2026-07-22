@@ -1,0 +1,23 @@
+{
+  "name": "Bid",
+  "type": "object",
+  "properties": {
+    "listing_id": {
+      "type": "string"
+    },
+    "listing_title": {
+      "type": "string"
+    },
+    "bidder_name": {
+      "type": "string"
+    },
+    "amount": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "listing_id",
+    "bidder_name",
+    "amount"
+  ]
+}

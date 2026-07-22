@@ -1,0 +1,217 @@
+{
+  "name": "Listing",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "car",
+        "part"
+      ],
+      "default": "car"
+    },
+    "category": {
+      "type": "string"
+    },
+    "price": {
+      "type": "number"
+    },
+    "condition": {
+      "type": "string",
+      "enum": [
+        "new",
+        "used",
+        "refurbished",
+        "for_parts"
+      ],
+      "default": "used"
+    },
+    "brand": {
+      "type": "string"
+    },
+    "model": {
+      "type": "string"
+    },
+    "chassis_code": {
+      "type": "string"
+    },
+    "engine_code": {
+      "type": "string"
+    },
+    "transmission": {
+      "type": "string",
+      "enum": [
+        "manual",
+        "auto",
+        "other"
+      ]
+    },
+    "state": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    },
+    "postcode": {
+      "type": "string"
+    },
+    "photos": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "postage_available": {
+      "type": "boolean",
+      "default": false
+    },
+    "pickup": {
+      "type": "boolean",
+      "default": true
+    },
+    "swap_accepted": {
+      "type": "boolean",
+      "default": false
+    },
+    "urgent": {
+      "type": "boolean",
+      "default": false
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "sold",
+        "pending"
+      ],
+      "default": "active"
+    },
+    "featured": {
+      "type": "boolean",
+      "default": false
+    },
+    "oem_aftermarket": {
+      "type": "string",
+      "enum": [
+        "oem",
+        "aftermarket",
+        "none"
+      ],
+      "default": "none"
+    },
+    "part_number": {
+      "type": "string"
+    },
+    "vehicle_compatibility": {
+      "type": "string"
+    },
+    "kilometres": {
+      "type": "number"
+    },
+    "registered": {
+      "type": "boolean",
+      "default": false
+    },
+    "roadworthy": {
+      "type": "boolean",
+      "default": false
+    },
+    "car_type": {
+      "type": "string",
+      "enum": [
+        "street",
+        "track",
+        "project",
+        "wrecking",
+        "show"
+      ],
+      "default": "street"
+    },
+    "year": {
+      "type": "number"
+    },
+    "is_turbo": {
+      "type": "boolean",
+      "default": false
+    },
+    "seller_name": {
+      "type": "string"
+    },
+    "seller_verified": {
+      "type": "boolean",
+      "default": false
+    },
+    "seller_rating": {
+      "type": "number",
+      "default": 5
+    },
+    "views": {
+      "type": "number",
+      "default": 0
+    },
+    "selling_format": {
+      "type": "string",
+      "enum": [
+        "buy_now",
+        "make_offer",
+        "auction"
+      ],
+      "default": "buy_now"
+    },
+    "reserve_price": {
+      "type": "number"
+    },
+    "auction_duration": {
+      "type": "number",
+      "default": 7
+    },
+    "auction_end_date": {
+      "type": "string"
+    },
+    "current_highest_bid": {
+      "type": "number",
+      "default": 0
+    },
+    "highest_bidder_name": {
+      "type": "string"
+    },
+    "auction_status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "active",
+        "ended_sold",
+        "ended_reserve_not_met"
+      ],
+      "default": "pending"
+    },
+    "auction_pro": {
+      "type": "boolean",
+      "default": false
+    },
+    "top_of_search": {
+      "type": "boolean",
+      "default": false
+    },
+    "homepage_feature": {
+      "type": "boolean",
+      "default": false
+    },
+    "auto_relist": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "title",
+    "type",
+    "price",
+    "state"
+  ]
+}

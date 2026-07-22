@@ -1,0 +1,83 @@
+{
+  "name": "Report",
+  "type": "object",
+  "properties": {
+    "report_type": {
+      "type": "string",
+      "enum": [
+        "daily_executive",
+        "weekly_health",
+        "security_scan",
+        "performance",
+        "database_health",
+        "marketplace_safety",
+        "customer_journey",
+        "financial"
+      ],
+      "default": "daily_executive"
+    },
+    "title": {
+      "type": "string"
+    },
+    "summary": {
+      "type": "string"
+    },
+    "content": {
+      "type": "string"
+    },
+    "health_score": {
+      "type": "number",
+      "default": 0
+    },
+    "customer_experience_score": {
+      "type": "number",
+      "default": 0
+    },
+    "critical_issues": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "high_priority_issues": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "revenue_opportunities": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "security_risks": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "suggested_improvements": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "metrics": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "archived"
+      ],
+      "default": "active"
+    }
+  },
+  "required": [
+    "report_type",
+    "title",
+    "content"
+  ]
+}

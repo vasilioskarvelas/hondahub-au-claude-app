@@ -1,0 +1,109 @@
+{
+  "description": "Analytics AI agent for Honda Hub. Tracks sign-ups, retention, daily active users, listings, sales, messages, revenue, conversions, and drop-off points. Recommends improvements based on data.",
+  "instructions": "You are the Analytics Agent for Honda Hub. You turn data into actionable insights.\n\nYour tracking areas:\n1. Sign-ups \u2014 new user registrations over time\n2. Retention \u2014 returning users, engagement frequency\n3. Daily active users (DAU)\n4. Listings \u2014 total, active, sold, by category, by state\n5. Sales \u2014 completed transactions, total volume\n6. Messages \u2014 conversation volume, response rates\n7. Revenue \u2014 by source (subscriptions, promotions, raffle, auctions)\n8. Conversions \u2014 visitor to signer-up, browser to buyer, free to paid\n9. Drop-off points \u2014 where users abandon flows\n\nWhen analysing data:\n- Identify trends and patterns\n- Highlight anomalies or concerning metrics\n- Recommend specific improvements based on the data\n- Suggest A/B tests where relevant\n- Focus on actionable metrics, not vanity metrics\n\nYou have read access to all entities so you can compute comprehensive analytics across the platform.",
+  "tool_configs": [
+    {
+      "entity_name": "Listing",
+      "allowed_operations": [
+        "read"
+      ]
+    },
+    {
+      "entity_name": "CommunityPost",
+      "allowed_operations": [
+        "read"
+      ]
+    },
+    {
+      "entity_name": "Comment",
+      "allowed_operations": [
+        "read"
+      ]
+    },
+    {
+      "entity_name": "Offer",
+      "allowed_operations": [
+        "read"
+      ]
+    },
+    {
+      "entity_name": "Bid",
+      "allowed_operations": [
+        "read"
+      ]
+    },
+    {
+      "entity_name": "User",
+      "allowed_operations": [
+        "read"
+      ]
+    },
+    {
+      "entity_name": "Follow",
+      "allowed_operations": [
+        "read"
+      ]
+    },
+    {
+      "entity_name": "Conversation",
+      "allowed_operations": [
+        "read"
+      ]
+    },
+    {
+      "entity_name": "Message",
+      "allowed_operations": [
+        "read"
+      ]
+    },
+    {
+      "entity_name": "GiveawayEntry",
+      "allowed_operations": [
+        "read"
+      ]
+    },
+    {
+      "entity_name": "GarageCar",
+      "allowed_operations": [
+        "read"
+      ]
+    },
+    {
+      "entity_name": "Event",
+      "allowed_operations": [
+        "read"
+      ]
+    },
+    {
+      "entity_name": "Notification",
+      "allowed_operations": [
+        "read"
+      ]
+    },
+    {
+      "entity_name": "PartnerDiscount",
+      "allowed_operations": [
+        "read"
+      ]
+    }
+  ],
+  "context_files": [],
+  "app_user_connector_configs": [],
+  "selected_skill_names": [],
+  "selected_workspace_skill_ids": [],
+  "model": "automatic",
+  "whatsapp_greeting": null,
+  "telegram_greeting": null,
+  "line_greeting": null,
+  "memory_config": {
+    "enabled": true,
+    "scope": "both",
+    "include_other_conversation_context": false,
+    "instructions": null
+  },
+  "voice_config": {
+    "voice_id": null
+  },
+  "allow_anonymous_access": false,
+  "name": "analytics"
+}

@@ -1,0 +1,29 @@
+{
+  "name": "GiveawayEntry",
+  "type": "object",
+  "properties": {
+    "giveaway_id": {
+      "type": "string"
+    },
+    "user_name": {
+      "type": "string"
+    },
+    "entry_type": {
+      "type": "string",
+      "enum": [
+        "subscriber_points",
+        "raffle_ticket"
+      ],
+      "default": "raffle_ticket"
+    },
+    "tickets": {
+      "type": "number",
+      "default": 1
+    }
+  },
+  "required": [
+    "giveaway_id",
+    "user_name",
+    "entry_type"
+  ]
+}

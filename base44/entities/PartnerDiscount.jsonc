@@ -1,0 +1,40 @@
+{
+  "name": "PartnerDiscount",
+  "type": "object",
+  "properties": {
+    "company_name": {
+      "type": "string"
+    },
+    "logo_url": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "discount_code": {
+      "type": "string"
+    },
+    "discount_percent": {
+      "type": "number"
+    },
+    "category": {
+      "type": "string"
+    },
+    "website_url": {
+      "type": "string"
+    },
+    "tier_required": {
+      "type": "string",
+      "enum": [
+        "pro",
+        "dealer"
+      ],
+      "default": "pro"
+    }
+  },
+  "required": [
+    "company_name",
+    "discount_code",
+    "tier_required"
+  ]
+}

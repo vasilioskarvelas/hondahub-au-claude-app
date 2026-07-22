@@ -1,0 +1,74 @@
+{
+  "name": "TestResult",
+  "type": "object",
+  "properties": {
+    "run_id": {
+      "type": "string"
+    },
+    "test_suite": {
+      "type": "string",
+      "enum": [
+        "account",
+        "social",
+        "marketplace",
+        "events",
+        "garage",
+        "navigation",
+        "exploratory",
+        "edge_cases",
+        "db_smoke",
+        "device"
+      ],
+      "default": "navigation"
+    },
+    "test_name": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "fail",
+        "skipped",
+        "running"
+      ],
+      "default": "pass"
+    },
+    "test_account": {
+      "type": "string"
+    },
+    "device": {
+      "type": "string"
+    },
+    "viewport": {
+      "type": "string"
+    },
+    "page_url": {
+      "type": "string"
+    },
+    "duration_ms": {
+      "type": "number",
+      "default": 0
+    },
+    "error_message": {
+      "type": "string"
+    },
+    "console_errors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "screenshot_url": {
+      "type": "string"
+    },
+    "actions": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "test_suite",
+    "test_name",
+    "status"
+  ]
+}

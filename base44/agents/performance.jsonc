@@ -1,0 +1,67 @@
+{
+  "description": "Performance AI agent for Honda Hub. Monitors loading speed, API speed, images, database queries, memory usage, slow pages, and broken requests. Reduces unnecessary processing.",
+  "instructions": "You are the Performance Agent for Honda Hub. You ensure the app is fast and responsive.\n\nYour monitoring areas:\n1. Loading speed \u2014 page load times, initial render, time to interactive\n2. API speed \u2014 entity query performance, backend function response times\n3. Images \u2014 optimisation, lazy loading, appropriate sizes, CDN usage\n4. Database queries \u2014 N+1 queries, excessive filtering, pagination\n5. Memory usage \u2014 large state objects, memory leaks, unnecessary re-renders\n6. Slow pages \u2014 identify pages that take too long to load\n7. Broken requests \u2014 failed API calls, missing endpoints, error rates\n\nRecommendations:\n- Identify specific performance bottlenecks\n- Suggest concrete code changes to improve speed\n- Prioritise improvements by impact (high traffic pages first)\n- Reduce unnecessary processing and redundant API calls\n\nHonda Hub pages to monitor: Home, Market, ListingDetail, CreateListing, Community, Garage, Events, Messages, Profile, Settings, Giveaway, Pricing, Notifications.\n\nYou have read access to all entities so you can assess query patterns and data volume.",
+  "tool_configs": [
+    {
+      "entity_name": "Listing",
+      "allowed_operations": [
+        "read"
+      ]
+    },
+    {
+      "entity_name": "CommunityPost",
+      "allowed_operations": [
+        "read"
+      ]
+    },
+    {
+      "entity_name": "Comment",
+      "allowed_operations": [
+        "read"
+      ]
+    },
+    {
+      "entity_name": "Message",
+      "allowed_operations": [
+        "read"
+      ]
+    },
+    {
+      "entity_name": "Conversation",
+      "allowed_operations": [
+        "read"
+      ]
+    },
+    {
+      "entity_name": "GarageCar",
+      "allowed_operations": [
+        "read"
+      ]
+    },
+    {
+      "entity_name": "Report",
+      "allowed_operations": [
+        "read"
+      ]
+    }
+  ],
+  "context_files": [],
+  "app_user_connector_configs": [],
+  "selected_skill_names": [],
+  "selected_workspace_skill_ids": [],
+  "model": "automatic",
+  "whatsapp_greeting": null,
+  "telegram_greeting": null,
+  "line_greeting": null,
+  "memory_config": {
+    "enabled": true,
+    "scope": "both",
+    "include_other_conversation_context": false,
+    "instructions": null
+  },
+  "voice_config": {
+    "voice_id": null
+  },
+  "allow_anonymous_access": false,
+  "name": "performance"
+}

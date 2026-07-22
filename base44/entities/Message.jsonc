@@ -1,0 +1,31 @@
+{
+  "name": "Message",
+  "type": "object",
+  "properties": {
+    "conversation_id": {
+      "type": "string"
+    },
+    "sender_name": {
+      "type": "string"
+    },
+    "text": {
+      "type": "string"
+    },
+    "attachment_url": {
+      "type": "string"
+    },
+    "attachment_type": {
+      "type": "string",
+      "enum": [
+        "image",
+        "video",
+        "file"
+      ]
+    }
+  },
+  "required": [
+    "conversation_id",
+    "sender_name",
+    "text"
+  ]
+}

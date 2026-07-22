@@ -1,0 +1,43 @@
+{
+  "name": "Giveaway",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "car_name": {
+      "type": "string"
+    },
+    "car_photo": {
+      "type": "string"
+    },
+    "draw_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "ended"
+      ],
+      "default": "active"
+    },
+    "raffle_ticket_price": {
+      "type": "number",
+      "default": 5
+    },
+    "total_entries": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "required": [
+    "title",
+    "car_name",
+    "draw_date"
+  ]
+}

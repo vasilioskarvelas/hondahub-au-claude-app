@@ -1,0 +1,40 @@
+{
+  "name": "GameResult",
+  "type": "object",
+  "properties": {
+    "user_name": {
+      "type": "string"
+    },
+    "game_type": {
+      "type": "string",
+      "enum": [
+        "trivia",
+        "drag_race",
+        "memory_match",
+        "engine_builder",
+        "boost_controller"
+      ],
+      "default": "trivia"
+    },
+    "score": {
+      "type": "number",
+      "default": 0
+    },
+    "total_questions": {
+      "type": "number",
+      "default": 10
+    },
+    "won": {
+      "type": "boolean",
+      "default": false
+    },
+    "reward_claimed": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "user_name",
+    "game_type"
+  ]
+}

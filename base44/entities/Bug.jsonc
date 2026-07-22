@@ -1,0 +1,90 @@
+{
+  "name": "Bug",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low"
+      ],
+      "default": "medium"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "open",
+        "assigned",
+        "in_progress",
+        "fixed",
+        "retesting",
+        "resolved",
+        "wont_fix"
+      ],
+      "default": "open"
+    },
+    "test_suite": {
+      "type": "string"
+    },
+    "test_account": {
+      "type": "string"
+    },
+    "device": {
+      "type": "string"
+    },
+    "viewport": {
+      "type": "string"
+    },
+    "page_url": {
+      "type": "string"
+    },
+    "actions_performed": {
+      "type": "string"
+    },
+    "expected_result": {
+      "type": "string"
+    },
+    "actual_result": {
+      "type": "string"
+    },
+    "error_message": {
+      "type": "string"
+    },
+    "console_errors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "screenshot_url": {
+      "type": "string"
+    },
+    "assigned_agent": {
+      "type": "string"
+    },
+    "repair_status": {
+      "type": "string"
+    },
+    "retest_result": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "pass",
+        "fail"
+      ],
+      "default": "pending"
+    },
+    "run_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "title",
+    "severity"
+  ]
+}

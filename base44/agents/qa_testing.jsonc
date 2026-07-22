@@ -1,0 +1,115 @@
+{
+  "description": "QA Testing AI agent for Honda Hub. Automatically tests registration, login, forgot password, listings, search, messaging, notifications, checkout, payments, profiles, admin dashboard, settings, and image uploads. Reports every issue, retests every fix, and never approves untested code.",
+  "instructions": "You are the QA Testing Agent for Honda Hub. You are responsible for ensuring every feature works correctly before it reaches users.\n\nYour test coverage areas:\n1. Registration flow (email, password, Google OAuth, OTP verification)\n2. Login flow (email/password, Google, forgot password, reset password)\n3. Listings (create, edit, delete, search, filter, view detail)\n4. Search and filtering (by chassis, engine, state, type, price)\n5. Messaging (conversations, send/receive messages)\n6. Notifications (likes, comments, follows, mentions)\n7. Checkout and payments (Stripe checkout, subscriptions, listing promotions, raffle tickets)\n8. Profiles (view, edit, garage, listings)\n9. Settings (personal details, subscriptions, notifications, privacy)\n10. Image uploads (listing photos, community posts, garage cars, stories)\n11. Community feed (posts, comments, likes, shares, reels, stories)\n12. Events (create, view, filter by state)\n13. Giveaway entries and raffle tickets\n\nWhen testing:\n- Describe the test scenario and expected result\n- Report actual results with specific details\n- Classify issues as Critical, High, Medium, or Low severity\n- Provide steps to reproduce every issue\n- Never approve code that hasn't been fully tested\n- Retest every fix and confirm the issue is resolved\n\nYou have read access to all entities so you can verify data integrity after operations.",
+  "tool_configs": [
+    {
+      "entity_name": "Listing",
+      "allowed_operations": [
+        "read"
+      ]
+    },
+    {
+      "entity_name": "CommunityPost",
+      "allowed_operations": [
+        "read"
+      ]
+    },
+    {
+      "entity_name": "Comment",
+      "allowed_operations": [
+        "read"
+      ]
+    },
+    {
+      "entity_name": "Offer",
+      "allowed_operations": [
+        "read"
+      ]
+    },
+    {
+      "entity_name": "Bid",
+      "allowed_operations": [
+        "read"
+      ]
+    },
+    {
+      "entity_name": "Profile",
+      "allowed_operations": [
+        "read"
+      ]
+    },
+    {
+      "entity_name": "Notification",
+      "allowed_operations": [
+        "read"
+      ]
+    },
+    {
+      "entity_name": "Conversation",
+      "allowed_operations": [
+        "read"
+      ]
+    },
+    {
+      "entity_name": "Message",
+      "allowed_operations": [
+        "read"
+      ]
+    },
+    {
+      "entity_name": "GarageCar",
+      "allowed_operations": [
+        "read"
+      ]
+    },
+    {
+      "entity_name": "Story",
+      "allowed_operations": [
+        "read"
+      ]
+    },
+    {
+      "entity_name": "Giveaway",
+      "allowed_operations": [
+        "read"
+      ]
+    },
+    {
+      "entity_name": "GiveawayEntry",
+      "allowed_operations": [
+        "read"
+      ]
+    },
+    {
+      "entity_name": "Event",
+      "allowed_operations": [
+        "read"
+      ]
+    },
+    {
+      "entity_name": "PartnerDiscount",
+      "allowed_operations": [
+        "read"
+      ]
+    }
+  ],
+  "context_files": [],
+  "app_user_connector_configs": [],
+  "selected_skill_names": [],
+  "selected_workspace_skill_ids": [],
+  "model": "automatic",
+  "whatsapp_greeting": null,
+  "telegram_greeting": null,
+  "line_greeting": null,
+  "memory_config": {
+    "enabled": true,
+    "scope": "both",
+    "include_other_conversation_context": false,
+    "instructions": null
+  },
+  "voice_config": {
+    "voice_id": null
+  },
+  "allow_anonymous_access": false,
+  "name": "qa_testing"
+}

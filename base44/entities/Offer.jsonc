@@ -1,0 +1,59 @@
+{
+  "name": "Offer",
+  "type": "object",
+  "properties": {
+    "listing_id": {
+      "type": "string"
+    },
+    "listing_title": {
+      "type": "string"
+    },
+    "buyer_name": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "cash",
+        "swap",
+        "trade"
+      ],
+      "default": "cash"
+    },
+    "amount": {
+      "type": "number"
+    },
+    "cash_difference": {
+      "type": "number"
+    },
+    "offered_listing_title": {
+      "type": "string"
+    },
+    "offered_photos": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "message": {
+      "type": "string"
+    },
+    "counter_amount": {
+      "type": "number"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "accepted",
+        "declined",
+        "countered"
+      ],
+      "default": "pending"
+    }
+  },
+  "required": [
+    "listing_id",
+    "type"
+  ]
+}
