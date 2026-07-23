@@ -35,17 +35,26 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'award') {
-      const { signal_type, reason, actor } = body;
+      // ADR-034: award creates a TrustScoreEvent and raises account_tier. Restricted to
+      // Moderator/Admin so no authenticated user (or AI integration) can self-escalate
+      // past the Vehicle/Business verification gates. The actor is derived from the
+      // principal, never the request body. Verification flows (vehicle/business/
+      // marketplace) call awardSignalToUser directly via the shared module, not here.
+      const isModOrAdmin = user.role === 'admin' || user.account_tier === 'moderator';
+      if (!isModOrAdmin) {
+        return Response.json({ error: 'PERMISSION_DENIED', details: { award: 'only a moderator/admin may award a trust signal' } }, { status: 403 });
+      }
+      const { signal_type, reason, target_user_id } = body;
       if (!Object.values(SignalType).includes(signal_type)) {
         return Response.json({ error: 'VALIDATION_FAILED', details: { signal_type: 'invalid' } }, { status: 422 });
       }
-      // Delegates to the shared TrustScoreService award logic (sole writer of
-      // account_tier) — awards to the calling user here.
+      const recipient = target_user_id || user.id;
+      const derivedActor = (user.role === 'admin' ? 'admin:' : 'moderator:') + user.id;
       const result = await awardSignalToUser(base44, {
-        target_user_id: user.id,
+        target_user_id: recipient,
         signal_type,
         reason: reason || signal_type,
-        actor: actor || 'system',
+        actor: derivedActor,
       });
       return Response.json(result);
     }

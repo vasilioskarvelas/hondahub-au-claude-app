@@ -199,12 +199,16 @@ export async function invalidPolymorphicReferenceSweep(base44: any): Promise<Job
   const e = b(base44).entities;
   const maps = await buildIdMaps(base44);
   const violations: any[] = [];
-  const check = (entity: string, rows: any[], typeField: string, idField: string, allowed: string[] | null) => {
+  // skipDangling (default false): skip the existence check for historical append-only
+  // records (AuditLog, ModerationAction), whose target may be legitimately deleted after
+  // the action was recorded. target_type validity is still checked.
+  const check = (entity: string, rows: any[], typeField: string, idField: string, allowed: string[] | null, skipDangling: boolean = false) => {
     for (const r of rows) {
       const t = r[typeField];
       if (t === null || t === undefined || t === "") continue; // null reference is valid
       if (!isReferenceType(t)) { violations.push({ entity, id: r.id, target_type: t, target_id: r[idField], error: "unknown target_type" }); continue; }
       if (allowed && !allowed.includes(t)) { violations.push({ entity, id: r.id, target_type: t, target_id: r[idField], error: "target_type not allowed for this field" }); continue; }
+      if (skipDangling) continue;
       const entName = BACKING_ENTITY_FOR_TYPE[t];
       if (entName && maps[entName]) {
         if (r[idField] && !maps[entName].has(r[idField])) violations.push({ entity, id: r.id, target_type: t, target_id: r[idField], error: `dangling: ${r[idField]} not in ${entName}` });
@@ -214,8 +218,8 @@ export async function invalidPolymorphicReferenceSweep(base44: any): Promise<Job
   check("Notification", await e.Notification.list("-created_date", 500), "target_type", "target_id", null);
   check("Report", await e.Report.list("-created_date", 500), "target_type", "target_id", null);
   check("ModerationCase", await e.ModerationCase.list("-created_date", 500), "target_type", "target_id", null);
-  check("ModerationAction", await e.ModerationAction.list("-created_date", 500), "target_type", "target_id", null);
-  check("AuditLog", await e.AuditLog.list("-created_date", 500), "target_type", "target_id", null);
+  check("ModerationAction", await e.ModerationAction.list("-created_date", 500), "target_type", "target_id", null, true);
+  check("AuditLog", await e.AuditLog.list("-created_date", 500), "target_type", "target_id", null, true);
   check("Follow", await e.Follow.list("-created_date", 1000), "target_type", "target_id", ["user", "vehicle", "business"]);
   check("Event", await e.Event.list("-created_date", 500), "organiser_type", "organiser_id", ["user", "business"]);
   check("Subscription", await e.Subscription.list("-created_date", 500), "subscriber_type", "subscriber_id", ["user", "business"]);
