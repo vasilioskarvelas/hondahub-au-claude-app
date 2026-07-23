@@ -16,11 +16,10 @@
         "group",
         "event",
         "business",
-        "business_review",
         "listing",
         "marketplace_message"
       ],
-      "description": "Reportable subset of ReferenceTypes (DATABASE_SCHEMA \u00a722). REPORT and MODERATION_CASE exist in the platform-wide registry but are NOT reportable targets. business_review added in Phase 07 (\u00a726 BusinessReview is reportable)."
+      "description": "Reportable subset of ReferenceTypes (DATABASE_SCHEMA \u00a722). REPORT and MODERATION_CASE exist in the platform-wide registry but are NOT reportable targets."
     },
     "target_id": {
       "type": "string",

@@ -4,7 +4,6 @@ import {
   err, isModOrAdmin, getOwnedVehicle, inList, buildTimelineSuggestion, modSuggestionTitle,
 } from "../../shared/garage.ts";
 import { validateReference, ReferenceTypes } from "../../shared/reference-resolver.ts";
-import { refreshExperienceForUser } from "../../shared/business.ts";
 
 /**
  * ModificationService (Phase 03) — owns structured build/mod records.
@@ -36,12 +35,8 @@ async function validateBusinessTag(base44: any, installation_type: string, busin
     target_type: ReferenceTypes.BUSINESS, target_id: business_id, allowedTypes: [ReferenceTypes.BUSINESS],
   });
   if (!ref.valid) return { installed_by_business_id: ref.error || 'invalid business reference' };
-  // Verified-gate (Phase 07): a Business must be verified to be tagged on a mod.
-  const biz = await base44.asServiceRole.entities.Business.get(business_id).catch(() => null);
-  if (!biz) return { installed_by_business_id: 'business not found' };
-  if (biz.verification_status !== 'verified') {
-    return { installed_by_business_id: 'business must be verified to be tagged' };
-  }
+  // Verified-gate activates when the Business entity lands in Phase 07 (existence +
+  // verified check via ReferenceResolverService's backing-entity lookup).
   return null;
 }
 
@@ -69,9 +64,6 @@ Deno.serve(async (req) => {
         if (body[f] !== undefined && f !== 'category' && f !== 'installation_type') data[f] = body[f];
       }
       const mod = await base44.entities.Modification.create(data);
-      if (mod.installed_by_business_id) {
-        await refreshExperienceForUser(base44, user.id, mod.installed_by_business_id).catch(() => {});
-      }
       return Response.json({ ok: true, modification: mod });
     }
 
@@ -93,10 +85,6 @@ Deno.serve(async (req) => {
         if (bizErr) return err('VALIDATION_FAILED', 422, bizErr);
       }
       const updated = await base44.entities.Modification.update(modification_id, data);
-      const bizId = data.installed_by_business_id !== undefined ? data.installed_by_business_id : mod.installed_by_business_id;
-      if (bizId) {
-        await refreshExperienceForUser(base44, user.id, bizId).catch(() => {});
-      }
       return Response.json({ ok: true, modification: updated });
     }
 

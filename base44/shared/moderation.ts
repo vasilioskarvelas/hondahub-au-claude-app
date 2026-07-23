@@ -39,7 +39,7 @@ export const AuditActionType = Object.freeze({
 // Report target subset of ReferenceTypes (DATABASE_SCHEMA §22).
 // REPORT and MODERATION_CASE are intentionally excluded — they are not reportable.
 export const REPORT_TARGET_TYPES = Object.freeze([
-  "user", "vehicle", "post", "comment", "group", "event", "business", "business_review", "listing", "marketplace_message",
+  "user", "vehicle", "post", "comment", "group", "event", "business", "listing", "marketplace_message",
 ]);
 
 // Fixed report category enum (§2.1).

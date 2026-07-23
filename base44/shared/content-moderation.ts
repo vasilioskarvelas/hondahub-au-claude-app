@@ -14,7 +14,6 @@
  */
 
 import { ModerationActionType } from "./moderation.ts";
-import { applyModerationActionToReview } from "./business.ts";
 
 export interface ContentActionResult {
   ok: boolean;
@@ -149,35 +148,6 @@ export async function applyContentAction(
     } catch {
       return { ok: false, error: "event not found" };
     }
-  }
-
-  // ---- Business (Phase 07) — status: active ↔ removed_by_moderation ----
-  if (target_type === "business") {
-    try {
-      const biz = await base44.asServiceRole.entities.Business.get(target_id);
-      if (action_type === ModerationActionType.CONTENT_REMOVED) {
-        if (biz.status === "removed_by_moderation") return { ok: true, changed: false };
-        await base44.asServiceRole.entities.Business.update(target_id, { status: "removed_by_moderation" });
-        return { ok: true, changed: true };
-      }
-      if (action_type === ModerationActionType.CONTENT_RESTORED) {
-        if (biz.status === "active") return { ok: true, changed: false };
-        await base44.asServiceRole.entities.Business.update(target_id, { status: "active" });
-        return { ok: true, changed: true };
-      }
-      return { ok: true, changed: false };
-    } catch {
-      return { ok: false, error: "business not found" };
-    }
-  }
-
-  // ---- BusinessReview (Phase 07) — routed through the owning service's
-  //      internal applyModerationActionToReview, never a direct write here.
-  //      content_removed → removed_by_moderation; content_restored → published.
-  //      Aggregate (rating_sum/review_count) recomputed inside the helper. ----
-  if (target_type === "business_review") {
-    const r = await applyModerationActionToReview(base44, target_id, action_type);
-    return { ok: r.ok, changed: r.changed, error: r.error };
   }
 
   // ---- listing / marketplace_message ----

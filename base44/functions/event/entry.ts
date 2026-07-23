@@ -32,7 +32,6 @@ import { GroupRole, MembershipStatus } from "../../shared/community.ts";
 import { validateReference } from "../../shared/reference-resolver.ts";
 import { writeAuditLog } from "../../shared/audit-log.ts";
 import { AuditActionType } from "../../shared/moderation.ts";
-import { refreshExperienceForUser } from "../../shared/business.ts";
 import { json, err } from "../../shared/http.ts";
 import { resolveMediaUrl } from "../../shared/media.ts";
 
@@ -209,10 +208,6 @@ Deno.serve(async (req) => {
         });
       }
       await recomputeAttendeeCount(base44, body.event_id);
-      // experience_verified auto-refresh: attending a business-organised event is evidence.
-      if (event.organiser_type === OrganiserType.BUSINESS) {
-        await refreshExperienceForUser(base44, user.id, event.organiser_id).catch(() => {});
-      }
       return json({ ok: true, attendance_status: status, attendance });
     }
 

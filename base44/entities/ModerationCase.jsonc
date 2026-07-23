@@ -12,11 +12,10 @@
         "group",
         "event",
         "business",
-        "business_review",
         "listing",
         "marketplace_message"
       ],
-      "description": "The case's primary subject \u2014 same reportable allow-list as Report. business_review added in Phase 07."
+      "description": "The case's primary subject \u2014 same reportable allow-list as Report."
     },
     "target_id": {
       "type": "string"
