@@ -1,0 +1,47 @@
+{
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "0 * * * *",
+      "one_time_date": null,
+      "timezone": "Australia/Melbourne",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "name": "Marketplace Listing Expiry",
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "marketplace_listing_expiry",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "expire_due_listings": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "marketplace",
+            "args": {
+              "action": "expireListings"
+            }
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Expire due marketplace listings",
+            "description": "Sweep active listings past their expires_at"
+          }
+        }
+      }
+    ]
+  },
+  "description": "Hourly sweep: transitions active/reserved MarketplaceListings whose expires_at has passed to 'expired' (fires ListingExpired). Idempotent \u2014 only active/reserved rows are eligible, so a repeat run is a no-op."
+}

@@ -38,14 +38,14 @@ const BACKING_ENTITY: Record<string, string | null> = {
   [ReferenceTypes.POST]: "Post",
   [ReferenceTypes.COMMENT]: "Comment",
   [ReferenceTypes.EVENT]: "Event",
-  [ReferenceTypes.LISTING]: "Listing",
+  [ReferenceTypes.LISTING]: "MarketplaceListing",
   [ReferenceTypes.REPORT]: "Report",
   [ReferenceTypes.VEHICLE]: "Vehicle", // Phase 03 — Vehicle backing entity now exists.
-  [ReferenceTypes.GROUP]: null,
-  [ReferenceTypes.BUSINESS]: null,
-  [ReferenceTypes.MODERATION_CASE]: null,
-  [ReferenceTypes.MARKETPLACE_MESSAGE]: null,
-  [ReferenceTypes.BUSINESS_REVIEW]: null,
+  [ReferenceTypes.GROUP]: "Group", // Phase 06 — Group backing entity now exists.
+  [ReferenceTypes.BUSINESS]: "Business", // Phase 07 — Business backing entity now exists.
+  [ReferenceTypes.MODERATION_CASE]: "ModerationCase",
+  [ReferenceTypes.MARKETPLACE_MESSAGE]: "MarketplaceMessage",
+  [ReferenceTypes.BUSINESS_REVIEW]: "BusinessReview",
 };
 
 export function isReferenceType(value: string): boolean {

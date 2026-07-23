@@ -41,6 +41,11 @@ import Connections from '@/pages/Connections';
 import ModerationQueue from '@/pages/ModerationQueue';
 import CaseDetail from '@/pages/CaseDetail';
 import AuditLogBrowser from '@/pages/AuditLogBrowser';
+import Marketplace from '@/pages/Marketplace';
+import MarketplaceListingDetail from '@/pages/MarketplaceListingDetail';
+import CreateMarketplaceListing from '@/pages/CreateMarketplaceListing';
+import Conversations from '@/pages/Conversations';
+import ConversationThread from '@/pages/ConversationThread';
 
 import Notifications from '@/pages/Notifications';
 import UserProfile from '@/pages/UserProfile';
@@ -104,6 +109,12 @@ const AuthenticatedApp = () => {
         <Route path="/moderation" element={<ModerationQueue />} />
         <Route path="/moderation/case/:id" element={<CaseDetail />} />
         <Route path="/admin/audit" element={<AuditLogBrowser />} />
+        <Route path="/marketplace" element={<Marketplace />} />
+        <Route path="/marketplace/create" element={<CreateMarketplaceListing />} />
+        <Route path="/marketplace/:id" element={<MarketplaceListingDetail />} />
+        <Route path="/marketplace/:id/edit" element={<CreateMarketplaceListing />} />
+        <Route path="/conversations" element={<Conversations />} />
+        <Route path="/conversation/:id" element={<ConversationThread />} />
 
         <Route path="/notifications" element={<Notifications />} />
         <Route path="/user/:name" element={<UserProfile />} />

@@ -56,6 +56,9 @@ export const NotificationType = Object.freeze({
   MODERATION_OUTCOME: "moderation_outcome",
   REPORT_UPDATE: "report_update",
   TRUST_TIER_CHANGE: "trust_tier_change",
+  // Phase 08 additions — registry-controlled growth (open list per §11).
+  NEW_MARKETPLACE_MESSAGE: "new_marketplace_message",
+  LISTING_UPDATE: "listing_update",
 });
 
 /**
@@ -79,6 +82,8 @@ export const AuditActionType = Object.freeze({
   // content-moderation delegate, so no new value is needed for those.
   EVENT_CANCELLED: "event_cancelled",
   GROUP_MEMBER_REMOVED: "group_member_removed",
+  // Phase 08 addition — Marketplace listing lifecycle transitions.
+  LISTING_STATUS_CHANGED: "listing_status_changed",
 });
 
 /**

@@ -1,0 +1,33 @@
+{
+  "name": "MarketplaceMessage",
+  "type": "object",
+  "properties": {
+    "conversation_id": {
+      "type": "string",
+      "description": "FK\u2192MarketplaceConversation."
+    },
+    "sender_id": {
+      "type": "string",
+      "description": "FK\u2192User. The sender (mirrors created_by_id; explicit). Either the conversation poster or initiator."
+    },
+    "body": {
+      "type": "string",
+      "description": "Message body. Text-only \u2014 no editing, no attachments. Required."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "published",
+        "removed_by_sender",
+        "removed_by_moderation"
+      ],
+      "default": "published",
+      "description": "published \u2192 removed_by_sender (via removeOwnMessage, by the sender) or removed_by_moderation (via the content-moderation delegate, by Mod/Admin). No edit path exists. Content is always retained for moderation history."
+    }
+  },
+  "required": [
+    "conversation_id",
+    "sender_id",
+    "body"
+  ]
+}

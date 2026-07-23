@@ -1,0 +1,52 @@
+{
+  "name": "MarketplaceConversation",
+  "type": "object",
+  "properties": {
+    "listing_id": {
+      "type": "string",
+      "description": "FK\u2192MarketplaceListing. The listing this conversation is about."
+    },
+    "poster_id": {
+      "type": "string",
+      "description": "FK\u2192User. The listing's poster (denormalized for queries; mirrors MarketplaceListing.poster_id). NEVER buyer_id/seller_id \u2014 the UI derives Buyer/Seller labels from the listing's listing_type at render time."
+    },
+    "initiator_id": {
+      "type": "string",
+      "description": "FK\u2192User. The user who started the conversation (the responder to the listing). Mirrors created_by_id; explicit for the uniqueness key."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "archived"
+      ],
+      "default": "active",
+      "description": "active \u2192 archived (via archiveConversation). Unique on (listing_id, initiator_id) while status=active."
+    },
+    "last_message_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Updated on every sendMessage. Used for inbox sort order."
+    },
+    "last_message_preview": {
+      "type": "string",
+      "description": "Truncated body of the most recent message, for inbox preview."
+    },
+    "poster_last_read_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Read tracking for the poster side. Updated when the poster marks the conversation read. No read_at on Message."
+    },
+    "initiator_last_read_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Read tracking for the initiator side. Updated when the initiator marks the conversation read."
+    }
+  },
+  "required": [
+    "listing_id",
+    "poster_id",
+    "initiator_id",
+    "status"
+  ]
+}

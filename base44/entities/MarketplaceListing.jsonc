@@ -1,0 +1,169 @@
+{
+  "name": "MarketplaceListing",
+  "type": "object",
+  "properties": {
+    "poster_id": {
+      "type": "string",
+      "description": "FK\u2192User. The poster (mirrors created_by_id; explicit and load-bearing). On a 'wanted' listing the poster is the BUYER \u2014 never assume poster=seller. UI derives Buyer/Seller labels from listing_type at render time, never from this field name."
+    },
+    "listing_type": {
+      "type": "string",
+      "enum": [
+        "for_sale",
+        "wanted"
+      ],
+      "description": "for_sale: poster is selling. wanted: poster is seeking to buy. Drives all Buyer/Seller role derivation in the UI and event payloads."
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "vehicle",
+        "parts",
+        "wheels_tyres",
+        "accessories",
+        "audio",
+        "tools",
+        "other"
+      ],
+      "description": "Listing category. Compatibility fields only apply when category != vehicle. primary_vehicle_id is required when category=vehicle AND listing_type=for_sale."
+    },
+    "title": {
+      "type": "string",
+      "description": "Listing title. Required."
+    },
+    "description": {
+      "type": "string",
+      "description": "Nullable free-text description."
+    },
+    "price": {
+      "type": "number",
+      "description": "Amount in AUD (implicit \u2014 no currency field). for_sale: asking price. wanted: budget/bounty. Nullable for wanted listings with no fixed budget."
+    },
+    "condition": {
+      "type": "string",
+      "enum": [
+        "new",
+        "used",
+        "refurbished",
+        "for_parts"
+      ],
+      "description": "Item condition. Meaningful for for_sale listings; nullable for wanted."
+    },
+    "primary_vehicle_id": {
+      "type": "string",
+      "description": "FK\u2192Vehicle. Required when category=vehicle AND listing_type=for_sale \u2014 must be owned by the poster (ownership validated via ReferenceResolverService + created_by_id check). Not set for wanted vehicle listings or non-vehicle categories."
+    },
+    "compatible_make": {
+      "type": "string",
+      "description": "Compatibility filter. Only applies when category != vehicle."
+    },
+    "compatible_model": {
+      "type": "string",
+      "description": "Compatibility filter. Only applies when category != vehicle."
+    },
+    "compatible_chassis_code": {
+      "type": "string",
+      "description": "Compatibility filter. Only applies when category != vehicle."
+    },
+    "compatible_year_from": {
+      "type": "number",
+      "description": "Compatibility year range start. Only applies when category != vehicle."
+    },
+    "compatible_year_to": {
+      "type": "number",
+      "description": "Compatibility year range end. Only applies when category != vehicle."
+    },
+    "location_general": {
+      "type": "string",
+      "description": "City/region only \u2014 privacy-conscious pattern consistent with User/Event/Business. No precise address."
+    },
+    "location_state": {
+      "type": "string",
+      "enum": [
+        "NSW",
+        "VIC",
+        "QLD",
+        "WA",
+        "SA",
+        "TAS",
+        "ACT",
+        "NT"
+      ],
+      "description": "AU state for filtering."
+    },
+    "postage_available": {
+      "type": "boolean",
+      "default": false
+    },
+    "pickup": {
+      "type": "boolean",
+      "default": true
+    },
+    "swap_accepted": {
+      "type": "boolean",
+      "default": false
+    },
+    "photo_urls": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Photo file URLs (uploaded via UploadFile). No Media FK array at MVP."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "pending_review",
+        "active",
+        "reserved",
+        "completed",
+        "expired",
+        "removed_by_poster",
+        "removed_by_moderation"
+      ],
+      "default": "draft",
+      "description": "Lifecycle: draft \u2192 pending_review/active \u2192 reserved \u2192 completed/expired \u2192 removed_by_poster/removed_by_moderation. 'completed' is the terminal SUCCESS state (never 'sold'). 'removed_by_poster' (never 'removed_by_seller'). completed + removed_by_moderation are terminal \u2014 no transition out."
+    },
+    "reserved_by_id": {
+      "type": "string",
+      "description": "FK\u2192User. Set when reserveListing is called with a user. The party the poster is reserving for."
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Set on publish; renewed by renewListing. The expiry background job transitions active\u2192expired when this passes."
+    },
+    "last_renewed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Enforces the 24-hour renewal rate limit (renewListing rejects within 24h of this with LISTING_RENEWAL_TOO_SOON)."
+    },
+    "published_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Set when markCompleted. completed is terminal."
+    },
+    "view_count": {
+      "type": "number",
+      "default": 0,
+      "description": "Basic counter only \u2014 no seller analytics beyond this per Phase 08 boundaries."
+    },
+    "conversation_count": {
+      "type": "number",
+      "default": 0,
+      "description": "Denormalized count of active conversations on this listing. Basic counter."
+    }
+  },
+  "required": [
+    "poster_id",
+    "listing_type",
+    "category",
+    "title",
+    "status"
+  ]
+}

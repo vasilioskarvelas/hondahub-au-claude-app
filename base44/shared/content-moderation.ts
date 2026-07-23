@@ -15,6 +15,7 @@
 
 import { ModerationActionType } from "./moderation.ts";
 import { applyModerationActionToReview } from "./business.ts";
+import { applyModerationActionToListing, applyModerationActionToMessage } from "./marketplace.ts";
 
 export interface ContentActionResult {
   ok: boolean;
@@ -166,9 +167,18 @@ export async function applyContentAction(
     return { ok: r.ok, changed: r.changed, error: r.error };
   }
 
-  // ---- listing / marketplace_message ----
-  // Backing entities land in Phase 08. The action is still recorded in
-  // ModerationAction; the content status change activates when each backing
-  // entity lands.
+  // ---- listing (Phase 08) — routed through the owning service's
+  //      applyModerationActionToListing, never a direct write here. ----
+  if (target_type === "listing") {
+    const r = await applyModerationActionToListing(base44, target_id, action_type);
+    return { ok: r.ok, changed: r.changed, error: r.error };
+  }
+
+  // ---- marketplace_message (Phase 08) — routed through applyModerationActionToMessage. ----
+  if (target_type === "marketplace_message") {
+    const r = await applyModerationActionToMessage(base44, target_id, action_type);
+    return { ok: r.ok, changed: r.changed, error: r.error };
+  }
+
   return { ok: true, changed: false };
 }

@@ -541,6 +541,14 @@ async function resolveContentAuthor(base44: any, target_type: string, target_id:
       const review = await base44.asServiceRole.entities.BusinessReview.get(target_id);
       return review.reviewer_id || null;
     }
+    if (target_type === "listing") {
+      const listing = await base44.asServiceRole.entities.MarketplaceListing.get(target_id);
+      return listing.poster_id || null;
+    }
+    if (target_type === "marketplace_message") {
+      const message = await base44.asServiceRole.entities.MarketplaceMessage.get(target_id);
+      return message.sender_id || null;
+    }
   } catch {}
   return null;
 }
@@ -575,6 +583,16 @@ async function fetchReportedContent(base44: any, target_type: string, target_id:
       const review = await base44.asServiceRole.entities.BusinessReview.get(target_id);
       const author = await base44.asServiceRole.entities.User.get(review.reviewer_id).catch(() => null);
       return { type: "business_review", review, author };
+    }
+    if (target_type === "listing") {
+      const listing = await base44.asServiceRole.entities.MarketplaceListing.get(target_id);
+      const author = await base44.asServiceRole.entities.User.get(listing.poster_id).catch(() => null);
+      return { type: "listing", listing, author };
+    }
+    if (target_type === "marketplace_message") {
+      const message = await base44.asServiceRole.entities.MarketplaceMessage.get(target_id);
+      const author = await base44.asServiceRole.entities.User.get(message.sender_id).catch(() => null);
+      return { type: "marketplace_message", message, author };
     }
   } catch {}
   return { type: target_type, note: "backing entity not yet built or not found" };

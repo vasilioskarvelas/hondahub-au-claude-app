@@ -42,6 +42,9 @@ export const NotificationType = {
   MODERATION_OUTCOME: "moderation_outcome",
   REPORT_UPDATE: "report_update",
   TRUST_TIER_CHANGE: "trust_tier_change",
+  // Phase 08 additions — registry-controlled growth (open list per §11).
+  NEW_MARKETPLACE_MESSAGE: "new_marketplace_message",
+  LISTING_UPDATE: "listing_update",
 };
 
 export const SignalType = {

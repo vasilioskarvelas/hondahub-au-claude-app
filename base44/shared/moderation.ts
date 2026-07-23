@@ -34,6 +34,10 @@ export const AuditActionType = Object.freeze({
   // Group/Event moderation removals are covered by moderation_action_applied.
   EVENT_CANCELLED: "event_cancelled",
   GROUP_MEMBER_REMOVED: "group_member_removed",
+  // Phase 08 addition — Marketplace listing lifecycle transitions
+  // (publish/reserve/complete/expire/renew/remove). Moderation-driven listing
+  // removal reuses the existing listing_removed_by_moderation value below.
+  LISTING_STATUS_CHANGED: "listing_status_changed",
 });
 
 // Report target subset of ReferenceTypes (DATABASE_SCHEMA §22).
