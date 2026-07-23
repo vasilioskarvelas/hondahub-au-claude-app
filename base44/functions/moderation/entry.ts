@@ -293,6 +293,24 @@ Deno.serve(async (req) => {
           actor_id: user.id, target_type, target_id,
         }).catch(() => {});
       }
+      // §9 — for a business_review, the affected Business is also notified (its active members),
+      //      with no reporter identity or internal case notes exposed.
+      if (target_type === "business_review") {
+        try {
+          const review = await base44.asServiceRole.entities.BusinessReview.get(target_id);
+          const members = await base44.asServiceRole.entities.BusinessMembership.filter({
+            business_id: review.business_id, status: "active",
+          });
+          for (const m of members) {
+            if (m.user_id !== authorId) {
+              await createNotification(base44, {
+                recipient_id: m.user_id, notification_type: NotificationType.MODERATION_OUTCOME,
+                actor_id: user.id, target_type: "business_review", target_id,
+              }).catch(() => {});
+            }
+          }
+        } catch {}
+      }
 
       return json({ ok: true, action: modAction, content_changed: contentResult.changed });
     }
@@ -519,6 +537,10 @@ async function resolveContentAuthor(base44: any, target_type: string, target_id:
     if (target_type === "user") {
       return target_id;
     }
+    if (target_type === "business_review") {
+      const review = await base44.asServiceRole.entities.BusinessReview.get(target_id);
+      return review.reviewer_id || null;
+    }
   } catch {}
   return null;
 }
@@ -544,6 +566,15 @@ async function fetchReportedContent(base44: any, target_type: string, target_id:
     if (target_type === "user") {
       const reportedUser = await base44.asServiceRole.entities.User.get(target_id);
       return { type: "user", user: reportedUser };
+    }
+    if (target_type === "business") {
+      const business = await base44.asServiceRole.entities.Business.get(target_id);
+      return { type: "business", business };
+    }
+    if (target_type === "business_review") {
+      const review = await base44.asServiceRole.entities.BusinessReview.get(target_id);
+      const author = await base44.asServiceRole.entities.User.get(review.reviewer_id).catch(() => null);
+      return { type: "business_review", review, author };
     }
   } catch {}
   return { type: target_type, note: "backing entity not yet built or not found" };

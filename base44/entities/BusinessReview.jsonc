@@ -1,0 +1,63 @@
+{
+  "name": "BusinessReview",
+  "type": "object",
+  "properties": {
+    "business_id": {
+      "type": "string",
+      "description": "FK\u2192Business."
+    },
+    "reviewer_id": {
+      "type": "string",
+      "description": "FK\u2192User. Mirrors created_by_id; explicit for the uniqueness key. Unique on (business_id, reviewer_id) while status is draft/published/hidden_pending_review."
+    },
+    "vehicle_id": {
+      "type": "string",
+      "description": "FK\u2192Vehicle, optional. Must belong to reviewer_id (validated via ReferenceResolverService)."
+    },
+    "rating": {
+      "type": "number",
+      "description": "Integer 1\u20135 inclusive. Required."
+    },
+    "body": {
+      "type": "string",
+      "description": "Review text. Required, length-capped, moderation-checked."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "hidden_pending_review",
+        "published",
+        "removed_by_reviewer",
+        "removed_by_moderation"
+      ],
+      "default": "draft",
+      "description": "Per ADR-028, hidden_pending_review serves double duty (pre-publish hold + post-report re-review hold). See Phase 07 \u00a75 for the full graph."
+    },
+    "experience_verified": {
+      "type": "boolean",
+      "default": false,
+      "description": "Auto-set ONLY by BusinessService at review creation/edit time, from recognised Modification/EventAttendance evidence (ADR-027, Option C). Never set by the Business, a human directly, or AI."
+    },
+    "business_response": {
+      "type": "string",
+      "description": "Nullable. Set ONLY by an authorised BusinessMembership (owner/staff) via respondToReview \u2014 never touches rating/body."
+    },
+    "business_responded_by_id": {
+      "type": "string",
+      "description": "FK\u2192User. The BusinessMembership holder who responded."
+    },
+    "business_responded_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Set when the business responds."
+    }
+  },
+  "required": [
+    "business_id",
+    "reviewer_id",
+    "rating",
+    "body",
+    "status"
+  ]
+}

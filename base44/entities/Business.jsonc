@@ -1,0 +1,96 @@
+{
+  "name": "Business",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Business name. Required, public-facing (moderation check applies)."
+    },
+    "about": {
+      "type": "string",
+      "description": "Nullable longer about text for the profile About tab."
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "workshop",
+        "tuner",
+        "dealer",
+        "parts_supplier",
+        "detailer",
+        "panel_shop",
+        "tyre_shop",
+        "other"
+      ],
+      "description": "Fixed category enum (Phase 07 \u00a72.1)."
+    },
+    "contact_email": {
+      "type": "string",
+      "description": "Nullable contact email."
+    },
+    "contact_phone": {
+      "type": "string",
+      "description": "Nullable contact phone."
+    },
+    "website": {
+      "type": "string",
+      "description": "Nullable external URL."
+    },
+    "location_general": {
+      "type": "string",
+      "description": "City/region only \u2014 same privacy-conscious pattern as User/Event. No precise address."
+    },
+    "services_offered": {
+      "type": "string",
+      "description": "Free text at MVP. Structured services taxonomy is a future enhancement."
+    },
+    "opening_hours": {
+      "type": "string",
+      "description": "Free text at MVP. Structured hours schema is a future enhancement."
+    },
+    "social_links": {
+      "type": "string",
+      "description": "Free text at MVP (e.g. one link per line)."
+    },
+    "follower_count": {
+      "type": "number",
+      "default": 0,
+      "description": "Denormalized counter \u2014 Follow is the source of truth. Read-optimization only."
+    },
+    "verification_status": {
+      "type": "string",
+      "enum": [
+        "unverified",
+        "pending",
+        "verified",
+        "rejected"
+      ],
+      "default": "unverified",
+      "description": "Moderator/Admin-only via submit/approve/reject. Creation NEVER auto-verifies."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "suspended",
+        "removed_by_moderation"
+      ],
+      "default": "active",
+      "description": "active \u2192 suspended / removed_by_moderation (moderation-driven). NOTE: the reverse-transition mechanism is not specified in the locked architecture (Architecture Questions item 1) \u2014 not implemented in this phase."
+    },
+    "review_count": {
+      "type": "number",
+      "default": 0,
+      "description": "Denormalized count of published BusinessReview rows. Source of truth = BusinessReview (status=published). Reconcilable by recalculateReviewAggregate."
+    },
+    "rating_sum": {
+      "type": "number",
+      "default": 0,
+      "description": "Denormalized sum of published BusinessReview ratings. No stored average_rating \u2014 always computed as rating_sum/review_count at display time (ADR-029)."
+    }
+  },
+  "required": [
+    "name",
+    "category"
+  ]
+}

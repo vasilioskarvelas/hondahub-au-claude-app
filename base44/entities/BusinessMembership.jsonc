@@ -1,0 +1,38 @@
+{
+  "name": "BusinessMembership",
+  "type": "object",
+  "properties": {
+    "business_id": {
+      "type": "string",
+      "description": "FK\u2192Business."
+    },
+    "user_id": {
+      "type": "string",
+      "description": "FK\u2192User. Mirrors created_by_id; explicit for the uniqueness key. Unique on (business_id, user_id)."
+    },
+    "role": {
+      "type": "string",
+      "enum": [
+        "owner",
+        "staff"
+      ],
+      "default": "staff",
+      "description": "owner manages membership + verification-relevant fields; staff (BizMgr) manages content (profile edits, review responses) but not the membership list. Exactly one active owner per Business at all times (service-enforced)."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "removed"
+      ],
+      "default": "active",
+      "description": "active \u2192 removed on leave/kick. Unique on (business_id, user_id)."
+    }
+  },
+  "required": [
+    "business_id",
+    "user_id",
+    "role",
+    "status"
+  ]
+}

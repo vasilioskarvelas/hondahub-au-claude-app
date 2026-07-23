@@ -16,10 +16,11 @@
         "group",
         "event",
         "business",
+        "business_review",
         "listing",
         "marketplace_message"
       ],
-      "description": "Reportable subset of ReferenceTypes (DATABASE_SCHEMA \u00a722). REPORT and MODERATION_CASE exist in the platform-wide registry but are NOT reportable targets."
+      "description": "Reportable subset of ReferenceTypes (DATABASE_SCHEMA \u00a722). REPORT and MODERATION_CASE exist in the platform-wide registry but are NOT reportable targets. business_review is a reportable target per Phase 07 \u00a79."
     },
     "target_id": {
       "type": "string",
@@ -38,7 +39,7 @@
         "dangerous_behaviour",
         "other"
       ],
-      "description": "Fixed report category enum (\u00a72.1). Reused as-is; no new categories."
+      "description": "Fixed report category enum (\u00a72.1)."
     },
     "description": {
       "type": "string",

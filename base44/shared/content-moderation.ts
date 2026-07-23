@@ -14,6 +14,7 @@
  */
 
 import { ModerationActionType } from "./moderation.ts";
+import { applyModerationActionToReview } from "./business.ts";
 
 export interface ContentActionResult {
   ok: boolean;
@@ -148,6 +149,21 @@ export async function applyContentAction(
     } catch {
       return { ok: false, error: "event not found" };
     }
+  }
+
+  // ---- BusinessReview (Phase 07) — routed through the owning service's
+  //      internal applyModerationActionToReview, never a direct write here.
+  //      content_removed → removed_by_moderation; content_restored → published.
+  //      Aggregate (rating_sum/review_count) recomputed inside the helper. ----
+  if (target_type === "business_review") {
+    const newStatus = action_type === ModerationActionType.CONTENT_REMOVED
+      ? "removed_by_moderation"
+      : action_type === ModerationActionType.CONTENT_RESTORED
+      ? "published"
+      : null;
+    if (!newStatus) return { ok: true, changed: false };
+    const r = await applyModerationActionToReview(base44, target_id, newStatus);
+    return { ok: r.ok, changed: r.changed, error: r.error };
   }
 
   // ---- listing / marketplace_message ----
