@@ -7,20 +7,23 @@ export default function Conversations() {
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await base44.functions.invoke("marketplace", { action: "listConversations" });
-        setConversations(res.data?.conversations || []);
-      } finally { setLoading(false); }
-    })();
-  }, []);
+  const load = async () => {
+    try {
+      const res = await base44.functions.invoke("marketplace", { action: "listConversations" });
+      setConversations(res.data?.conversations || []);
+    } finally { setLoading(false); }
+  };
+
+  useEffect(() => { load(); }, []);
 
   return (
     <div className="mx-auto max-w-2xl space-y-5">
-      <div>
-        <h1 className="text-2xl font-black tracking-tighter">Messages</h1>
-        <p className="text-sm text-muted-foreground">Your marketplace conversations.</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-black tracking-tighter">Messages</h1>
+          <p className="text-sm text-muted-foreground">Your marketplace conversations.</p>
+        </div>
+        <Link to="/marketplace" className="text-sm font-bold text-primary">Browse listings</Link>
       </div>
       {loading ? (
         <div className="py-12 text-center text-sm text-muted-foreground">Loading...</div>
@@ -34,9 +37,7 @@ export default function Conversations() {
         <div className="space-y-2">
           {conversations.map((c) => {
             // Role labels derived from listing_type at display time — never hardcoded.
-            const iAmPoster = c.poster_id; // (role context comes from the listing_type)
-            const myRoleLabel = c.listing_type === "wanted" ? "buyer" : "seller";
-            const theirRoleLabel = c.listing_type === "wanted" ? "seller" : "buyer";
+            const myRoleLabel = c.my_role || (c.listing_type === "wanted" ? "buyer" : "seller");
             return (
               <Link key={c.id} to={`/conversation/${c.id}`} className="flex items-center gap-3 rounded-2xl border border-border bg-card p-3 transition hover:border-primary">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-secondary"><MessageSquare className="h-5 w-5 text-muted-foreground" /></div>
@@ -49,7 +50,6 @@ export default function Conversations() {
                     <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] font-bold uppercase text-foreground/70">{c.listing_type === "wanted" ? "Wanted" : "For sale"}</span>
                     <span className="truncate">re: {c.listing_title}</span>
                   </div>
-                  {c.last_message_preview && <p className="mt-0.5 truncate text-xs text-muted-foreground">{c.last_message_preview}</p>}
                 </div>
                 <div className="shrink-0 text-right">
                   <span className="text-[10px] font-bold uppercase text-muted-foreground">{myRoleLabel}</span>

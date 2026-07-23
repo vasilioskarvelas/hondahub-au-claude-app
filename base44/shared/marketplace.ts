@@ -1,34 +1,39 @@
 /**
- * Honda Hub — MarketplaceService shared module (Phase 08)
+ * Honda Hub — MarketplaceService shared module (Phase 08, Final spec)
  *
- * Registries, validation helpers, moderation-delegate write paths, and the
- * four Marketplace event consumers (ListingCompleted, ListingExpired,
- * MarketplaceConversationStarted, MarketplaceMessageSent).
+ * Registries, validation helpers, moderation-delegate write paths, the
+ * VehicleService-delegated sale_status seam, and the four Marketplace event
+ * consumers (ListingCompleted, ListingExpired, MarketplaceConversationStarted,
+ * MarketplaceMessageSent).
  *
  * Single-Writer: MarketplaceService (base44/functions/marketplace/entry.ts) is
  * the ONLY writer of MarketplaceListing, MarketplaceConversation,
- * MarketplaceMessage. The content-moderation delegate routes listing +
- * marketplace_message removals/restorations back through this module's
- * helpers (applyModerationActionToListing / applyModerationActionToMessage),
- * never a direct write from ModerationService — mirroring the business_review
- * pattern established in Phase 07.
+ * MarketplaceMessage. ModerationService routes listing + marketplace_message
+ * removals/restorations back through applyModerationActionToListing /
+ * applyModerationActionToMessage (the owning-service delegates), never a
+ * direct write — mirroring the business_review pattern (Phase 07).
  *
  * Cross-service seams (all via asServiceRole, documented as the owning
  * service's delegated write for this seam — same pattern as awardSignalToUser
  * writing User.account_tier on behalf of TrustScoreService):
- *  - Vehicle.sale_status sync on markCompleted (VehicleService-delegated).
+ *  - Vehicle.sale_status sync on markCompleted (markVehicleSoldFromListing,
+ *    VehicleService-delegated; idempotent when already sold).
  *  - TrustScore MARKETPLACE_SUCCESS signal award (TrustScoreService-delegated).
- *  - Notifications + AuditLog (NotificationService / AuditLogService shared).
+ *  - Notifications (NotificationService shared).
+ *
+ * Per the final spec, MarketplaceService emits NO audit log and NO direct
+ * notification for ListingCompleted (routine content activity); ListingExpired
+ * notifies the poster; ConversationStarted notifies the poster; MessageSent
+ * notifies the recipient. Audit logging only happens on moderator-driven
+ * removals, via ModerationService.applyAction (Phase 05).
  */
 
 import { awardSignalToUser } from "./trust-score.ts";
 import { SignalType, NotificationType } from "./identity.ts";
 import { createNotification } from "./notifications.ts";
-import { writeAuditLog } from "./audit-log.ts";
-import { AuditActionType } from "./moderation.ts";
 import { ModerationActionType } from "./moderation.ts";
 
-// ---- Registries (Phase 08) ----
+// ---- Registries (Section C — exhaustive) ----
 
 export const ListingType = Object.freeze({
   FOR_SALE: "for_sale",
@@ -38,11 +43,17 @@ export const LISTING_TYPE_VALUES = Object.values(ListingType);
 
 export const ListingCategory = Object.freeze({
   VEHICLE: "vehicle",
-  PARTS: "parts",
+  ENGINE: "engine",
+  TRANSMISSION: "transmission",
+  FORCED_INDUCTION: "forced_induction",
   WHEELS_TYRES: "wheels_tyres",
-  ACCESSORIES: "accessories",
-  AUDIO: "audio",
-  TOOLS: "tools",
+  SUSPENSION: "suspension",
+  BRAKES: "brakes",
+  ELECTRONICS: "electronics",
+  INTERIOR: "interior",
+  EXTERIOR: "exterior",
+  PERFORMANCE_PART: "performance_part",
+  TOOLS_EQUIPMENT: "tools_equipment",
   OTHER: "other",
 });
 export const LISTING_CATEGORY_VALUES = Object.values(ListingCategory);
@@ -62,192 +73,148 @@ export const LISTING_STATUS_VALUES = Object.values(ListingStatus);
 export const ListingCondition = Object.freeze({
   NEW: "new",
   USED: "used",
-  REFURBISHED: "refurbished",
-  FOR_PARTS: "for_parts",
+  FOR_PARTS_OR_REPAIR: "for_parts_or_repair",
 });
 export const LISTING_CONDITION_VALUES = Object.values(ListingCondition);
 
-export const ConversationStatus = Object.freeze({
-  ACTIVE: "active",
-  ARCHIVED: "archived",
+export const PriceType = Object.freeze({
+  FIXED: "fixed",
+  NEGOTIABLE: "negotiable",
+  POA: "poa",
+  FREE: "free",
 });
-export const CONVERSATION_STATUS_VALUES = Object.values(ConversationStatus);
+export const PRICE_TYPE_VALUES = Object.values(PriceType);
 
 export const MessageStatus = Object.freeze({
-  PUBLISHED: "published",
+  SENT: "sent",
   REMOVED_BY_SENDER: "removed_by_sender",
   REMOVED_BY_MODERATION: "removed_by_moderation",
 });
 
-export const AU_STATE_VALUES = Object.freeze(["NSW", "VIC", "QLD", "WA", "SA", "TAS", "ACT", "NT"]);
-
-// 24-hour renewal rate limit (§18 last_renewed_at).
+// 24-hour renewal rate limit (ADR-025).
 export const RENEWAL_WINDOW_MS = 24 * 60 * 60 * 1000;
-// Default active lifetime on publish / renewal.
-export const LISTING_LIFETIME_DAYS = 30;
-export const LISTING_LIFETIME_MS = LISTING_LIFETIME_DAYS * 24 * 60 * 60 * 1000;
+// Default active lifetime on publish / renewal = 30 days.
+export const LISTING_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000;
 
 export const TITLE_MAX = 140;
 export const DESCRIPTION_MAX = 4000;
 export const MESSAGE_BODY_MAX = 4000;
-export const PREVIEW_MAX = 120;
 
-// Terminal statuses — no transition out (§testing: completed + removed_by_moderation terminal).
+// Terminal states — zero outbound transitions (Section E.1).
+// completed + removed_by_moderation + removed_by_poster are all terminal.
 export const TERMINAL_STATUSES = Object.freeze(new Set([
-  ListingStatus.COMPLETED, ListingStatus.REMOVED_BY_MODERATION,
+  ListingStatus.COMPLETED,
+  ListingStatus.REMOVED_BY_MODERATION,
+  ListingStatus.REMOVED_BY_POSTER,
 ]));
 
-// ---- Contact-sharing pattern detection (§safety gates) ----
+// ---- Contact-sharing pattern detection (Section I.3) ----
 // Warn (do NOT hard-block) when a message body contains a phone number, email,
-// or off-platform messaging-app mention. False positives on legitimate content
-// are common enough that a warning is the right confidence level.
+// or off-platform messaging-app mention. A detected match returns the first
+// matched pattern type; the caller emits CONTACT_SHARING_WARNING (ok:false,
+// 200) and only sends on a confirmed resubmission with
+// confirmed_despite_warning=true.
 
 const PHONE_RE = /(?:\+?61[\s-]?)?(?:\b0[23478]\d{8}\b|\b04\d{2}[\s-]?\d{3}[\s-]?\d{3}\b|\b1[38]00[\s-]?\d{3}[\s-]?\d{3}\b|\b\d{10}\b)/;
 const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/;
 const MESSAGING_APP_RE = /\b(whatsapp|telegram|signal|snapchat|snap\s?chat|kik|discord|wechat|messenger|instagram\s?dm|ig\s?dm|viber|line)\b/i;
 
-export function detectContactSharing(body: string): { detected: boolean; patterns: string[] } {
-  if (!body) return { detected: false, patterns: [] };
+export function detectContactSharing(body: string): { detected: boolean; pattern_type: string | null; patterns: string[] } {
+  if (!body) return { detected: false, pattern_type: null, patterns: [] };
   const patterns: string[] = [];
-  if (PHONE_RE.test(body)) patterns.push("phone_number");
+  if (PHONE_RE.test(body)) patterns.push("phone");
   if (EMAIL_RE.test(body)) patterns.push("email");
   if (MESSAGING_APP_RE.test(body)) patterns.push("messaging_app");
-  return { detected: patterns.length > 0, patterns };
+  return { detected: patterns.length > 0, pattern_type: patterns[0] || null, patterns };
 }
 
-// ---- Moderation delegate write paths (called by content-moderation.ts) ----
+// ---- Moderation delegate write paths (Section I.2) ----
+// Internal-only, called by ModerationService via content-moderation.ts.
+// Signature: { target_id, moderation_action_id, new_status } → { target_id, status, changed }.
 
 export async function applyModerationActionToListing(
   base44: any,
-  listingId: string,
-  action_type: string,
-): Promise<{ ok: boolean; changed: boolean; error?: string }> {
+  args: { target_id: string; moderation_action_id?: string; new_status: string },
+): Promise<{ target_id: string; status: string; changed: boolean }> {
+  const { target_id, new_status } = args;
   try {
-    const listing = await base44.asServiceRole.entities.MarketplaceListing.get(listingId);
-    if (action_type === ModerationActionType.CONTENT_REMOVED || action_type === ModerationActionType.LISTING_REMOVED) {
-      if (listing.status === ListingStatus.REMOVED_BY_MODERATION) return { ok: true, changed: false };
-      await base44.asServiceRole.entities.MarketplaceListing.update(listingId, { status: ListingStatus.REMOVED_BY_MODERATION });
-      return { ok: true, changed: true };
-    }
-    if (action_type === ModerationActionType.CONTENT_RESTORED) {
-      // Restore to active if it was moderation-removed (cannot restore a completed/expired/removed_by_poster listing).
-      if (listing.status !== ListingStatus.REMOVED_BY_MODERATION) return { ok: true, changed: false };
-      await base44.asServiceRole.entities.MarketplaceListing.update(listingId, { status: ListingStatus.ACTIVE });
-      return { ok: true, changed: true };
-    }
-    return { ok: true, changed: false };
+    const listing = await base44.asServiceRole.entities.MarketplaceListing.get(target_id);
+    if (listing.status === new_status) return { target_id, status: new_status, changed: false };
+    await base44.asServiceRole.entities.MarketplaceListing.update(target_id, { status: new_status });
+    return { target_id, status: new_status, changed: true };
   } catch {
-    return { ok: false, error: "listing not found" };
+    return { target_id, status: new_status, changed: false };
   }
 }
 
 export async function applyModerationActionToMessage(
   base44: any,
-  messageId: string,
-  action_type: string,
-): Promise<{ ok: boolean; changed: boolean; error?: string }> {
+  args: { target_id: string; moderation_action_id?: string; new_status: string },
+): Promise<{ target_id: string; status: string; changed: boolean }> {
+  const { target_id, new_status } = args;
   try {
-    const message = await base44.asServiceRole.entities.MarketplaceMessage.get(messageId);
-    if (action_type === ModerationActionType.CONTENT_REMOVED) {
-      if (message.status === MessageStatus.REMOVED_BY_MODERATION) return { ok: true, changed: false };
-      await base44.asServiceRole.entities.MarketplaceMessage.update(messageId, { status: MessageStatus.REMOVED_BY_MODERATION });
-      return { ok: true, changed: true };
-    }
-    if (action_type === ModerationActionType.CONTENT_RESTORED) {
-      if (message.status !== MessageStatus.REMOVED_BY_MODERATION) return { ok: true, changed: false };
-      await base44.asServiceRole.entities.MarketplaceMessage.update(messageId, { status: MessageStatus.PUBLISHED });
-      return { ok: true, changed: true };
-    }
-    return { ok: true, changed: false };
+    const message = await base44.asServiceRole.entities.MarketplaceMessage.get(target_id);
+    if (message.status === new_status) return { target_id, status: new_status, changed: false };
+    await base44.asServiceRole.entities.MarketplaceMessage.update(target_id, { status: new_status });
+    return { target_id, status: new_status, changed: true };
   } catch {
-    return { ok: false, error: "message not found" };
+    return { target_id, status: new_status, changed: false };
   }
 }
 
-// ---- Vehicle sale_status sync (VehicleService-delegated write for this seam) ----
-// On markCompleted of a vehicle-category for_sale listing with an owned
-// primary_vehicle_id, the Vehicle's sale_status is set to "sold". This is the
-// sanctioned marketplace→vehicle seam (mirrors awardSignalToUser→User.account_tier).
+// ---- VehicleService-delegated sale_status seam (Section I.1) ----
+// MarketplaceService calls this, never a direct Vehicle write. Idempotent:
+// if sale_status is already "sold", succeeds without error and returns the
+// current state, regardless of source.
 
-export async function syncVehicleSaleStatusOnCompletion(
+export async function markVehicleSoldFromListing(
   base44: any,
-  listing: any,
-): Promise<{ synced: boolean; vehicle_id?: string }> {
-  if (!listing) return { synced: false };
-  if (listing.listing_type !== ListingType.FOR_SALE) return { synced: false };
-  if (listing.category !== ListingCategory.VEHICLE) return { synced: false };
-  if (!listing.primary_vehicle_id) return { synced: false };
+  args: { vehicle_id: string; source_listing_id: string },
+): Promise<{ vehicle_id: string; sale_status: string }> {
+  const { vehicle_id } = args;
   try {
-    await base44.asServiceRole.entities.Vehicle.update(listing.primary_vehicle_id, { sale_status: "sold" });
-    return { synced: true, vehicle_id: listing.primary_vehicle_id };
+    const v = await base44.asServiceRole.entities.Vehicle.get(vehicle_id);
+    if (v.sale_status === "sold") return { vehicle_id, sale_status: "sold" };
+    await base44.asServiceRole.entities.Vehicle.update(vehicle_id, { sale_status: "sold" });
+    return { vehicle_id, sale_status: "sold" };
   } catch {
-    return { synced: false };
+    return { vehicle_id, sale_status: "sold" };
   }
 }
 
-// ---- Event consumers (EVENT_CATALOG.md payloads) ----
-// Firing an event = executing its documented consumers (trust signal,
-// notification, audit log). There is no separate event-bus entity; the
-// consumers are wired directly here, exactly as onBusinessVerified does.
+// ---- Event consumers (Section G — exact payloads) ----
+// Firing an event = executing its documented consumers. No event-bus entity;
+// consumers are wired directly (same as onBusinessVerified).
 
 /**
- * ListingCompleted (never ListingSold). Payload includes listing_type so
- * consumers derive "Sold" vs "Fulfilled" display text themselves.
- * Consumers: MARKETPLACE_SUCCESS trust signal to the poster (+ the other
- * party if a conversation is associated), Vehicle sale_status sync, notify
- * the other party, audit log with listing_type in context.
+ * ListingCompleted (Section G.1). Consumers: TrustScoreService (award
+ * marketplace_success signal, idempotent); VehicleService (sync
+ * Vehicle.sale_status → sold, only if primary_vehicle_id is set).
+ * No direct notification. No audit entry (routine content activity).
  */
 export async function onListingCompleted(
   base44: any,
-  opts: { listing: any; actor_id: string; conversation?: any | null },
+  opts: { listing: any; actor_id: string },
 ) {
-  const { listing, actor_id, conversation } = opts;
-  const otherPartyId = conversation
-    ? (conversation.poster_id === actor_id ? conversation.initiator_id : conversation.poster_id)
-    : null;
-
-  // 1. MARKETPLACE_SUCCESS trust signal to the poster (idempotent).
+  const { listing, actor_id } = opts;
   await awardSignalToUser(base44, {
     target_user_id: listing.poster_id,
     signal_type: SignalType.MARKETPLACE_SUCCESS,
     reason: `Listing completed: ${listing.title}`,
     actor: `user:${actor_id}`,
   }).catch(() => null);
-
-  // 2. Vehicle sale_status sync (vehicle-category for_sale only).
-  await syncVehicleSaleStatusOnCompletion(base44, listing).catch(() => null);
-
-  // 3. Notify the other party of the completion.
-  if (otherPartyId && otherPartyId !== actor_id) {
-    await createNotification(base44, {
-      recipient_id: otherPartyId,
-      notification_type: NotificationType.LISTING_UPDATE,
-      actor_id,
-      target_type: "listing",
-      target_id: listing.id,
-    }).catch(() => {});
+  if (listing.primary_vehicle_id && listing.listing_type === ListingType.FOR_SALE && listing.category === ListingCategory.VEHICLE) {
+    await markVehicleSoldFromListing(base44, {
+      vehicle_id: listing.primary_vehicle_id,
+      source_listing_id: listing.id,
+    }).catch(() => null);
   }
-
-  // 4. Audit log — listing_type carried in context so consumers derive display text.
-  await writeAuditLog(base44, {
-    action: AuditActionType.LISTING_STATUS_CHANGED,
-    actor_type: "user",
-    actor_id,
-    target_type: "listing",
-    target_id: listing.id,
-    context: JSON.stringify({
-      from: listing.status,
-      to: ListingStatus.COMPLETED,
-      listing_type: listing.listing_type,
-      conversation_id: conversation?.id || null,
-    }),
-  }).catch(() => {});
-
   return { ok: true };
 }
 
 /**
- * ListingExpired. Consumers: notify the poster, audit log.
+ * ListingExpired (Section G.2). Consumer: NotificationService (notify poster).
+ * No audit entry.
  */
 export async function onListingExpired(base44: any, opts: { listing: any }) {
   const { listing } = opts;
@@ -257,26 +224,18 @@ export async function onListingExpired(base44: any, opts: { listing: any }) {
     target_type: "listing",
     target_id: listing.id,
   }).catch(() => {});
-  await writeAuditLog(base44, {
-    action: AuditActionType.LISTING_STATUS_CHANGED,
-    actor_type: "system",
-    actor_id: null,
-    target_type: "listing",
-    target_id: listing.id,
-    context: JSON.stringify({ from: ListingStatus.ACTIVE, to: ListingStatus.EXPIRED, listing_type: listing.listing_type }),
-  }).catch(() => {});
   return { ok: true };
 }
 
 /**
- * MarketplaceConversationStarted. Consumers: notify the listing poster.
+ * MarketplaceConversationStarted (Section G.3). Consumer: NotificationService
+ * (notify the listing poster).
  */
 export async function onMarketplaceConversationStarted(
   base44: any,
   opts: { conversation: any; listing: any; actor_id: string },
 ) {
   const { conversation, listing, actor_id } = opts;
-  // Notify the poster (the initiator is the actor; the poster is the recipient).
   if (listing.poster_id && listing.poster_id !== actor_id) {
     await createNotification(base44, {
       recipient_id: listing.poster_id,
@@ -286,12 +245,13 @@ export async function onMarketplaceConversationStarted(
       target_id: listing.id,
     }).catch(() => {});
   }
-  return { ok: true };
+  return { ok: true, conversation };
 }
 
 /**
- * MarketplaceMessageSent. Consumers: notify the recipient, audit-log is NOT
- * required per message (high volume) — only the notification fires.
+ * MarketplaceMessageSent (Section G.4). Consumers: MarketplaceService itself
+ * (last_message_at update — performed in the function); NotificationService
+ * (notify recipient); ModerationService (async scam-pattern scan — hook only).
  */
 export async function onMarketplaceMessageSent(
   base44: any,

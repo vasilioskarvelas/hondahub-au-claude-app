@@ -4,10 +4,18 @@ import { base44 } from "@/api/base44Client";
 import { ArrowLeft, Car } from "lucide-react";
 
 const CATEGORIES = [
-  { v: "vehicle", l: "Vehicle" }, { v: "parts", l: "Parts" }, { v: "wheels_tyres", l: "Wheels & Tyres" },
-  { v: "accessories", l: "Accessories" }, { v: "audio", l: "Audio" }, { v: "tools", l: "Tools" }, { v: "other", l: "Other" },
+  { v: "vehicle", l: "Vehicle" }, { v: "engine", l: "Engine" }, { v: "transmission", l: "Transmission" },
+  { v: "forced_induction", l: "Forced Induction" }, { v: "wheels_tyres", l: "Wheels & Tyres" },
+  { v: "suspension", l: "Suspension" }, { v: "brakes", l: "Brakes" }, { v: "electronics", l: "Electronics" },
+  { v: "interior", l: "Interior" }, { v: "exterior", l: "Exterior" }, { v: "performance_part", l: "Performance Part" },
+  { v: "tools_equipment", l: "Tools & Equipment" }, { v: "other", l: "Other" },
 ];
-const STATES = ["NSW", "VIC", "QLD", "WA", "SA", "TAS", "ACT", "NT"];
+const CONDITIONS = [
+  { v: "new", l: "New" }, { v: "used", l: "Used" }, { v: "for_parts_or_repair", l: "For parts or repair" },
+];
+const PRICE_TYPES = [
+  { v: "fixed", l: "Fixed" }, { v: "negotiable", l: "Negotiable" }, { v: "poa", l: "Price on ask" }, { v: "free", l: "Free" },
+];
 
 export default function CreateMarketplaceListing() {
   const { id } = useParams();
@@ -17,10 +25,10 @@ export default function CreateMarketplaceListing() {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [f, setF] = useState({
-    listing_type: "for_sale", category: "parts", title: "", description: "", price: "", condition: "used",
+    listing_type: "for_sale", category: "engine", title: "", description: "",
+    price_type: "fixed", price: "", condition: "used", quantity: "1",
     primary_vehicle_id: "", compatible_make: "", compatible_model: "", compatible_chassis_code: "",
-    compatible_year_from: "", compatible_year_to: "", location_general: "", location_state: "",
-    postage_available: false, pickup: true, swap_accepted: false, photo_urls: [],
+    compatible_year_from: "", compatible_year_to: "", location_general: "", photo_urls: [],
   });
 
   useEffect(() => {
@@ -32,19 +40,48 @@ export default function CreateMarketplaceListing() {
       if (editing) {
         const res = await base44.functions.invoke("marketplace", { action: "getListing", listing_id: id });
         const l = res.data?.listing;
-        if (l) setF((prev) => ({ ...prev, ...l, price: l.price ?? "", compatible_year_from: l.compatible_year_from ?? "", compatible_year_to: l.compatible_year_to ?? "", photo_urls: l.photo_urls || [] }));
+        if (l) setF((prev) => ({
+          ...prev, listing_type: l.listing_type || "for_sale", category: l.category || "engine", title: l.title || "",
+          description: l.description || "", price_type: l.price_type || "fixed",
+          price: l.price_cents != null ? String(l.price_cents / 100) : "", condition: l.condition || "used",
+          quantity: String(l.quantity ?? 1), primary_vehicle_id: l.primary_vehicle_id || "",
+          compatible_make: l.compatible_make || "", compatible_model: l.compatible_model || "",
+          compatible_chassis_code: l.compatible_chassis_code || "",
+          compatible_year_from: l.compatible_year_from ?? "", compatible_year_to: l.compatible_year_to ?? "",
+          location_general: l.location_general || "", photo_urls: l.photo_urls || [],
+        }));
       }
     })();
   }, [id]);
 
   const isVehicleForSale = f.category === "vehicle" && f.listing_type === "for_sale";
   const showCompat = f.category !== "vehicle";
+  const showPrice = f.price_type === "fixed" || f.price_type === "negotiable";
 
   const submit = async (publish) => {
     if (!f.title.trim() || busy) return;
     setBusy(publish ? "publish" : "draft"); setError("");
     try {
-      const payload = { ...f, price: f.price === "" ? undefined : Number(f.price), compatible_year_from: f.compatible_year_from === "" ? undefined : Number(f.compatible_year_from), compatible_year_to: f.compatible_year_to === "" ? undefined : Number(f.compatible_year_to) };
+      const payload = {
+        listing_type: f.listing_type, category: f.category, title: f.title.trim(),
+        description: f.description.trim() || undefined, price_type: f.price_type, condition: f.condition,
+        quantity: Number(f.quantity) || 1, location_general: f.location_general.trim() || undefined,
+        primary_vehicle_id: f.primary_vehicle_id || undefined,
+        compatible_year_from: f.compatible_year_from === "" ? undefined : Number(f.compatible_year_from),
+        compatible_year_to: f.compatible_year_to === "" ? undefined : Number(f.compatible_year_to),
+      };
+      if (showPrice) {
+        const dollars = f.price === "" ? NaN : Number(f.price);
+        if (Number.isNaN(dollars) || dollars < 0) { setError("Enter a valid price."); setBusy(""); return; }
+        payload.price_cents = Math.round(dollars * 100);
+      } else {
+        payload.price_cents = null;
+      }
+      if (showCompat) {
+        payload.compatible_make = f.compatible_make.trim() || undefined;
+        payload.compatible_model = f.compatible_model.trim() || undefined;
+        payload.compatible_chassis_code = f.compatible_chassis_code.trim() || undefined;
+      }
       let res;
       if (editing) {
         res = await base44.functions.invoke("marketplace", { action: "updateListing", listing_id: id, ...payload });
@@ -65,7 +102,7 @@ export default function CreateMarketplaceListing() {
       <Link to="/marketplace" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" /> Marketplace</Link>
       <div>
         <h1 className="text-2xl font-black tracking-tighter">{editing ? "Edit listing" : "Post a listing"}</h1>
-        <p className="text-sm text-muted-foreground">Trusted Member+ required to publish. Drafts save at any tier.</p>
+        <p className="text-sm text-muted-foreground">Trusted Member+ publishes straight to active; New Member submits for review.</p>
       </div>
       {error && <div className="rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>}
 
@@ -91,18 +128,29 @@ export default function CreateMarketplaceListing() {
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Price (AUD)</label>
-            <input type="number" value={f.price} onChange={(e) => field("price", e.target.value)} placeholder="0" className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary" />
+            <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Price type</label>
+            <select value={f.price_type} onChange={(e) => field("price_type", e.target.value)} className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary">
+              {PRICE_TYPES.map((p) => <option key={p.v} value={p.v}>{p.l}</option>)}
+            </select>
           </div>
           <div>
             <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Condition</label>
             <select value={f.condition} onChange={(e) => field("condition", e.target.value)} className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary">
-              <option value="used">Used</option><option value="new">New</option><option value="refurbished">Refurbished</option><option value="for_parts">For parts</option>
+              {CONDITIONS.map((c) => <option key={c.v} value={c.v}>{c.l}</option>)}
             </select>
           </div>
         </div>
+        {showPrice && (
+          <div>
+            <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Price (AUD)</label>
+            <input type="number" value={f.price} onChange={(e) => field("price", e.target.value)} placeholder="0" className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary" />
+          </div>
+        )}
+        <div>
+          <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Quantity</label>
+          <input type="number" min="1" value={f.quantity} onChange={(e) => field("quantity", e.target.value)} className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary" />
+        </div>
 
-        {/* Vehicle selector (required for vehicle for_sale) */}
         {isVehicleForSale && (
           <div className="rounded-xl border border-primary/30 bg-primary/5 p-3">
             <label className="flex items-center gap-1 text-xs font-bold uppercase tracking-wide text-primary"><Car className="h-3.5 w-3.5" /> Vehicle (required)</label>
@@ -114,7 +162,6 @@ export default function CreateMarketplaceListing() {
           </div>
         )}
 
-        {/* Compatibility fields (only non-vehicle) */}
         {showCompat && (
           <div className="space-y-3 rounded-xl border border-border p-3">
             <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Compatibility (optional)</p>
@@ -130,18 +177,7 @@ export default function CreateMarketplaceListing() {
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3">
-          <input value={f.location_general} onChange={(e) => field("location_general", e.target.value)} placeholder="City/region" className="rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary" />
-          <select value={f.location_state} onChange={(e) => field("location_state", e.target.value)} className="rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary">
-            <option value="">State</option>
-            {STATES.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </div>
-        <div className="flex flex-wrap gap-4">
-          {[{ k: "postage_available", l: "Postage available" }, { k: "pickup", l: "Pickup" }, { k: "swap_accepted", l: "Swap accepted" }].map((o) => (
-            <label key={o.k} className="flex items-center gap-1.5 text-sm"><input type="checkbox" checked={!!f[o.k]} onChange={(e) => field(o.k, e.target.checked)} /> {o.l}</label>
-          ))}
-        </div>
+        <input value={f.location_general} onChange={(e) => field("location_general", e.target.value)} placeholder="City/region" className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary" />
       </div>
 
       <div className="flex gap-2">

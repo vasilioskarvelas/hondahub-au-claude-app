@@ -12,22 +12,23 @@
     },
     "body": {
       "type": "string",
-      "description": "Message body. Text-only \u2014 no editing, no attachments. Required."
+      "description": "Message body. Text-only \u2014 no editing, no attachments. Required, capped at exactly 4,000 characters."
     },
     "status": {
       "type": "string",
       "enum": [
-        "published",
+        "sent",
         "removed_by_sender",
         "removed_by_moderation"
       ],
-      "default": "published",
-      "description": "published \u2192 removed_by_sender (via removeOwnMessage, by the sender) or removed_by_moderation (via the content-moderation delegate, by Mod/Admin). No edit path exists. Content is always retained for moderation history."
+      "default": "sent",
+      "description": "sent \u2192 removed_by_sender (via removeOwnMessage, by the sender) or removed_by_moderation (via the content-moderation delegate, by Mod/Admin). No edit path exists. removed_by_sender is a soft-delete \u2014 the body is retained for moderator access under an active Report. Content is always retained."
     }
   },
   "required": [
     "conversation_id",
     "sender_id",
-    "body"
+    "body",
+    "status"
   ]
 }

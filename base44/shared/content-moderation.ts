@@ -168,16 +168,31 @@ export async function applyContentAction(
   }
 
   // ---- listing (Phase 08) — routed through the owning service's
-  //      applyModerationActionToListing, never a direct write here. ----
+  //      applyModerationActionToListing, never a direct write here.
+  //      content_removed/listing_removed → removed_by_moderation;
+  //      content_restored → active (resolved decision, Section E.1). ----
   if (target_type === "listing") {
-    const r = await applyModerationActionToListing(base44, target_id, action_type);
-    return { ok: r.ok, changed: r.changed, error: r.error };
+    const newStatus = (action_type === ModerationActionType.CONTENT_REMOVED || action_type === ModerationActionType.LISTING_REMOVED)
+      ? "removed_by_moderation"
+      : action_type === ModerationActionType.CONTENT_RESTORED
+      ? "active"
+      : null;
+    if (!newStatus) return { ok: true, changed: false };
+    const r = await applyModerationActionToListing(base44, { target_id, new_status: newStatus });
+    return { ok: true, changed: r.changed, error: r.changed ? undefined : "listing not found" };
   }
 
-  // ---- marketplace_message (Phase 08) — routed through applyModerationActionToMessage. ----
+  // ---- marketplace_message (Phase 08) — routed through applyModerationActionToMessage.
+  //      content_removed → removed_by_moderation; content_restored → sent. ----
   if (target_type === "marketplace_message") {
-    const r = await applyModerationActionToMessage(base44, target_id, action_type);
-    return { ok: r.ok, changed: r.changed, error: r.error };
+    const newStatus = action_type === ModerationActionType.CONTENT_REMOVED
+      ? "removed_by_moderation"
+      : action_type === ModerationActionType.CONTENT_RESTORED
+      ? "sent"
+      : null;
+    if (!newStatus) return { ok: true, changed: false };
+    const r = await applyModerationActionToMessage(base44, { target_id, new_status: newStatus });
+    return { ok: true, changed: r.changed, error: r.changed ? undefined : "message not found" };
   }
 
   return { ok: true, changed: false };

@@ -14,39 +14,36 @@
       "type": "string",
       "description": "FK\u2192User. The user who started the conversation (the responder to the listing). Mirrors created_by_id; explicit for the uniqueness key."
     },
-    "status": {
-      "type": "string",
-      "enum": [
-        "active",
-        "archived"
-      ],
-      "default": "active",
-      "description": "active \u2192 archived (via archiveConversation). Unique on (listing_id, initiator_id) while status=active."
-    },
     "last_message_at": {
       "type": "string",
       "format": "date-time",
-      "description": "Updated on every sendMessage. Used for inbox sort order."
+      "description": "Source of truth: MAX(MarketplaceMessage.created_at WHERE conversation_id = this). Used for inbox sort order. Defaults to created_at."
     },
-    "last_message_preview": {
+    "poster_archived_at": {
       "type": "string",
-      "description": "Truncated body of the most recent message, for inbox preview."
+      "format": "date-time",
+      "description": "Participant-level archive \u2014 hides the conversation from the poster's inbox without affecting the initiator's copy. Reversible (poster clears it to un-archive)."
+    },
+    "initiator_archived_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Participant-level archive for the initiator. Independent of poster_archived_at. Reversible."
     },
     "poster_last_read_at": {
       "type": "string",
       "format": "date-time",
-      "description": "Read tracking for the poster side. Updated when the poster marks the conversation read. No read_at on Message."
+      "description": "Read-tracking pointer for the poster side. Continuously updated, not a lifecycle state. No read_at on Message (ADR-022)."
     },
     "initiator_last_read_at": {
       "type": "string",
       "format": "date-time",
-      "description": "Read tracking for the initiator side. Updated when the initiator marks the conversation read."
+      "description": "Read-tracking pointer for the initiator side. Continuously updated."
     }
   },
   "required": [
     "listing_id",
     "poster_id",
     "initiator_id",
-    "status"
+    "last_message_at"
   ]
 }

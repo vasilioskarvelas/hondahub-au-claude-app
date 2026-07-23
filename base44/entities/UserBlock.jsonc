@@ -6,13 +6,13 @@
       "type": "string",
       "description": "FK\u2192User. The user who initiated the block (mirrors created_by_id; explicit for the uniqueness key)."
     },
-    "blocked_id": {
+    "blocked_user_id": {
       "type": "string",
-      "description": "FK\u2192User. The user who is blocked."
+      "description": "FK\u2192User. The user who is blocked. Final field name (supersedes an earlier blocked_id)."
     }
   },
   "required": [
     "blocker_id",
-    "blocked_id"
+    "blocked_user_id"
   ]
 }

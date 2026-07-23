@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { ArrowLeft, Send, ShieldAlert, Ban, Archive, Trash2 } from "lucide-react";
+import { ArrowLeft, Send, ShieldAlert, Ban } from "lucide-react";
 
 export default function ConversationThread() {
   const { id } = useParams();
@@ -18,7 +18,7 @@ export default function ConversationThread() {
   const load = async () => {
     const [convRes, msgRes] = await Promise.all([
       base44.functions.invoke("marketplace", { action: "getConversation", conversation_id: id }),
-      base44.functions.invoke("marketplace", { action: "getMessages", conversation_id: id }),
+      base44.functions.invoke("marketplace", { action: "listMessages", conversation_id: id }),
     ]);
     setData(convRes.data);
     setMessages(msgRes.data?.messages || []);
@@ -29,31 +29,35 @@ export default function ConversationThread() {
     (async () => {
       try { setMe(await base44.auth.me()); } catch {}
       await load();
-      await base44.functions.invoke("marketplace", { action: "markConversationRead", conversation_id: id }).catch(() => {});
     })();
   }, [id]);
 
-  const send = async (acknowledge) => {
-    if (!text.trim() || busy) return;
-    setBusy(true); setError(""); setRiskWarning(null);
-    try {
-      const res = await base44.functions.invoke("marketplace", { action: "sendMessage", conversation_id: id, body: text.trim(), acknowledge_risk: acknowledge });
-      if (res.data?.ok) {
-        setText("");
-        await load();
-      } else if (res.data?.error === "MESSAGE_CONTACT_PATTERN_DETECTED") {
-        // Pre-send risk warning — show patterns, let the sender confirm to proceed.
-        setRiskWarning(res.data.details?.patterns || ["contact_info"]);
-      } else {
-        setError(res.data?.error || "Failed to send");
-      }
-    } catch (e) { setError(e.message); } finally { setBusy(false); }
+  const send = (confirmed) => {
+    return (async () => {
+      if (!text.trim() || busy) return;
+      setBusy(true); setError(""); setRiskWarning(null);
+      try {
+        const res = await base44.functions.invoke("marketplace", {
+          action: "sendMessage", conversation_id: id, body: text.trim(),
+          confirmed_despite_warning: confirmed ? true : undefined,
+        });
+        if (res.data?.ok) {
+          setText("");
+          await load();
+        } else if (res.data?.error?.code === "CONTACT_SHARING_WARNING") {
+          // Soft warning — show the matched pattern, let the sender confirm to proceed.
+          setRiskWarning(res.data.error.details?.matched_pattern_type || "contact_info");
+        } else {
+          setError(res.data?.error?.message || res.data?.error || "Failed to send");
+        }
+      } catch (e) { setError(e.message); } finally { setBusy(false); }
+    })();
   };
 
   const block = async () => {
     if (!data?.other_party) return;
     if (!confirm(`Block ${data.other_party.display_name}? They won't be able to start new conversations or send new messages, but this conversation's history stays visible.`)) return;
-    const res = await base44.functions.invoke("marketplace", { action: "blockUser", blocked_id: data.other_party.user_id });
+    const res = await base44.functions.invoke("marketplace", { action: "blockUser", blocked_user_id: data.other_party.user_id });
     if (res.data?.ok) setError(`Blocked ${data.other_party.display_name}. History stays visible.`);
   };
 
@@ -66,7 +70,7 @@ export default function ConversationThread() {
   if (!data.conversation) return <div className="py-16 text-center text-sm text-muted-foreground">Conversation not found.</div>;
 
   const listing = data.listing;
-  const myRole = data.my_role; // derived from listing_type by the service — never a hardcoded field assumption
+  const myRole = data.my_role;
   const theirRole = myRole === "buyer" ? "seller" : "buyer";
 
   return (
@@ -81,14 +85,14 @@ export default function ConversationThread() {
           {listing && <p className="truncate text-xs text-muted-foreground">re: {listing.title} · {listing.listing_type === "wanted" ? "Wanted" : "For sale"}</p>}
         </div>
         <button onClick={block} title="Block user" className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary hover:text-destructive"><Ban className="h-4 w-4" /></button>
-        <button onClick={archive} title="Archive" className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary"><Archive className="h-4 w-4" /></button>
+        <button onClick={archive} title="Archive" className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary">Archive</button>
       </div>
 
       {/* Messages — history stays visible even after a block */}
       <div className="flex-1 space-y-2 overflow-y-auto py-3">
         {messages.map((m) => {
           const mine = me && m.sender_id === me.id;
-          const removed = m.status !== "published";
+          const removed = m.status !== "sent";
           return (
             <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
               <div className={`max-w-[75%] rounded-2xl px-3 py-2 text-sm ${mine ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground"} ${removed ? "italic opacity-50" : ""}`}>
@@ -106,7 +110,7 @@ export default function ConversationThread() {
       {riskWarning && (
         <div className="mb-2 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3">
           <div className="flex items-center gap-1.5 text-xs font-bold text-amber-400"><ShieldAlert className="h-4 w-4" /> Sharing contact info</div>
-          <p className="mt-1 text-xs text-muted-foreground">Your message may contain {riskWarning.join(", ").replace(/_/g, " ")}. Sharing off-platform contact details is at your own risk. Send anyway?</p>
+          <p className="mt-1 text-xs text-muted-foreground">Your message appears to contain {riskWarning}. Scammers often try to move conversations off-platform — send anyway?</p>
           <div className="mt-2 flex gap-2">
             <button onClick={() => send(true)} className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-bold text-black">Send anyway</button>
             <button onClick={() => { setRiskWarning(null); setText(""); }} className="rounded-lg border border-border px-3 py-1.5 text-xs font-bold">Cancel</button>

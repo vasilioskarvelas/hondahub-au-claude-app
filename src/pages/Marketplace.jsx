@@ -1,18 +1,30 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { Search, Plus, Tag, Package, Wrench, Cog, Car, Music } from "lucide-react";
+import { Search, Plus, Tag, Package, Wrench, Cog, Car, Cpu, Wind, Zap, Circle, Armchair, Settings } from "lucide-react";
 
 const CATEGORIES = [
   { v: "vehicle", l: "Vehicles", i: Car },
-  { v: "parts", l: "Parts", i: Cog },
-  { v: "wheels_tyres", l: "Wheels & Tyres", i: Package },
-  { v: "accessories", l: "Accessories", i: Tag },
-  { v: "audio", l: "Audio", i: Music },
-  { v: "tools", l: "Tools", i: Wrench },
+  { v: "engine", l: "Engines", i: Cog },
+  { v: "transmission", l: "Transmissions", i: Settings },
+  { v: "forced_induction", l: "Forced Induction", i: Wind },
+  { v: "wheels_tyres", l: "Wheels & Tyres", i: Circle },
+  { v: "suspension", l: "Suspension", i: Cog },
+  { v: "brakes", l: "Brakes", i: Cog },
+  { v: "electronics", l: "Electronics", i: Cpu },
+  { v: "interior", l: "Interior", i: Armchair },
+  { v: "exterior", l: "Exterior", i: Car },
+  { v: "performance_part", l: "Performance", i: Zap },
+  { v: "tools_equipment", l: "Tools", i: Wrench },
+  { v: "other", l: "Other", i: Package },
 ];
-
 const CATEGORY_LABEL = Object.fromEntries(CATEGORIES.map((c) => [c.v, c.l]));
+
+function priceLabel(l) {
+  if (l.price_type === "free") return "Free";
+  if (l.price_type === "poa" || l.price_cents == null) return "POA";
+  return `$${(l.price_cents / 100).toLocaleString()}`;
+}
 
 export default function Marketplace() {
   const navigate = useNavigate();
@@ -28,12 +40,10 @@ export default function Marketplace() {
       if (filters.category) args.category = filters.category;
       if (filters.search) args.search = filters.search;
       if (filters.compatible_make) args.compatible_make = filters.compatible_make;
-      if (filters.compatible_year) args.compatible_year = filters.compatible_year;
+      if (filters.compatible_year) args.compatible_year = Number(filters.compatible_year);
       const res = await base44.functions.invoke("marketplace", args);
       setListings(res.data?.listings || []);
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   useEffect(() => { load(); }, []);
@@ -50,7 +60,6 @@ export default function Marketplace() {
         </button>
       </div>
 
-      {/* Filters */}
       <div className="space-y-3 rounded-2xl border border-border bg-card p-4">
         <div className="flex gap-2">
           <div className="relative flex-1">
@@ -76,17 +85,15 @@ export default function Marketplace() {
             );
           })}
         </div>
-        {/* Compatibility filters (only for non-vehicle categories) */}
         {filters.category && filters.category !== "vehicle" && (
           <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
             <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Compatibility:</span>
-            <input value={filters.compatible_make} onChange={(e) => setFilters({ ...filters, compatible_make: e.target.value })} placeholder="Make/model" className="w-40 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs outline-none focus:border-primary" />
+            <input value={filters.compatible_make} onChange={(e) => setFilters({ ...filters, compatible_make: e.target.value })} placeholder="Make" className="w-40 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs outline-none focus:border-primary" />
             <input value={filters.compatible_year} onChange={(e) => setFilters({ ...filters, compatible_year: e.target.value })} placeholder="Year" className="w-24 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs outline-none focus:border-primary" />
           </div>
         )}
       </div>
 
-      {/* Results */}
       {loading ? (
         <div className="py-12 text-center text-sm text-muted-foreground">Loading listings...</div>
       ) : listings.length === 0 ? (
@@ -109,8 +116,8 @@ export default function Marketplace() {
                 </div>
                 <h3 className="mt-1.5 line-clamp-1 text-sm font-bold">{l.title}</h3>
                 <div className="mt-1 flex items-center justify-between">
-                  {l.price != null ? <span className="text-sm font-black">${Number(l.price).toLocaleString()}</span> : <span className="text-xs text-muted-foreground">Price on ask</span>}
-                  <span className="text-xs text-muted-foreground">{l.location_state || ""}</span>
+                  <span className="text-sm font-black">{priceLabel(l)}</span>
+                  <span className="truncate text-xs text-muted-foreground">{l.location_general || ""}</span>
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">by {l.poster_name}</p>
               </div>

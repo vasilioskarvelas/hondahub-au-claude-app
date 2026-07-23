@@ -30,11 +30,11 @@ export async function isBlockedEitherDirection(
   try {
     const blocks = await base44.asServiceRole.entities.UserBlock.filter({
       blocker_id: { $in: [userAId, userBId] },
-      blocked_id: { $in: [userAId, userBId] },
+      blocked_user_id: { $in: [userAId, userBId] },
     });
     return blocks.some((b: any) =>
-      (b.blocker_id === userAId && b.blocked_id === userBId) ||
-      (b.blocker_id === userBId && b.blocked_id === userAId),
+      (b.blocker_id === userAId && b.blocked_user_id === userBId) ||
+      (b.blocker_id === userBId && b.blocked_user_id === userAId),
     );
   } catch {
     return false;
@@ -80,17 +80,17 @@ export async function createBlock(base44: any, blockerId: string, blockedId: str
     throw new Error("createBlock: invalid blocker/blocked");
   }
   const existing = await base44.asServiceRole.entities.UserBlock.filter({
-    blocker_id: blockerId, blocked_id: blockedId,
+    blocker_id: blockerId, blocked_user_id: blockedId,
   });
   if (existing.length > 0) return existing[0];
   return await base44.asServiceRole.entities.UserBlock.create({
-    blocker_id: blockerId, blocked_id: blockedId,
+    blocker_id: blockerId, blocked_user_id: blockedId,
   });
 }
 
 export async function removeBlock(base44: any, blockerId: string, blockedId: string) {
   const existing = await base44.asServiceRole.entities.UserBlock.filter({
-    blocker_id: blockerId, blocked_id: blockedId,
+    blocker_id: blockerId, blocked_user_id: blockedId,
   });
   for (const b of existing) {
     await base44.asServiceRole.entities.UserBlock.delete(b.id);

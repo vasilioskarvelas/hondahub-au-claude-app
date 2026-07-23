@@ -5,7 +5,7 @@
       "trigger_type": "scheduled",
       "events": [],
       "schedule_mode": "recurring",
-      "cron_expression": "0 * * * *",
+      "cron_expression": "*/15 * * * *",
       "one_time_date": null,
       "timezone": "Australia/Melbourne",
       "interval_value": null,
@@ -21,7 +21,7 @@
     "document": {
       "dsl": "1.0.0",
       "name": "marketplace_listing_expiry",
-      "version": "1.0",
+      "version": "1.1",
       "namespace": "base44"
     },
     "do": [
@@ -37,11 +37,11 @@
           "then": "end",
           "x-base44": {
             "title": "Expire due marketplace listings",
-            "description": "Sweep active listings past their expires_at"
+            "description": "Sweep active/reserved listings past their expires_at (every 15 minutes, batch 500)."
           }
         }
       }
     ]
   },
-  "description": "Hourly sweep: transitions active/reserved MarketplaceListings whose expires_at has passed to 'expired' (fires ListingExpired). Idempotent \u2014 only active/reserved rows are eligible, so a repeat run is a no-op."
+  "description": "Every 15 minutes: transitions active/reserved MarketplaceListings whose expires_at has passed to 'expired' (fires ListingExpired \u2192 notify poster). Idempotent \u2014 only active/reserved rows are eligible, so a repeat run is a no-op."
 }
