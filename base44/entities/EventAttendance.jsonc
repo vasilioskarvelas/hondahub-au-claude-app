@@ -1,0 +1,33 @@
+{
+  "name": "EventAttendance",
+  "type": "object",
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "description": "FK\u2192Event."
+    },
+    "user_id": {
+      "type": "string",
+      "description": "FK\u2192User. Mirrors created_by_id; explicit for the uniqueness key. Unique on (event_id, user_id)."
+    },
+    "attending_vehicle_id": {
+      "type": "string",
+      "description": "FK\u2192Vehicle, optional. 'Which car am I bringing.' Must belong to user_id \u2014 validated via the ReferenceResolverService ownership pattern, never assumed from the payload."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "going",
+        "interested",
+        "cancelled"
+      ],
+      "default": "going",
+      "description": "going/interested \u2192 cancelled, or hard-deleted on withdrawal (no moderation/audit value in retaining \u2014 same reasoning as Follow/PostLike)."
+    }
+  },
+  "required": [
+    "event_id",
+    "user_id",
+    "status"
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "name": "GroupMembership",
+  "type": "object",
+  "properties": {
+    "group_id": {
+      "type": "string",
+      "description": "FK\u2192Group."
+    },
+    "user_id": {
+      "type": "string",
+      "description": "FK\u2192User. Mirrors created_by_id; explicit for the uniqueness key."
+    },
+    "role": {
+      "type": "string",
+      "enum": [
+        "member",
+        "moderator",
+        "owner"
+      ],
+      "default": "member",
+      "description": "Group-scoped roles, DISTINCT from platform AccountTier. A Group moderator has no special platform permissions outside that group. Exactly one owner per Group at all times (service-enforced)."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "pending_approval",
+        "removed"
+      ],
+      "default": "active",
+      "description": "pending_approval \u2192 active (private-group approval by GrpMod/GrpOwn) or direct to active (public group). \u2192 removed on leave/kick. Unique on (group_id, user_id)."
+    }
+  },
+  "required": [
+    "group_id",
+    "user_id",
+    "role"
+  ]
+}

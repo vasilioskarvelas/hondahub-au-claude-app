@@ -23,7 +23,12 @@
         "business_status_changed",
         "listing_removed_by_moderation",
         "trust_tier_overridden",
-        "financial_change_approved"
+        "financial_change_approved",
+        "report_filed",
+        "moderation_action_applied",
+        "moderation_case_status_changed",
+        "event_cancelled",
+        "group_member_removed"
       ],
       "description": "AuditActionType registry \u2014 never a free-text string. Append-only: no update or delete path, ever."
     },

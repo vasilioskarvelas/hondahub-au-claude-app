@@ -30,6 +30,10 @@ export const AuditActionType = Object.freeze({
   REPORT_FILED: "report_filed",
   MODERATION_ACTION_APPLIED: "moderation_action_applied",
   MODERATION_CASE_STATUS_CHANGED: "moderation_case_status_changed",
+  // Phase 06 additions — Event cancellation (§2.3) and Group member kick (§2.2).
+  // Group/Event moderation removals are covered by moderation_action_applied.
+  EVENT_CANCELLED: "event_cancelled",
+  GROUP_MEMBER_REMOVED: "group_member_removed",
 });
 
 // Report target subset of ReferenceTypes (DATABASE_SCHEMA §22).

@@ -110,8 +110,48 @@ export async function applyContentAction(
     return { ok: true, changed: false };
   }
 
-  // ---- listing / group / event / business / marketplace_message ----
-  // Backing entities land in later phases (06/07/08). The action is still
+  // ---- Group (Phase 06) ----
+  if (target_type === "group") {
+    try {
+      const group = await base44.asServiceRole.entities.Group.get(target_id);
+      if (action_type === ModerationActionType.CONTENT_REMOVED) {
+        if (group.status === "removed_by_moderation") return { ok: true, changed: false };
+        await base44.asServiceRole.entities.Group.update(target_id, { status: "removed_by_moderation" });
+        return { ok: true, changed: true };
+      }
+      if (action_type === ModerationActionType.CONTENT_RESTORED) {
+        if (group.status === "active") return { ok: true, changed: false };
+        await base44.asServiceRole.entities.Group.update(target_id, { status: "active" });
+        return { ok: true, changed: true };
+      }
+      return { ok: true, changed: false };
+    } catch {
+      return { ok: false, error: "group not found" };
+    }
+  }
+
+  // ---- Event (Phase 06) ----
+  if (target_type === "event") {
+    try {
+      const event = await base44.asServiceRole.entities.Event.get(target_id);
+      if (action_type === ModerationActionType.CONTENT_REMOVED) {
+        if (event.status === "removed_by_moderation") return { ok: true, changed: false };
+        await base44.asServiceRole.entities.Event.update(target_id, { status: "removed_by_moderation" });
+        return { ok: true, changed: true };
+      }
+      if (action_type === ModerationActionType.CONTENT_RESTORED) {
+        if (event.status === "published") return { ok: true, changed: false };
+        await base44.asServiceRole.entities.Event.update(target_id, { status: "published" });
+        return { ok: true, changed: true };
+      }
+      return { ok: true, changed: false };
+    } catch {
+      return { ok: false, error: "event not found" };
+    }
+  }
+
+  // ---- listing / business / marketplace_message ----
+  // Backing entities land in later phases (07/08). The action is still
   // recorded in ModerationAction; the content status change activates when
   // each backing entity lands.
   return { ok: true, changed: false };

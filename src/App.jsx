@@ -28,6 +28,9 @@ import VehicleDetail from '@/pages/VehicleDetail';
 import VerificationQueue from '@/pages/VerificationQueue';
 import EventDetail from '@/pages/EventDetail';
 import Groups from '@/pages/Groups';
+import GroupDetail from '@/pages/GroupDetail';
+import CreateGroup from '@/pages/CreateGroup';
+import CreateEvent from '@/pages/CreateEvent';
 import Login from '@/pages/Login';
 import Register from '@/pages/Register';
 import ForgotPassword from '@/pages/ForgotPassword';
@@ -91,6 +94,9 @@ const AuthenticatedApp = () => {
         <Route path="/verification-queue" element={<VerificationQueue />} />
         <Route path="/user/:name/garage" element={<UserGarage />} />
         <Route path="/groups" element={<Groups />} />
+        <Route path="/group/create" element={<CreateGroup />} />
+        <Route path="/group/:id" element={<GroupDetail />} />
+        <Route path="/event/create" element={<CreateEvent />} />
         <Route path="/feed" element={<Feed />} />
         <Route path="/post/:id" element={<PostDetail />} />
         <Route path="/connections" element={<Connections />} />

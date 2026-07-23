@@ -1,0 +1,51 @@
+{
+  "name": "Group",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Group/club name. Max 100 chars (service-enforced). Public-facing \u2014 moderation check applies."
+    },
+    "description": {
+      "type": "string",
+      "description": "Nullable free-text group description."
+    },
+    "owner_id": {
+      "type": "string",
+      "description": "FK\u2192User. The creator/primary admin. Single fixed owner at MVP (no succession \u2014 known accepted limitation)."
+    },
+    "visibility": {
+      "type": "string",
+      "enum": [
+        "public",
+        "private"
+      ],
+      "default": "public",
+      "description": "public = anyone New Member+ can view/join; private = invite/request only, member list and content hidden from non-members."
+    },
+    "member_count": {
+      "type": "number",
+      "default": 0,
+      "description": "Denormalized counter \u2014 GroupMembership (status=active) is the source of truth. Read-optimization only, NEVER used for permissions. Reconcilable by recomputing COUNT(GroupMembership WHERE group_id=this AND status='active')."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "archived",
+        "removed_by_moderation"
+      ],
+      "default": "active",
+      "description": "active \u2192 archived (owner-initiated, reversible) or removed_by_moderation (audit-logged via ModerationService)."
+    },
+    "cover_media_id": {
+      "type": "string",
+      "description": "FK\u2192Media. Optional cover/logo (source=community)."
+    }
+  },
+  "required": [
+    "name",
+    "owner_id",
+    "visibility"
+  ]
+}

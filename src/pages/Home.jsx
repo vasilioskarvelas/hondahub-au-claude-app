@@ -24,7 +24,7 @@ export default function Home() {
       setListings(l);
       setLoading(false);
     });
-    base44.entities.Event.filter({ date: { $gte: new Date().toISOString().slice(0, 10) } }, "date", 1).then((e) => setNextEvent(e[0] || null));
+    base44.entities.Event.filter({ status: "published" }, "starts_at", 10).then((e) => { const upcoming = e.find((x) => new Date(x.starts_at).getTime() >= Date.now()); setNextEvent(upcoming || null); });
     base44.entities.Giveaway.filter({ status: "active" }, "-created_date", 1).then((g) => setActiveGiveaway(g[0] || null));
     base44.entities.CommunityPost.filter({}, "-likes", 1).then((p) => setCommunitySpotlight(p[0] || null));
     base44.entities.PartnerDiscount.list("-created_date", 20).then((d) => setPartnerDiscounts(d));
@@ -61,18 +61,14 @@ export default function Home() {
             {nextEvent && <Link to="/events" className="ml-auto text-xs text-primary">See all <ArrowRight className="inline h-3 w-3" /></Link>}
           </div>
           {nextEvent ? (
-            <Link to="/events" className="group relative block overflow-hidden rounded-2xl border border-border bg-card transition hover:border-primary/50">
+            <Link to={`/event/${nextEvent.id}`} className="group relative block overflow-hidden rounded-2xl border border-border bg-card transition hover:border-primary/50">
               <div className="relative h-32 overflow-hidden">
-                {nextEvent.image_url ? (
-                  <img src={nextEvent.image_url} alt={nextEvent.title} className="h-full w-full object-cover transition group-hover:scale-105" />
-                ) : (
-                  <div className="flex h-full items-center justify-center bg-gradient-to-br from-primary/20 to-secondary"><CalendarDays className="h-10 w-10 text-primary/50" /></div>
-                )}
+                <div className="flex h-full items-center justify-center bg-gradient-to-br from-primary/20 to-secondary"><CalendarDays className="h-10 w-10 text-primary/50" /></div>
                 <div className="absolute inset-0 bg-gradient-to-t from-card via-card/30 to-transparent" />
               </div>
               <div className="absolute bottom-0 left-0 right-0 p-3">
                 <div className="line-clamp-1 text-sm font-bold">{nextEvent.title}</div>
-                <div className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground"><MapPin className="h-3 w-3" /> {nextEvent.state} · {nextEvent.date}{nextEvent.time && ` · ${nextEvent.time}`}</div>
+                <div className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground"><MapPin className="h-3 w-3" /> {nextEvent.location_general || "TBA"} · {new Date(nextEvent.starts_at).toLocaleDateString("en-AU", { day: "numeric", month: "short" })} · {new Date(nextEvent.starts_at).toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit" })}</div>
               </div>
             </Link>
           ) : (

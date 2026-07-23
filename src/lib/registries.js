@@ -73,6 +73,12 @@ export const AuditActionType = Object.freeze({
   REPORT_FILED: "report_filed",                       // written by ModerationService.fileReport() (§2.1/§5.1)
   MODERATION_ACTION_APPLIED: "moderation_action_applied", // the mirrored AuditLog entry every ModerationAction creates (§2.5/§5.2)
   MODERATION_CASE_STATUS_CHANGED: "moderation_case_status_changed", // every ModerationCase.status transition (§2.2)
+  // Phase 06 additions — audit-logging of organiser-initiated Event cancellation
+  // (§2.3) and Group member kicks (§2.2). Group/Event moderation removals are
+  // covered by the generic moderation_action_applied mirror via the
+  // content-moderation delegate, so no new value is needed for those.
+  EVENT_CANCELLED: "event_cancelled",
+  GROUP_MEMBER_REMOVED: "group_member_removed",
 });
 
 /**

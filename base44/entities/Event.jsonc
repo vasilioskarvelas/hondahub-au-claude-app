@@ -2,47 +2,77 @@
   "name": "Event",
   "type": "object",
   "properties": {
-    "title": {
-      "type": "string"
-    },
-    "type": {
+    "organiser_type": {
       "type": "string",
       "enum": [
-        "meet",
-        "cruise",
-        "track_day",
-        "drag_day",
-        "cars_coffee",
-        "workshop_event"
+        "user",
+        "business"
       ],
-      "default": "meet"
+      "description": "Polymorphic organiser. Validated via ReferenceResolverService against the USER/BUSINESS subset of ReferenceTypes."
     },
-    "date": {
+    "organiser_id": {
       "type": "string",
-      "format": "date"
+      "description": "Polymorphic pair with organiser_type. The organiser account must be in good standing (not suspended/banned; business not rejected)."
     },
-    "time": {
-      "type": "string"
-    },
-    "location": {
-      "type": "string"
-    },
-    "state": {
-      "type": "string"
+    "title": {
+      "type": "string",
+      "description": "Event title. Required."
     },
     "description": {
-      "type": "string"
+      "type": "string",
+      "description": "Nullable free-text. The organiser may optionally disclose a precise address here \u2014 never a structured field the platform collects."
     },
-    "image_url": {
-      "type": "string"
+    "location_name": {
+      "type": "string",
+      "description": "Free text e.g. 'Sandown Raceway car park'. Nullable."
     },
-    "organizer_name": {
-      "type": "string"
+    "location_general": {
+      "type": "string",
+      "description": "City/region only \u2014 consistent with User's privacy-conscious location field. No precise street address stored."
+    },
+    "starts_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Required. Cannot be in the past at CREATION time (editing a past event for record-keeping is a separate allowed case)."
+    },
+    "ends_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Nullable. If set, must be after starts_at."
+    },
+    "attendee_count": {
+      "type": "number",
+      "default": 0,
+      "description": "Denormalized counter \u2014 EventAttendance (status=going) is the source of truth. Reconcilable by recomputing COUNT(EventAttendance WHERE event_id=this AND status='going')."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "published",
+        "cancelled",
+        "removed_by_moderation"
+      ],
+      "default": "published",
+      "description": "published \u2192 cancelled (organiser-initiated, audit-logged) or removed_by_moderation (via ModerationService). Events are public by nature \u2014 no per-event visibility field."
+    },
+    "group_id": {
+      "type": "string",
+      "description": "FK\u2192Group. Optional \u2014 Event connected to a Group the organiser moderates/owns (GrpMod/GrpOwn required at creation)."
+    },
+    "business_id": {
+      "type": "string",
+      "description": "FK\u2192Business. Optional \u2014 Event connected to a Business the organiser manages/owns (BizMgr/BizOwn required at creation; Phase 07)."
+    },
+    "cover_media_id": {
+      "type": "string",
+      "description": "FK\u2192Media. Optional cover image (source=event/community)."
     }
   },
   "required": [
+    "organiser_type",
+    "organiser_id",
     "title",
-    "date",
-    "state"
+    "starts_at",
+    "status"
   ]
 }
