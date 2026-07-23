@@ -1,0 +1,80 @@
+{
+  "name": "Business",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Business name. Max 100 (service-enforced). Public-facing \u2014 moderation check applies."
+    },
+    "description": {
+      "type": "string",
+      "description": "Nullable short tagline/summary."
+    },
+    "about": {
+      "type": "string",
+      "description": "Nullable longer about text for the profile About tab."
+    },
+    "category": {
+      "type": "string",
+      "description": "Free-text business category (workshop, parts, dealer, dyno, tuning, body shop, etc.). Free text at MVP \u2014 no enum invented."
+    },
+    "location_general": {
+      "type": "string",
+      "description": "City/region only \u2014 consistent with the platform's privacy-conscious location pattern. No street address stored."
+    },
+    "website_url": {
+      "type": "string",
+      "description": "External URL. Subject to new-account link-posting restriction."
+    },
+    "phone": {
+      "type": "string",
+      "description": "Contact phone (optional)."
+    },
+    "email": {
+      "type": "string",
+      "description": "Contact email (optional)."
+    },
+    "logo_media_id": {
+      "type": "string",
+      "description": "FK\u2192Media (source=business). Nullable logo."
+    },
+    "cover_media_id": {
+      "type": "string",
+      "description": "FK\u2192Media (source=business). Nullable cover image."
+    },
+    "verification_status": {
+      "type": "string",
+      "enum": [
+        "unverified",
+        "pending",
+        "verified",
+        "rejected"
+      ],
+      "default": "unverified",
+      "description": "Moderator/Admin-only via submit/approve/reject. Creation NEVER auto-verifies."
+    },
+    "review_count": {
+      "type": "number",
+      "default": 0,
+      "description": "Denormalized count of published BusinessReview rows. Source of truth = BusinessReview (status=published). Reconcilable by recalculateReviewAggregate."
+    },
+    "rating_sum": {
+      "type": "number",
+      "default": 0,
+      "description": "Denormalized sum of published BusinessReview ratings. No stored average_rating field \u2014 always computed as rating_sum/review_count at display time to avoid floating-point drift."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "archived",
+        "removed_by_moderation"
+      ],
+      "default": "active",
+      "description": "active \u2192 archived (owner-initiated) or removed_by_moderation (via ModerationService \u2192 content-moderation delegate)."
+    }
+  },
+  "required": [
+    "name"
+  ]
+}

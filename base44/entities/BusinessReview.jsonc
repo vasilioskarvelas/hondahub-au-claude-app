@@ -1,0 +1,59 @@
+{
+  "name": "BusinessReview",
+  "type": "object",
+  "properties": {
+    "business_id": {
+      "type": "string",
+      "description": "FK\u2192Business."
+    },
+    "reviewer_id": {
+      "type": "string",
+      "description": "FK\u2192User. Mirrors created_by_id; explicit for the uniqueness key. Unique on (business_id, reviewer_id) while not removed \u2014 one review per reviewer per business; to revise, use updateReview (while draft/hidden) rather than a new row."
+    },
+    "rating": {
+      "type": "number",
+      "description": "1\u20135 integer. Required. Validated in service."
+    },
+    "body": {
+      "type": "string",
+      "description": "Nullable review text. Max 2000 (service-enforced)."
+    },
+    "business_response": {
+      "type": "string",
+      "description": "Nullable. Set ONLY by an authorised BusinessMembership (owner/staff) via respondToReview \u2014 never by the reviewer, never touching rating/body."
+    },
+    "responded_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Set when the business responds."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "published",
+        "hidden_pending_review",
+        "removed_by_reviewer",
+        "removed_by_moderation"
+      ],
+      "default": "draft",
+      "description": "draft \u2192 published (direct, Trusted Member+) or via hidden_pending_review (a below-Trusted reviewer's draft is saved hidden pending them reaching Trusted tier). \u2192 removed_by_reviewer (reviewer removes own) or removed_by_moderation (ModerationService via applyModerationActionToReview). A reviewer may restore their own removal; they may NOT restore a moderator's removal."
+    },
+    "experience_verified": {
+      "type": "boolean",
+      "default": false,
+      "description": "Auto-set ONLY by BusinessService: true iff the reviewer has a Modification (installed_by_business_id=this Business) OR an EventAttendance on an Event organised by this Business. Never set by the Business itself, never by a human directly, never by AI."
+    },
+    "published_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Set when the review first reaches published; for display ordering."
+    }
+  },
+  "required": [
+    "business_id",
+    "reviewer_id",
+    "rating",
+    "status"
+  ]
+}

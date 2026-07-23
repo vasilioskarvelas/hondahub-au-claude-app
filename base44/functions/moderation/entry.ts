@@ -519,6 +519,10 @@ async function resolveContentAuthor(base44: any, target_type: string, target_id:
     if (target_type === "user") {
       return target_id;
     }
+    if (target_type === "business_review") {
+      const review = await base44.asServiceRole.entities.BusinessReview.get(target_id);
+      return review.reviewer_id || null;
+    }
   } catch {}
   return null;
 }
@@ -544,6 +548,15 @@ async function fetchReportedContent(base44: any, target_type: string, target_id:
     if (target_type === "user") {
       const reportedUser = await base44.asServiceRole.entities.User.get(target_id);
       return { type: "user", user: reportedUser };
+    }
+    if (target_type === "business") {
+      const business = await base44.asServiceRole.entities.Business.get(target_id);
+      return { type: "business", business };
+    }
+    if (target_type === "business_review") {
+      const review = await base44.asServiceRole.entities.BusinessReview.get(target_id);
+      const author = await base44.asServiceRole.entities.User.get(review.reviewer_id).catch(() => null);
+      return { type: "business_review", review, author };
     }
   } catch {}
   return { type: target_type, note: "backing entity not yet built or not found" };

@@ -32,11 +32,9 @@ import { GroupRole, MembershipStatus } from "../../shared/community.ts";
 import { validateReference } from "../../shared/reference-resolver.ts";
 import { writeAuditLog } from "../../shared/audit-log.ts";
 import { AuditActionType } from "../../shared/moderation.ts";
-
-function json(data: any, status = 200) { return Response.json(data, { status }); }
-function err(code: string, status: number, details?: any) {
-  return json({ error: code, ...(details ? { details } : {}) }, status);
-}
+import { refreshExperienceForUser } from "../../shared/business.ts";
+import { json, err } from "../../shared/http.ts";
+import { resolveMediaUrl } from "../../shared/media.ts";
 
 Deno.serve(async (req) => {
   try {
@@ -211,6 +209,10 @@ Deno.serve(async (req) => {
         });
       }
       await recomputeAttendeeCount(base44, body.event_id);
+      // experience_verified auto-refresh: attending a business-organised event is evidence.
+      if (event.organiser_type === OrganiserType.BUSINESS) {
+        await refreshExperienceForUser(base44, user.id, event.organiser_id).catch(() => {});
+      }
       return json({ ok: true, attendance_status: status, attendance });
     }
 
@@ -313,7 +315,7 @@ async function holdsBusinessManagerRole(base44: any, userId: string, businessId:
   // is deferred and explicitly tracked, never silently marked passing (§9.7).
   try {
     const rows = await base44.asServiceRole.entities.BusinessMembership.filter({ business_id: businessId, user_id: userId, status: "active" });
-    return rows.some((m: any) => m.role === "owner" || m.role === "manager");
+    return rows.some((m: any) => m.role === "owner" || m.role === "staff");
   } catch {
     return false;
   }
@@ -354,10 +356,4 @@ async function enrichAttendees(base44: any, attendances: any[]) {
       vehicle,
     };
   }));
-}
-
-async function resolveMediaUrl(base44: any, mediaId?: string | null): Promise<string | null> {
-  if (!mediaId) return null;
-  const m = await base44.asServiceRole.entities.Media.get(mediaId).catch(() => null);
-  return m?.file_url || null;
 }

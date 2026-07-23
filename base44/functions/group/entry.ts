@@ -36,11 +36,8 @@ import {
 } from "../../shared/community.ts";
 import { writeAuditLog } from "../../shared/audit-log.ts";
 import { AuditActionType } from "../../shared/moderation.ts";
-
-function json(data: any, status = 200) { return Response.json(data, { status }); }
-function err(code: string, status: number, details?: any) {
-  return json({ error: code, ...(details ? { details } : {}) }, status);
-}
+import { json, err } from "../../shared/http.ts";
+import { resolveMediaUrl } from "../../shared/media.ts";
 
 Deno.serve(async (req) => {
   try {
@@ -353,10 +350,4 @@ async function enrichMembers(base44: any, memberships: any[]) {
       joined_at: m.created_date,
     };
   }));
-}
-
-async function resolveMediaUrl(base44: any, mediaId?: string | null): Promise<string | null> {
-  if (!mediaId) return null;
-  const m = await base44.asServiceRole.entities.Media.get(mediaId).catch(() => null);
-  return m?.file_url || null;
 }
