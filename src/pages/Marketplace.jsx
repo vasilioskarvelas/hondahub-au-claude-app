@@ -19,6 +19,13 @@ const CATEGORIES = [
   { v: "other", l: "Other", i: Package },
 ];
 const CATEGORY_LABEL = Object.fromEntries(CATEGORIES.map((c) => [c.v, c.l]));
+const OEM_OPTIONS = [{ v: "", l: "Any OEM/aftermarket" }, { v: "oem", l: "OEM" }, { v: "aftermarket", l: "Aftermarket" }, { v: "not_applicable", l: "N/A" }];
+const SORT_OPTIONS = [
+  { v: "", l: "Newest" },
+  { v: "price_asc", l: "Price: low to high" },
+  { v: "price_desc", l: "Price: high to low" },
+  { v: "views", l: "Most viewed" },
+];
 
 function priceLabel(l) {
   if (l.price_type === "free") return "Free";
@@ -30,7 +37,10 @@ export default function Marketplace() {
   const navigate = useNavigate();
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({ listing_type: "", category: "", search: "", compatible_make: "", compatible_year: "" });
+  const [filters, setFilters] = useState({
+    listing_type: "", category: "", search: "", compatible_make: "", compatible_year: "",
+    brand: "", oem_or_aftermarket: "", shipping_available: false, pickup_available: false, sort: "",
+  });
 
   const load = async () => {
     setLoading(true);
@@ -41,12 +51,19 @@ export default function Marketplace() {
       if (filters.search) args.search = filters.search;
       if (filters.compatible_make) args.compatible_make = filters.compatible_make;
       if (filters.compatible_year) args.compatible_year = Number(filters.compatible_year);
+      if (filters.brand) args.brand = filters.brand;
+      if (filters.oem_or_aftermarket) args.oem_or_aftermarket = filters.oem_or_aftermarket;
+      if (filters.shipping_available) args.shipping_available = true;
+      if (filters.pickup_available) args.pickup_available = true;
+      if (filters.sort) args.sort = filters.sort;
       const res = await base44.functions.invoke("marketplace", args);
       setListings(res.data?.listings || []);
     } finally { setLoading(false); }
   };
 
   useEffect(() => { load(); }, []);
+
+  const showAttrFilters = filters.category && filters.category !== "vehicle";
 
   return (
     <div className="mx-auto max-w-5xl space-y-5">
@@ -71,6 +88,9 @@ export default function Marketplace() {
             <option value="for_sale">For sale</option>
             <option value="wanted">Wanted</option>
           </select>
+          <select value={filters.sort} onChange={(e) => setFilters({ ...filters, sort: e.target.value })} className="rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary">
+            {SORT_OPTIONS.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
+          </select>
           <button onClick={load} className="rounded-xl bg-secondary px-4 py-2 text-sm font-bold">Search</button>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -85,11 +105,26 @@ export default function Marketplace() {
             );
           })}
         </div>
-        {filters.category && filters.category !== "vehicle" && (
+        {(filters.category && filters.category !== "vehicle") && (
           <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
             <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Compatibility:</span>
             <input value={filters.compatible_make} onChange={(e) => setFilters({ ...filters, compatible_make: e.target.value })} placeholder="Make" className="w-40 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs outline-none focus:border-primary" />
             <input value={filters.compatible_year} onChange={(e) => setFilters({ ...filters, compatible_year: e.target.value })} placeholder="Year" className="w-24 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs outline-none focus:border-primary" />
+          </div>
+        )}
+        {showAttrFilters && (
+          <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
+            <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Details:</span>
+            <input value={filters.brand} onChange={(e) => setFilters({ ...filters, brand: e.target.value })} placeholder="Brand" className="w-36 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs outline-none focus:border-primary" />
+            <select value={filters.oem_or_aftermarket} onChange={(e) => setFilters({ ...filters, oem_or_aftermarket: e.target.value })} className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs outline-none focus:border-primary">
+              {OEM_OPTIONS.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
+            </select>
+            <label className="flex items-center gap-1 text-xs font-bold uppercase tracking-wide text-muted-foreground">
+              <input type="checkbox" checked={filters.shipping_available} onChange={(e) => setFilters({ ...filters, shipping_available: e.target.checked })} /> Ships
+            </label>
+            <label className="flex items-center gap-1 text-xs font-bold uppercase tracking-wide text-muted-foreground">
+              <input type="checkbox" checked={filters.pickup_available} onChange={(e) => setFilters({ ...filters, pickup_available: e.target.checked })} /> Pickup
+            </label>
           </div>
         )}
       </div>
@@ -113,6 +148,7 @@ export default function Marketplace() {
                 <div className="flex items-center gap-1.5">
                   <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${l.listing_type === "wanted" ? "bg-blue-500/15 text-blue-400" : "bg-primary/15 text-primary"}`}>{l.listing_type === "wanted" ? "Wanted" : "For sale"}</span>
                   <span className="text-[10px] font-bold uppercase text-muted-foreground">{CATEGORY_LABEL[l.category] || l.category}</span>
+                  {l.shipping_available && <span className="text-[10px] text-muted-foreground">· ships</span>}
                 </div>
                 <h3 className="mt-1.5 line-clamp-1 text-sm font-bold">{l.title}</h3>
                 <div className="mt-1 flex items-center justify-between">

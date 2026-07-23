@@ -42,6 +42,7 @@ import {
   ListingStatus, ListingType, ListingCategory, ListingCondition, PriceType, MessageStatus,
   RENEWAL_WINDOW_MS, LISTING_LIFETIME_MS, TITLE_MAX, DESCRIPTION_MAX, MESSAGE_BODY_MAX,
   TERMINAL_STATUSES, detectContactSharing,
+  validateCategoryAttributes, applicableCategoryFields, CATEGORY_ATTR_FIELDS, OEM_OR_AFTERMARKET_VALUES,
   onListingCompleted, onListingExpired, onMarketplaceConversationStarted, onMarketplaceMessageSent,
 } from "../../shared/marketplace.ts";
 import { meetsCreationTier, meetsParticipationTier, accountInGoodStanding } from "../../shared/community.ts";
@@ -138,6 +139,10 @@ Deno.serve(async (req) => {
           }
         }
       }
+      // ADR-042 category attributes — validate + reject category-mismatched fields.
+      const catAttr = validateCategoryAttributes(category, body, {});
+      if (!catAttr.ok) return err(catAttr.error.code, 422, { field: catAttr.error.field, message: catAttr.error.message });
+      Object.assign(fields, catAttr.fields);
       if (body.primary_vehicle_id !== undefined && body.primary_vehicle_id) {
         const ov = await validateOwnedVehicle(base44, user, body.primary_vehicle_id);
         if (!ov.ok) return err("VALIDATION_FAILED", 422, { primary_vehicle_id: ov.error });
@@ -210,6 +215,16 @@ Deno.serve(async (req) => {
             upd[f] = y;
           }
         }
+      }
+      // ADR-042 category attributes — validate against the final category, reject
+      // mismatched submitted fields, and null out stale group fields on category change.
+      const catAttr = validateCategoryAttributes(effectiveCategory, body, listing);
+      if (!catAttr.ok) return err(catAttr.error.code, 422, { field: catAttr.error.field, message: catAttr.error.message });
+      Object.assign(upd, catAttr.fields);
+      const oldAllowed = applicableCategoryFields(listing.category);
+      const newAllowed = applicableCategoryFields(effectiveCategory);
+      for (const f of CATEGORY_ATTR_FIELDS) {
+        if (oldAllowed.has(f) && !newAllowed.has(f) && listing[f] != null) upd[f] = null;
       }
       if (body.primary_vehicle_id !== undefined) {
         if (body.primary_vehicle_id) {
@@ -487,9 +502,25 @@ Deno.serve(async (req) => {
         return err("RESOURCE_NOT_VISIBLE", 404);
       }
       const poster = await base44.asServiceRole.entities.User.get(listing.poster_id).catch(() => null);
+      // ADR-042 §2: vehicle-category listings pull display data from the linked
+      // Vehicle record rather than asking the seller to re-enter it.
+      let vehicle = null;
+      if (listing.category === ListingCategory.VEHICLE && listing.primary_vehicle_id) {
+        const v = await base44.asServiceRole.entities.Vehicle.get(listing.primary_vehicle_id).catch(() => null);
+        if (v) vehicle = {
+          nickname: v.nickname || null, make: v.make || null, model: v.model || null, year: v.year ?? null,
+          chassis_code: v.chassis_code || null, generation: v.generation || null, body_style: v.body_style || null,
+          colour: v.colour || null, trim: v.trim || null, engine_code: v.engine_code || null,
+          engine_capacity: v.engine_capacity ?? null, transmission: v.transmission || null, drivetrain: v.drivetrain || null,
+          fuel_type: v.fuel_type || null, odometer_km: v.odometer_km ?? null, power_kw: v.power_kw ?? null,
+          registration_state: v.registration_state || null, build_status: v.build_status || null,
+          sale_status: v.sale_status || null, build_description: v.build_description || null, cover_media_id: v.cover_media_id || null,
+        };
+      }
       return json({
         ok: true,
         listing: { ...listing, poster_name: poster?.display_name || poster?.handle || "Poster", poster_handle: poster?.handle || null },
+        vehicle,
       });
     }
 
@@ -536,6 +567,35 @@ Deno.serve(async (req) => {
       if (body.search) {
         const q = String(body.search).toLowerCase();
         listings = listings.filter((l: any) => (l.title || "").toLowerCase().includes(q) || (l.description || "").toLowerCase().includes(q));
+      }
+      // ADR-042 §5 new filters (brand / oem_or_aftermarket / shipping / pickup).
+      if (body.brand) {
+        const b = String(body.brand).toLowerCase();
+        listings = listings.filter((l: any) => (l.brand || "").toLowerCase() === b);
+      }
+      if (body.oem_or_aftermarket && OEM_OR_AFTERMARKET_VALUES.includes(body.oem_or_aftermarket)) {
+        listings = listings.filter((l: any) => l.oem_or_aftermarket === body.oem_or_aftermarket);
+      }
+      if (body.shipping_available === true || body.shipping_available === "true") {
+        listings = listings.filter((l: any) => !!l.shipping_available);
+      }
+      if (body.pickup_available === true || body.pickup_available === "true") {
+        listings = listings.filter((l: any) => l.pickup_available !== false);
+      }
+      // ADR-042 §5 new sort options. Default remains published_at DESC (from the
+      // initial fetch). poa/free sort to the end regardless of price direction.
+      if (body.sort === "price_asc" || body.sort === "price_desc") {
+        const dir = body.sort === "price_asc" ? 1 : -1;
+        const priced = (l: any) => (l.price_type === PriceType.FIXED || l.price_type === PriceType.NEGOTIABLE) ? l.price_cents : null;
+        listings.sort((a: any, b: any) => {
+          const ap = priced(a), bp = priced(b);
+          if (ap === null && bp === null) return 0;
+          if (ap === null) return 1;
+          if (bp === null) return -1;
+          return dir * (ap - bp);
+        });
+      } else if (body.sort === "views") {
+        listings.sort((a: any, b: any) => (b.view_count || 0) - (a.view_count || 0));
       }
       const limit = Math.min(Number(body.limit) || DEFAULT_LIMIT, MAX_LIMIT);
       const offset = Number(body.cursor) || 0;

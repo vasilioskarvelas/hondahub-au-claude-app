@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { ArrowLeft, Car } from "lucide-react";
+import CategoryAttributesForm from "@/components/marketplace/CategoryAttributesForm";
+import { applicableCategoryFields, DEFAULT_ATTRS, EMPTY_ATTRS } from "@/components/marketplace/categoryAttrs";
 
 const CATEGORIES = [
   { v: "vehicle", l: "Vehicle" }, { v: "engine", l: "Engine" }, { v: "transmission", l: "Transmission" },
@@ -29,6 +31,7 @@ export default function CreateMarketplaceListing() {
     price_type: "fixed", price: "", condition: "used", quantity: "1",
     primary_vehicle_id: "", compatible_make: "", compatible_model: "", compatible_chassis_code: "",
     compatible_year_from: "", compatible_year_to: "", location_general: "", photo_urls: [],
+    ...DEFAULT_ATTRS, ...EMPTY_ATTRS,
   });
 
   useEffect(() => {
@@ -49,6 +52,24 @@ export default function CreateMarketplaceListing() {
           compatible_chassis_code: l.compatible_chassis_code || "",
           compatible_year_from: l.compatible_year_from ?? "", compatible_year_to: l.compatible_year_to ?? "",
           location_general: l.location_general || "", photo_urls: l.photo_urls || [],
+          ...DEFAULT_ATTRS, ...EMPTY_ATTRS,
+          brand: l.brand || "",
+          oem_or_aftermarket: l.oem_or_aftermarket || "",
+          shipping_available: l.shipping_available ?? false,
+          pickup_available: l.pickup_available ?? true,
+          shipping_cost: l.shipping_cost_cents != null ? String(l.shipping_cost_cents / 100) : "",
+          wheel_diameter_inches: l.wheel_diameter_inches ?? "",
+          wheel_width_inches: l.wheel_width_inches ?? "",
+          wheel_offset_mm: l.wheel_offset_mm ?? "",
+          wheel_pcd: l.wheel_pcd || "",
+          wheel_quantity: l.wheel_quantity ?? "",
+          tyres_included: l.tyres_included ?? false,
+          tyre_tread_percentage: l.tyre_tread_percentage ?? "",
+          component_kilometres: l.component_kilometres ?? "",
+          tested_before_listing: l.tested_before_listing || "",
+          warranty_included: l.warranty_included ?? false,
+          lock_status: l.lock_status || "",
+          tuned: l.tuned ?? false,
         }));
       }
     })();
@@ -57,6 +78,12 @@ export default function CreateMarketplaceListing() {
   const isVehicleForSale = f.category === "vehicle" && f.listing_type === "for_sale";
   const showCompat = f.category !== "vehicle";
   const showPrice = f.price_type === "fixed" || f.price_type === "negotiable";
+
+  const field = (k, v) => setF({ ...f, [k]: v });
+
+  // Switching category resets every category-attribute field so no stale value
+  // is ever submitted for a category it no longer applies to (ADR-042 §4).
+  const setCategory = (cat) => setF({ ...f, category: cat, ...DEFAULT_ATTRS, ...EMPTY_ATTRS });
 
   const submit = async (publish) => {
     if (!f.title.trim() || busy) return;
@@ -82,6 +109,18 @@ export default function CreateMarketplaceListing() {
         payload.compatible_model = f.compatible_model.trim() || undefined;
         payload.compatible_chassis_code = f.compatible_chassis_code.trim() || undefined;
       }
+      // ADR-042 category attributes — only send fields applicable to the
+      // selected category. shipping_cost maps to shipping_cost_cents.
+      const applicable = applicableCategoryFields(f.category);
+      for (const key of applicable) {
+        if (key === "shipping_cost_cents") {
+          payload.shipping_cost_cents = f.shipping_available ? Math.round((Number(f.shipping_cost) || 0) * 100) : null;
+          continue;
+        }
+        const val = f[key];
+        if (val === "" || val === undefined) continue; // skip empty textual/numeric fields
+        payload[key] = val;
+      }
       let res;
       if (editing) {
         res = await base44.functions.invoke("marketplace", { action: "updateListing", listing_id: id, ...payload });
@@ -91,11 +130,9 @@ export default function CreateMarketplaceListing() {
         if (publish && res.data?.ok) res = await base44.functions.invoke("marketplace", { action: "publishListing", listing_id: res.data.listing_id });
       }
       if (res.data?.ok) navigate(`/marketplace/${res.data.listing_id || id}`);
-      else setError(res.data?.error || "Failed");
+      else setError(res.data?.details?.message || res.data?.error || "Failed");
     } catch (e) { setError(e.message); } finally { setBusy(""); }
   };
-
-  const field = (k, v) => setF({ ...f, [k]: v });
 
   return (
     <div className="mx-auto max-w-lg space-y-5">
@@ -114,7 +151,7 @@ export default function CreateMarketplaceListing() {
         </div>
         <div>
           <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Category</label>
-          <select value={f.category} onChange={(e) => field("category", e.target.value)} className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary">
+          <select value={f.category} onChange={(e) => setCategory(e.target.value)} className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary">
             {CATEGORIES.map((c) => <option key={c.v} value={c.v}>{c.l}</option>)}
           </select>
         </div>
@@ -176,6 +213,8 @@ export default function CreateMarketplaceListing() {
             </div>
           </div>
         )}
+
+        <CategoryAttributesForm category={f.category} values={f} onChange={field} />
 
         <input value={f.location_general} onChange={(e) => field("location_general", e.target.value)} placeholder="City/region" className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary" />
       </div>

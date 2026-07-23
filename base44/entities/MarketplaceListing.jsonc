@@ -101,6 +101,95 @@
       "type": "number",
       "description": "Compatibility year range end. Only applies when category != vehicle."
     },
+    "brand": {
+      "type": "string",
+      "description": "ADR-042 generic category attribute. Applies to any category except 'vehicle' (must be null for vehicle). Free text, length-capped 100."
+    },
+    "oem_or_aftermarket": {
+      "type": "string",
+      "enum": [
+        "oem",
+        "aftermarket",
+        "not_applicable"
+      ],
+      "description": "ADR-042 generic category attribute. Applies to any category except 'vehicle'. Required for engine/transmission/forced_induction/wheels_tyres/suspension/brakes/electronics/performance_part; optional otherwise. Must be null for vehicle."
+    },
+    "shipping_available": {
+      "type": "boolean",
+      "default": false,
+      "description": "ADR-042 generic category attribute. Applies to any category except 'vehicle'. Defaults false."
+    },
+    "pickup_available": {
+      "type": "boolean",
+      "default": true,
+      "description": "ADR-042 generic category attribute. Applies to any category except 'vehicle'. Defaults true."
+    },
+    "shipping_cost_cents": {
+      "type": "number",
+      "description": "ADR-042 generic category attribute. Integer cents. Required (non-null) when shipping_available=true; must be null when shipping_available=false (0 = free shipping). Applies to any category except 'vehicle'."
+    },
+    "wheel_diameter_inches": {
+      "type": "number",
+      "description": "ADR-042 wheels_tyres group. Integer 10\u201324. Applies only when category=wheels_tyres; must be null for every other category."
+    },
+    "wheel_width_inches": {
+      "type": "number",
+      "description": "ADR-042 wheels_tyres group. Decimal 3.0\u201315.0. Applies only when category=wheels_tyres."
+    },
+    "wheel_offset_mm": {
+      "type": "number",
+      "description": "ADR-042 wheels_tyres group. Integer -50 to 80. Applies only when category=wheels_tyres."
+    },
+    "wheel_pcd": {
+      "type": "string",
+      "description": "ADR-042 wheels_tyres group. Free-text PCD notation (e.g. '5x114.3'). Applies only when category=wheels_tyres."
+    },
+    "wheel_quantity": {
+      "type": "number",
+      "description": "ADR-042 wheels_tyres group. Integer 1\u20135. Applies only when category=wheels_tyres."
+    },
+    "tyres_included": {
+      "type": "boolean",
+      "default": false,
+      "description": "ADR-042 wheels_tyres group. Applies only when category=wheels_tyres."
+    },
+    "tyre_tread_percentage": {
+      "type": "number",
+      "description": "ADR-042 wheels_tyres group. Integer 0\u2013100. Required when tyres_included=true; must be null when tyres_included is not true. Applies only when category=wheels_tyres."
+    },
+    "component_kilometres": {
+      "type": "number",
+      "description": "ADR-042 drivetrain group. Integer >=0, nullable (unknown history valid). Applies only when category is engine/transmission/forced_induction."
+    },
+    "tested_before_listing": {
+      "type": "string",
+      "enum": [
+        "compression_tested",
+        "leak_down_tested",
+        "running_when_removed",
+        "untested"
+      ],
+      "description": "ADR-042 drivetrain group. Applies only when category is engine/transmission/forced_induction."
+    },
+    "warranty_included": {
+      "type": "boolean",
+      "default": false,
+      "description": "ADR-042 drivetrain group. Defaults false. Applies only when category is engine/transmission/forced_induction."
+    },
+    "lock_status": {
+      "type": "string",
+      "enum": [
+        "locked",
+        "unlocked",
+        "not_applicable"
+      ],
+      "description": "ADR-042 electronics group. Applies only when category=electronics."
+    },
+    "tuned": {
+      "type": "boolean",
+      "default": false,
+      "description": "ADR-042 electronics group. Defaults false. Applies only when category=electronics."
+    },
     "status": {
       "type": "string",
       "enum": [

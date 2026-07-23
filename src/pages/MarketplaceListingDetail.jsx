@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { ArrowLeft, MessageSquare, Tag, Clock, RefreshCw, Trash2, CheckCircle2 } from "lucide-react";
+import CategoryAttributeDisplay from "@/components/marketplace/CategoryAttributeDisplay";
 
 const STATUS_META = {
   active: { l: "Active", c: "text-emerald-400" },
@@ -99,6 +100,8 @@ export default function MarketplaceListingDetail() {
           {listing.location_general && <div className="col-span-2"><span className="text-muted-foreground">Location</span><br /><span className="font-bold">{listing.location_general}</span></div>}
           {listing.compatible_make && <div className="col-span-2"><span className="text-muted-foreground">Fits</span><br /><span className="font-bold">{listing.compatible_make} {listing.compatible_model || ""} {listing.compatible_chassis_code || ""} {listing.compatible_year_from ? `(${listing.compatible_year_from}${listing.compatible_year_to ? `–${listing.compatible_year_to}` : "+"})` : ""}</span></div>}
         </div>
+
+        <CategoryAttributeDisplay listing={listing} vehicle={data?.vehicle} />
         <div className="border-t border-border pt-3 text-xs text-muted-foreground">
           Posted by <span className="font-bold text-foreground">{listing.poster_name}</span>
           {listing.expires_at && <div className="mt-1 flex items-center gap-1"><Clock className="h-3 w-3" /> Expires {new Date(listing.expires_at).toLocaleDateString()}</div>}

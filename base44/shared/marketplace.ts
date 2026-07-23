@@ -100,6 +100,165 @@ export const TITLE_MAX = 140;
 export const DESCRIPTION_MAX = 4000;
 export const MESSAGE_BODY_MAX = 4000;
 
+// ---- ADR-042 category attributes (exhaustive) ----
+// Generic group applies to every category except vehicle. The three specific
+// groups (wheels, drivetrain, electronics) apply only to their named category.
+// Every field here is nullable/optional unless a required-when rule states
+// otherwise. A field submitted for a category it does not apply to is a hard
+// CATEGORY_FIELD_MISMATCH rejection (Section 4), never silently nulled.
+
+export const OemOrAftermarket = Object.freeze({ OEM: "oem", AFTERMARKET: "aftermarket", NOT_APPLICABLE: "not_applicable" });
+export const OEM_OR_AFTERMARKET_VALUES = Object.values(OemOrAftermarket);
+export const TestedBeforeListing = Object.freeze({
+  COMPRESSION_TESTED: "compression_tested",
+  LEAK_DOWN_TESTED: "leak_down_tested",
+  RUNNING_WHEN_REMOVED: "running_when_removed",
+  UNTESTED: "untested",
+});
+export const TESTED_BEFORE_LISTING_VALUES = Object.values(TestedBeforeListing);
+export const LockStatus = Object.freeze({ LOCKED: "locked", UNLOCKED: "unlocked", NOT_APPLICABLE: "not_applicable" });
+export const LOCK_STATUS_VALUES = Object.values(LockStatus);
+
+const BRAND_MAX = 100;
+const DRIVETRAIN_CATEGORIES = [ListingCategory.ENGINE, ListingCategory.TRANSMISSION, ListingCategory.FORCED_INDUCTION];
+const OEM_REQUIRED_CATEGORIES = [
+  ListingCategory.ENGINE, ListingCategory.TRANSMISSION, ListingCategory.FORCED_INDUCTION,
+  ListingCategory.WHEELS_TYRES, ListingCategory.SUSPENSION, ListingCategory.BRAKES,
+  ListingCategory.ELECTRONICS, ListingCategory.PERFORMANCE_PART,
+];
+const GENERIC_ATTR_FIELDS = ["brand", "oem_or_aftermarket", "shipping_available", "pickup_available", "shipping_cost_cents"];
+const WHEELS_FIELDS = ["wheel_diameter_inches", "wheel_width_inches", "wheel_offset_mm", "wheel_pcd", "wheel_quantity", "tyres_included", "tyre_tread_percentage"];
+const DRIVETRAIN_FIELDS = ["component_kilometres", "tested_before_listing", "warranty_included"];
+const ELECTRONICS_FIELDS = ["lock_status", "tuned"];
+export const CATEGORY_ATTR_FIELDS = Object.freeze([...GENERIC_ATTR_FIELDS, ...WHEELS_FIELDS, ...DRIVETRAIN_FIELDS, ...ELECTRONICS_FIELDS]);
+
+/** Fields that may be non-null for a given category (union of applicable groups). */
+export function applicableCategoryFields(category: string): Set<string> {
+  const s = new Set<string>();
+  if (category === ListingCategory.VEHICLE) return s;
+  GENERIC_ATTR_FIELDS.forEach((f) => s.add(f));
+  if (category === ListingCategory.WHEELS_TYRES) WHEELS_FIELDS.forEach((f) => s.add(f));
+  if (DRIVETRAIN_CATEGORIES.includes(category)) DRIVETRAIN_FIELDS.forEach((f) => s.add(f));
+  if (category === ListingCategory.ELECTRONICS) ELECTRONICS_FIELDS.forEach((f) => s.add(f));
+  return s;
+}
+
+/**
+ * Validates ADR-042 category attributes against the listing's final category.
+ * Returns { ok: true, fields } with only the applicable, validated values to
+ * merge into the create/update payload, or { ok: false, error } where error is
+ * { code, field, message }. `existing` carries the prior listing row (empty on
+ * create) so cross-field rules resolve against the effective value.
+ */
+export function validateCategoryAttributes(category: string, payload: any, existing: any = {}): { ok: true; fields: any } | { ok: false; error: { code: string; field: string; message: string } } {
+  const allowed = applicableCategoryFields(category);
+  const fields: any = {};
+
+  // 1. Section 4 hard rule — reject any submitted category-specific field that
+  //    does not apply to the listing's category.
+  for (const key of CATEGORY_ATTR_FIELDS) {
+    if (payload[key] !== undefined && !allowed.has(key)) {
+      return { ok: false, error: { code: "CATEGORY_FIELD_MISMATCH", field: key, message: "This field doesn't apply to the selected category." } };
+    }
+  }
+  if (category === ListingCategory.VEHICLE) return { ok: true, fields };
+
+  // 2. Generic fields (apply to every non-vehicle category).
+  if (payload.brand !== undefined) {
+    const b = (payload.brand || "").trim();
+    if (b.length > BRAND_MAX) return { ok: false, error: { code: "VALIDATION_FAILED", field: "brand", message: `max ${BRAND_MAX} chars` } };
+    fields.brand = b || null;
+  }
+  if (OEM_REQUIRED_CATEGORIES.includes(category)) {
+    const finalOem = payload.oem_or_aftermarket !== undefined ? payload.oem_or_aftermarket : existing.oem_or_aftermarket;
+    if (finalOem === null || finalOem === undefined || finalOem === "" || !OEM_OR_AFTERMARKET_VALUES.includes(finalOem)) {
+      return { ok: false, error: { code: "VALIDATION_FAILED", field: "oem_or_aftermarket", message: "required for this category" } };
+    }
+    if (payload.oem_or_aftermarket !== undefined) fields.oem_or_aftermarket = payload.oem_or_aftermarket;
+  } else if (payload.oem_or_aftermarket !== undefined) {
+    const v = payload.oem_or_aftermarket;
+    if (v === null || v === "") fields.oem_or_aftermarket = null;
+    else if (OEM_OR_AFTERMARKET_VALUES.includes(v)) fields.oem_or_aftermarket = v;
+    else return { ok: false, error: { code: "VALIDATION_FAILED", field: "oem_or_aftermarket", message: "invalid" } };
+  }
+  if (payload.shipping_available !== undefined) fields.shipping_available = !!payload.shipping_available;
+  if (payload.pickup_available !== undefined) fields.pickup_available = !!payload.pickup_available;
+  const effShipping = payload.shipping_available !== undefined ? !!payload.shipping_available : !!existing.shipping_available;
+  if (payload.shipping_cost_cents !== undefined) {
+    if (payload.shipping_cost_cents === null) {
+      if (effShipping) return { ok: false, error: { code: "VALIDATION_FAILED", field: "shipping_cost_cents", message: "required when shipping_available is true" } };
+      fields.shipping_cost_cents = null;
+    } else {
+      const sc = Number(payload.shipping_cost_cents);
+      if (!Number.isInteger(sc) || sc < 0) return { ok: false, error: { code: "VALIDATION_FAILED", field: "shipping_cost_cents", message: "non-negative integer (cents)" } };
+      if (!effShipping) return { ok: false, error: { code: "VALIDATION_FAILED", field: "shipping_cost_cents", message: "must be null when shipping_available is false" } };
+      fields.shipping_cost_cents = sc;
+    }
+  }
+
+  // 3. Wheels & tyres group.
+  if (category === ListingCategory.WHEELS_TYRES) {
+    if (payload.wheel_diameter_inches !== undefined) {
+      if (payload.wheel_diameter_inches === null) fields.wheel_diameter_inches = null;
+      else { const n = Number(payload.wheel_diameter_inches); if (!Number.isInteger(n) || n < 10 || n > 24) return { ok: false, error: { code: "VALIDATION_FAILED", field: "wheel_diameter_inches", message: "10–24" } }; fields.wheel_diameter_inches = n; }
+    }
+    if (payload.wheel_width_inches !== undefined) {
+      if (payload.wheel_width_inches === null) fields.wheel_width_inches = null;
+      else { const n = Number(payload.wheel_width_inches); if (Number.isNaN(n) || n < 3 || n > 15) return { ok: false, error: { code: "VALIDATION_FAILED", field: "wheel_width_inches", message: "3.0–15.0" } }; fields.wheel_width_inches = n; }
+    }
+    if (payload.wheel_offset_mm !== undefined) {
+      if (payload.wheel_offset_mm === null) fields.wheel_offset_mm = null;
+      else { const n = Number(payload.wheel_offset_mm); if (!Number.isInteger(n) || n < -50 || n > 80) return { ok: false, error: { code: "VALIDATION_FAILED", field: "wheel_offset_mm", message: "-50 to 80" } }; fields.wheel_offset_mm = n; }
+    }
+    if (payload.wheel_pcd !== undefined) fields.wheel_pcd = (payload.wheel_pcd || "").trim() || null;
+    if (payload.wheel_quantity !== undefined) {
+      if (payload.wheel_quantity === null) fields.wheel_quantity = null;
+      else { const n = Number(payload.wheel_quantity); if (!Number.isInteger(n) || n < 1 || n > 5) return { ok: false, error: { code: "VALIDATION_FAILED", field: "wheel_quantity", message: "1–5" } }; fields.wheel_quantity = n; }
+    }
+    if (payload.tyres_included !== undefined) fields.tyres_included = !!payload.tyres_included;
+    const effTyres = payload.tyres_included !== undefined ? !!payload.tyres_included : !!existing.tyres_included;
+    if (payload.tyre_tread_percentage !== undefined) {
+      if (payload.tyre_tread_percentage === null) {
+        if (effTyres) return { ok: false, error: { code: "VALIDATION_FAILED", field: "tyre_tread_percentage", message: "required when tyres_included is true" } };
+        fields.tyre_tread_percentage = null;
+      } else {
+        const n = Number(payload.tyre_tread_percentage);
+        if (!Number.isInteger(n) || n < 0 || n > 100) return { ok: false, error: { code: "VALIDATION_FAILED", field: "tyre_tread_percentage", message: "0–100" } };
+        if (!effTyres) return { ok: false, error: { code: "VALIDATION_FAILED", field: "tyre_tread_percentage", message: "must be null when tyres_included is false" } };
+        fields.tyre_tread_percentage = n;
+      }
+    }
+  }
+
+  // 4. Drivetrain group.
+  if (DRIVETRAIN_CATEGORIES.includes(category)) {
+    if (payload.component_kilometres !== undefined) {
+      if (payload.component_kilometres === null) fields.component_kilometres = null;
+      else { const n = Number(payload.component_kilometres); if (!Number.isInteger(n) || n < 0) return { ok: false, error: { code: "VALIDATION_FAILED", field: "component_kilometres", message: "non-negative integer" } }; fields.component_kilometres = n; }
+    }
+    if (payload.tested_before_listing !== undefined) {
+      const v = payload.tested_before_listing;
+      if (v === null || v === "") fields.tested_before_listing = null;
+      else if (TESTED_BEFORE_LISTING_VALUES.includes(v)) fields.tested_before_listing = v;
+      else return { ok: false, error: { code: "VALIDATION_FAILED", field: "tested_before_listing", message: "invalid" } };
+    }
+    if (payload.warranty_included !== undefined) fields.warranty_included = !!payload.warranty_included;
+  }
+
+  // 5. Electronics group.
+  if (category === ListingCategory.ELECTRONICS) {
+    if (payload.lock_status !== undefined) {
+      const v = payload.lock_status;
+      if (v === null || v === "") fields.lock_status = null;
+      else if (LOCK_STATUS_VALUES.includes(v)) fields.lock_status = v;
+      else return { ok: false, error: { code: "VALIDATION_FAILED", field: "lock_status", message: "invalid" } };
+    }
+    if (payload.tuned !== undefined) fields.tuned = !!payload.tuned;
+  }
+
+  return { ok: true, fields };
+}
+
 // Terminal states — zero outbound transitions (Section E.1).
 // completed + removed_by_moderation + removed_by_poster are all terminal.
 export const TERMINAL_STATUSES = Object.freeze(new Set([
