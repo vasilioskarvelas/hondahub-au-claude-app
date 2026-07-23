@@ -76,6 +76,22 @@
       "type": "string",
       "description": "Suburb/region only \u2014 privacy-conscious pattern consistent with User/Event/Business. No precise address."
     },
+    "photo_urls": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "ADR-045: listing photo URLs (uploaded via UploadFile). Capped at 10. Drives the Photos component of the Listing Quality Score."
+    },
+    "video_urls": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "ADR-045: listing video URLs. Any non-empty array satisfies the Video component of the Listing Quality Score."
+    },
     "primary_vehicle_id": {
       "type": "string",
       "description": "FK\u2192Vehicle. Required when category=vehicle AND listing_type=for_sale \u2014 must be owned by the poster (ownership validated via ReferenceResolverService + created_by_id check). Optional compatibility-context for other categories."
@@ -189,6 +205,26 @@
       "type": "boolean",
       "default": false,
       "description": "ADR-042 electronics group. Defaults false. Applies only when category=electronics."
+    },
+    "additional_specifications": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "value"
+        ]
+      },
+      "default": [],
+      "description": "ADR-045 \u00a71: bounded, display-only supplementary label/value pairs. Max 10 entries; label \u2264 40 chars; value \u2264 100 chars; both required if an entry exists. Never searched or filtered. Rendered on Listing Detail below the structured fields."
     },
     "status": {
       "type": "string",

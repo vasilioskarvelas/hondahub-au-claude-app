@@ -43,6 +43,7 @@ import {
   RENEWAL_WINDOW_MS, LISTING_LIFETIME_MS, TITLE_MAX, DESCRIPTION_MAX, MESSAGE_BODY_MAX,
   TERMINAL_STATUSES, detectContactSharing,
   validateCategoryAttributes, applicableCategoryFields, CATEGORY_ATTR_FIELDS, OEM_OR_AFTERMARKET_VALUES,
+  validateAdditionalSpecifications, computeListingQualityScore,
   onListingCompleted, onListingExpired, onMarketplaceConversationStarted, onMarketplaceMessageSent,
 } from "../../shared/marketplace.ts";
 import { meetsCreationTier, meetsParticipationTier, accountInGoodStanding } from "../../shared/community.ts";
@@ -123,6 +124,7 @@ Deno.serve(async (req) => {
         price_type, price_cents, condition, quantity,
         compatible_make: ListingCategory.VEHICLE === category ? null : "Honda",
         status: ListingStatus.DRAFT, view_count: 0, conversation_count: 0,
+        photo_urls: [], video_urls: [], additional_specifications: [],
       };
       if (body.description !== undefined) fields.description = (body.description || "").trim().slice(0, DESCRIPTION_MAX) || null;
       if (body.location_general !== undefined) fields.location_general = (body.location_general || "").trim() || null;
@@ -143,6 +145,12 @@ Deno.serve(async (req) => {
       const catAttr = validateCategoryAttributes(category, body, {});
       if (!catAttr.ok) return err(catAttr.error.code, 422, { field: catAttr.error.field, message: catAttr.error.message });
       Object.assign(fields, catAttr.fields);
+      // ADR-045: media + additional specifications.
+      if (Array.isArray(body.photo_urls)) fields.photo_urls = body.photo_urls.filter((u: any) => typeof u === "string").slice(0, 10);
+      if (Array.isArray(body.video_urls)) fields.video_urls = body.video_urls.filter((u: any) => typeof u === "string").slice(0, 3);
+      const specRes = validateAdditionalSpecifications(body);
+      if (!specRes.ok) return err(specRes.error.code, 422, { field: specRes.error.field, message: specRes.error.message });
+      if (specRes.fields !== undefined) fields.additional_specifications = specRes.fields;
       if (body.primary_vehicle_id !== undefined && body.primary_vehicle_id) {
         const ov = await validateOwnedVehicle(base44, user, body.primary_vehicle_id);
         if (!ov.ok) return err("VALIDATION_FAILED", 422, { primary_vehicle_id: ov.error });
@@ -221,6 +229,12 @@ Deno.serve(async (req) => {
       const catAttr = validateCategoryAttributes(effectiveCategory, body, listing);
       if (!catAttr.ok) return err(catAttr.error.code, 422, { field: catAttr.error.field, message: catAttr.error.message });
       Object.assign(upd, catAttr.fields);
+      // ADR-045: media + additional specifications.
+      if (Array.isArray(body.photo_urls)) upd.photo_urls = body.photo_urls.filter((u: any) => typeof u === "string").slice(0, 10);
+      if (Array.isArray(body.video_urls)) upd.video_urls = body.video_urls.filter((u: any) => typeof u === "string").slice(0, 3);
+      const specUpd = validateAdditionalSpecifications(body);
+      if (!specUpd.ok) return err(specUpd.error.code, 422, { field: specUpd.error.field, message: specUpd.error.message });
+      if (specUpd.fields !== undefined) upd.additional_specifications = specUpd.fields;
       const oldAllowed = applicableCategoryFields(listing.category);
       const newAllowed = applicableCategoryFields(effectiveCategory);
       for (const f of CATEGORY_ATTR_FIELDS) {
@@ -517,10 +531,13 @@ Deno.serve(async (req) => {
           sale_status: v.sale_status || null, build_description: v.build_description || null, cover_media_id: v.cover_media_id || null,
         };
       }
+      // ADR-045: Listing Quality Score — only for the poster, only while draft.
+      const quality = (isOwner && listing.status === ListingStatus.DRAFT) ? computeListingQualityScore(listing) : null;
       return json({
         ok: true,
         listing: { ...listing, poster_name: poster?.display_name || poster?.handle || "Poster", poster_handle: poster?.handle || null },
         vehicle,
+        ...(quality ? { quality_score: quality.score, quality_checklist: quality.checklist } : {}),
       });
     }
 

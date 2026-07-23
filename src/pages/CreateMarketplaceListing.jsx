@@ -1,9 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { ArrowLeft, Car } from "lucide-react";
+import { ArrowLeft, Car, ImagePlus, Video } from "lucide-react";
 import CategoryAttributesForm from "@/components/marketplace/CategoryAttributesForm";
 import { applicableCategoryFields, DEFAULT_ATTRS, EMPTY_ATTRS } from "@/components/marketplace/categoryAttrs";
+import PhotoUploader from "@/components/listing/PhotoUploader";
+import VideoUploader from "@/components/marketplace/VideoUploader";
+import AdditionalSpecsEditor from "@/components/marketplace/AdditionalSpecsEditor";
+import QualityScore from "@/components/marketplace/QualityScore";
+import { computeListingQuality } from "@/lib/listingQuality";
 
 const CATEGORIES = [
   { v: "vehicle", l: "Vehicle" }, { v: "engine", l: "Engine" }, { v: "transmission", l: "Transmission" },
@@ -26,11 +31,13 @@ export default function CreateMarketplaceListing() {
   const [vehicles, setVehicles] = useState([]);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
+  const [loadedStatus, setLoadedStatus] = useState(null);
   const [f, setF] = useState({
     listing_type: "for_sale", category: "engine", title: "", description: "",
     price_type: "fixed", price: "", condition: "used", quantity: "1",
     primary_vehicle_id: "", compatible_make: "", compatible_model: "", compatible_chassis_code: "",
-    compatible_year_from: "", compatible_year_to: "", location_general: "", photo_urls: [],
+    compatible_year_from: "", compatible_year_to: "", location_general: "",
+    photo_urls: [], video_urls: [], additional_specifications: [],
     ...DEFAULT_ATTRS, ...EMPTY_ATTRS,
   });
 
@@ -43,34 +50,30 @@ export default function CreateMarketplaceListing() {
       if (editing) {
         const res = await base44.functions.invoke("marketplace", { action: "getListing", listing_id: id });
         const l = res.data?.listing;
-        if (l) setF((prev) => ({
-          ...prev, listing_type: l.listing_type || "for_sale", category: l.category || "engine", title: l.title || "",
-          description: l.description || "", price_type: l.price_type || "fixed",
-          price: l.price_cents != null ? String(l.price_cents / 100) : "", condition: l.condition || "used",
-          quantity: String(l.quantity ?? 1), primary_vehicle_id: l.primary_vehicle_id || "",
-          compatible_make: l.compatible_make || "", compatible_model: l.compatible_model || "",
-          compatible_chassis_code: l.compatible_chassis_code || "",
-          compatible_year_from: l.compatible_year_from ?? "", compatible_year_to: l.compatible_year_to ?? "",
-          location_general: l.location_general || "", photo_urls: l.photo_urls || [],
-          ...DEFAULT_ATTRS, ...EMPTY_ATTRS,
-          brand: l.brand || "",
-          oem_or_aftermarket: l.oem_or_aftermarket || "",
-          shipping_available: l.shipping_available ?? false,
-          pickup_available: l.pickup_available ?? true,
-          shipping_cost: l.shipping_cost_cents != null ? String(l.shipping_cost_cents / 100) : "",
-          wheel_diameter_inches: l.wheel_diameter_inches ?? "",
-          wheel_width_inches: l.wheel_width_inches ?? "",
-          wheel_offset_mm: l.wheel_offset_mm ?? "",
-          wheel_pcd: l.wheel_pcd || "",
-          wheel_quantity: l.wheel_quantity ?? "",
-          tyres_included: l.tyres_included ?? false,
-          tyre_tread_percentage: l.tyre_tread_percentage ?? "",
-          component_kilometres: l.component_kilometres ?? "",
-          tested_before_listing: l.tested_before_listing || "",
-          warranty_included: l.warranty_included ?? false,
-          lock_status: l.lock_status || "",
-          tuned: l.tuned ?? false,
-        }));
+        if (l) {
+          setLoadedStatus(l.status);
+          setF((prev) => ({
+            ...prev, listing_type: l.listing_type || "for_sale", category: l.category || "engine", title: l.title || "",
+            description: l.description || "", price_type: l.price_type || "fixed",
+            price: l.price_cents != null ? String(l.price_cents / 100) : "", condition: l.condition || "used",
+            quantity: String(l.quantity ?? 1), primary_vehicle_id: l.primary_vehicle_id || "",
+            compatible_make: l.compatible_make || "", compatible_model: l.compatible_model || "",
+            compatible_chassis_code: l.compatible_chassis_code || "",
+            compatible_year_from: l.compatible_year_from ?? "", compatible_year_to: l.compatible_year_to ?? "",
+            location_general: l.location_general || "",
+            photo_urls: l.photo_urls || [], video_urls: l.video_urls || [],
+            additional_specifications: l.additional_specifications || [],
+            ...DEFAULT_ATTRS, ...EMPTY_ATTRS,
+            brand: l.brand || "", oem_or_aftermarket: l.oem_or_aftermarket || "",
+            shipping_available: l.shipping_available ?? false, pickup_available: l.pickup_available ?? true,
+            shipping_cost: l.shipping_cost_cents != null ? String(l.shipping_cost_cents / 100) : "",
+            wheel_diameter_inches: l.wheel_diameter_inches ?? "", wheel_width_inches: l.wheel_width_inches ?? "",
+            wheel_offset_mm: l.wheel_offset_mm ?? "", wheel_pcd: l.wheel_pcd || "", wheel_quantity: l.wheel_quantity ?? "",
+            tyres_included: l.tyres_included ?? false, tyre_tread_percentage: l.tyre_tread_percentage ?? "",
+            component_kilometres: l.component_kilometres ?? "", tested_before_listing: l.tested_before_listing || "",
+            warranty_included: l.warranty_included ?? false, lock_status: l.lock_status || "", tuned: l.tuned ?? false,
+          }));
+        }
       }
     })();
   }, [id]);
@@ -78,11 +81,14 @@ export default function CreateMarketplaceListing() {
   const isVehicleForSale = f.category === "vehicle" && f.listing_type === "for_sale";
   const showCompat = f.category !== "vehicle";
   const showPrice = f.price_type === "fixed" || f.price_type === "negotiable";
+  const showQuality = !editing || loadedStatus === "draft";
+  const quality = computeListingQuality(f);
 
   const field = (k, v) => setF({ ...f, [k]: v });
+  const setPhotos = (updater) => setF((prev) => ({ ...prev, photo_urls: typeof updater === "function" ? updater(prev.photo_urls) : updater }));
+  const setVideos = (updater) => setF((prev) => ({ ...prev, video_urls: typeof updater === "function" ? updater(prev.video_urls) : updater }));
+  const setSpecs = (updater) => setF((prev) => ({ ...prev, additional_specifications: typeof updater === "function" ? updater(prev.additional_specifications) : updater }));
 
-  // Switching category resets every category-attribute field so no stale value
-  // is ever submitted for a category it no longer applies to (ADR-042 §4).
   const setCategory = (cat) => setF({ ...f, category: cat, ...DEFAULT_ATTRS, ...EMPTY_ATTRS });
 
   const submit = async (publish) => {
@@ -96,6 +102,8 @@ export default function CreateMarketplaceListing() {
         primary_vehicle_id: f.primary_vehicle_id || undefined,
         compatible_year_from: f.compatible_year_from === "" ? undefined : Number(f.compatible_year_from),
         compatible_year_to: f.compatible_year_to === "" ? undefined : Number(f.compatible_year_to),
+        photo_urls: f.photo_urls, video_urls: f.video_urls,
+        additional_specifications: f.additional_specifications,
       };
       if (showPrice) {
         const dollars = f.price === "" ? NaN : Number(f.price);
@@ -109,8 +117,6 @@ export default function CreateMarketplaceListing() {
         payload.compatible_model = f.compatible_model.trim() || undefined;
         payload.compatible_chassis_code = f.compatible_chassis_code.trim() || undefined;
       }
-      // ADR-042 category attributes — only send fields applicable to the
-      // selected category. shipping_cost maps to shipping_cost_cents.
       const applicable = applicableCategoryFields(f.category);
       for (const key of applicable) {
         if (key === "shipping_cost_cents") {
@@ -118,7 +124,7 @@ export default function CreateMarketplaceListing() {
           continue;
         }
         const val = f[key];
-        if (val === "" || val === undefined) continue; // skip empty textual/numeric fields
+        if (val === "" || val === undefined) continue;
         payload[key] = val;
       }
       let res;
@@ -162,6 +168,7 @@ export default function CreateMarketplaceListing() {
         <div>
           <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Description</label>
           <textarea value={f.description} onChange={(e) => field("description", e.target.value)} rows={4} className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary" />
+          <p className="mt-1 text-right text-[10px] text-muted-foreground">{f.description.length} chars</p>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -216,8 +223,25 @@ export default function CreateMarketplaceListing() {
 
         <CategoryAttributesForm category={f.category} values={f} onChange={field} />
 
+        <div className="space-y-2">
+          <label className="flex items-center gap-1 text-xs font-bold uppercase tracking-wide text-muted-foreground"><ImagePlus className="h-3.5 w-3.5" /> Photos</label>
+          <PhotoUploader photos={f.photo_urls} setPhotos={setPhotos} />
+        </div>
+
+        <div className="space-y-2">
+          <label className="flex items-center gap-1 text-xs font-bold uppercase tracking-wide text-muted-foreground"><Video className="h-3.5 w-3.5" /> Video</label>
+          <VideoUploader videos={f.video_urls} setVideos={setVideos} />
+        </div>
+
+        <details className="rounded-xl border border-border p-3">
+          <summary className="cursor-pointer text-xs font-bold uppercase tracking-wide text-muted-foreground">Anything else buyers should know?</summary>
+          <div className="mt-3"><AdditionalSpecsEditor specs={f.additional_specifications} setSpecs={setSpecs} /></div>
+        </details>
+
         <input value={f.location_general} onChange={(e) => field("location_general", e.target.value)} placeholder="City/region" className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary" />
       </div>
+
+      {showQuality && <QualityScore score={quality.score} checklist={quality.checklist} />}
 
       <div className="flex gap-2">
         <button disabled={!!busy || !f.title.trim()} onClick={() => submit(false)} className="flex-1 rounded-xl border border-border py-3 text-sm font-bold disabled:opacity-50">{busy === "draft" ? "Saving..." : "Save draft"}</button>

@@ -100,6 +100,85 @@ export const TITLE_MAX = 140;
 export const DESCRIPTION_MAX = 4000;
 export const MESSAGE_BODY_MAX = 4000;
 
+// ---- ADR-045: Additional Specifications (bounded, display-only) ----
+
+export const ADDITIONAL_SPEC_MAX_ENTRIES = 10;
+export const SPEC_LABEL_MAX = 40;
+export const SPEC_VALUE_MAX = 100;
+
+/**
+ * ADR-045 §1 — validates the bounded, display-only additional_specifications
+ * list. Returns { ok, fields } where fields is the cleaned array (or undefined
+ * when the key was not submitted). Empty entries (both label and value blank)
+ * are silently dropped; an entry with one populated and the other empty is a
+ * hard VALIDATION_FAILED rejection. Never searchable / filterable.
+ */
+export function validateAdditionalSpecifications(payload: any): { ok: true; fields: any[] | undefined } | { ok: false; error: { code: string; field: string; message: string } } {
+  if (payload.additional_specifications === undefined) return { ok: true, fields: undefined };
+  const raw = payload.additional_specifications;
+  if (raw === null) return { ok: true, fields: [] };
+  if (!Array.isArray(raw)) return { ok: false, error: { code: "VALIDATION_FAILED", field: "additional_specifications", message: "must be an array" } };
+  if (raw.length > ADDITIONAL_SPEC_MAX_ENTRIES) return { ok: false, error: { code: "VALIDATION_FAILED", field: "additional_specifications", message: `max ${ADDITIONAL_SPEC_MAX_ENTRIES} entries` } };
+  const cleaned: any[] = [];
+  for (const e of raw) {
+    if (!e || typeof e !== "object") return { ok: false, error: { code: "VALIDATION_FAILED", field: "additional_specifications", message: "invalid entry" } };
+    const label = (e.label ?? "").toString().trim();
+    const value = (e.value ?? "").toString().trim();
+    if (!label && !value) continue;
+    if (!label || !value) return { ok: false, error: { code: "VALIDATION_FAILED", field: "additional_specifications", message: "label and value are both required" } };
+    if (label.length > SPEC_LABEL_MAX) return { ok: false, error: { code: "VALIDATION_FAILED", field: "additional_specifications", message: `label max ${SPEC_LABEL_MAX} chars` } };
+    if (value.length > SPEC_VALUE_MAX) return { ok: false, error: { code: "VALIDATION_FAILED", field: "additional_specifications", message: `value max ${SPEC_VALUE_MAX} chars` } };
+    cleaned.push({ label, value });
+  }
+  return { ok: true, fields: cleaned };
+}
+
+function hasNonEmptyArray(a: any): boolean { return Array.isArray(a) && a.length > 0; }
+
+/**
+ * ADR-045 §2 — Listing Quality Score, computed at read time (never stored).
+ * Returns { score (0–100), checklist (ordered { key, label, ok }) }.
+ * For vehicle listings the Compatibility component is omitted and the score is
+ * scaled from the remaining 80 points. Compatibility is satisfied by an active
+ * seller selection — the ADR-043 plural arrays if present, else the ADR-042
+ * singular compatible_model/compatible_chassis_code (the defaulting
+ * compatible_make="Honda" does not represent an active choice).
+ */
+export function computeListingQualityScore(listing: any): { score: number; checklist: { key: string; label: string; ok: boolean }[] } {
+  const photos = Array.isArray(listing.photo_urls) ? listing.photo_urls.length : 0;
+  const photosPoints = photos >= 8 ? 40 : photos >= 4 ? 30 : photos >= 2 ? 20 : photos >= 1 ? 10 : 0;
+  const descLen = (listing.description || "").length;
+  const descPoints = descLen >= 150 ? 20 : descLen >= 50 ? 10 : 0;
+  const hasVideo = hasNonEmptyArray(listing.video_urls);
+  const videoPoints = hasVideo ? 20 : 0;
+  const isVehicle = listing.category === ListingCategory.VEHICLE;
+  const photoOk = photosPoints === 40;
+  const descOk = descPoints === 20;
+  const videoOk = videoPoints === 20;
+  if (isVehicle) {
+    const score = Math.round(((photosPoints + descPoints + videoPoints) / 80) * 100);
+    return { score, checklist: [
+      { key: "photos", label: "8 or more photos", ok: photoOk },
+      { key: "description", label: "Detailed description (150+ characters)", ok: descOk },
+      { key: "video", label: "Video added", ok: videoOk },
+    ] };
+  }
+  const compatActive =
+    hasNonEmptyArray(listing.compatible_models) ||
+    hasNonEmptyArray(listing.compatible_chassis_codes) ||
+    hasNonEmptyArray(listing.compatible_engine_families) ||
+    !!(listing.compatible_model && String(listing.compatible_model).trim()) ||
+    !!(listing.compatible_chassis_code && String(listing.compatible_chassis_code).trim());
+  const compatPoints = compatActive ? 20 : 0;
+  const score = photosPoints + descPoints + compatPoints + videoPoints;
+  return { score, checklist: [
+    { key: "photos", label: "8 or more photos", ok: photoOk },
+    { key: "compatibility", label: "Compatibility selected", ok: compatPoints === 20 },
+    { key: "description", label: "Detailed description (150+ characters)", ok: descOk },
+    { key: "video", label: "Video added", ok: videoOk },
+  ] };
+}
+
 // ---- ADR-042 category attributes (exhaustive) ----
 // Generic group applies to every category except vehicle. The three specific
 // groups (wheels, drivetrain, electronics) apply only to their named category.

@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { ArrowLeft, MessageSquare, Tag, Clock, RefreshCw, Trash2, CheckCircle2 } from "lucide-react";
 import CategoryAttributeDisplay from "@/components/marketplace/CategoryAttributeDisplay";
+import QualityScore from "@/components/marketplace/QualityScore";
 
 const STATUS_META = {
   active: { l: "Active", c: "text-emerald-400" },
@@ -79,9 +80,16 @@ export default function MarketplaceListingDetail() {
       <Link to="/marketplace" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" /> Marketplace</Link>
 
       <div className="overflow-hidden rounded-2xl border border-border bg-card">
-        <div className="aspect-video bg-secondary">
-          {listing.photo_urls?.[0] ? <img src={listing.photo_urls[0]} alt={listing.title} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center"><Tag className="h-10 w-10 text-muted-foreground" /></div>}
-        </div>
+        {listing.photo_urls?.length > 0 ? (
+          <div className="grid grid-cols-2 gap-1 bg-border sm:grid-cols-3">
+            {listing.photo_urls.map((u, i) => (
+              <div key={i} className="aspect-square bg-secondary"><img src={u} alt="" className="h-full w-full object-cover" /></div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex aspect-video items-center justify-center bg-secondary"><Tag className="h-10 w-10 text-muted-foreground" /></div>
+        )}
+        {listing.video_urls?.map((u, i) => <video key={`v${i}`} src={u} controls className="w-full bg-black" />)}
       </div>
 
       <div className="space-y-3 rounded-2xl border border-border bg-card p-5">
@@ -102,11 +110,25 @@ export default function MarketplaceListingDetail() {
         </div>
 
         <CategoryAttributeDisplay listing={listing} vehicle={data?.vehicle} />
+
+        {listing.additional_specifications?.length > 0 && (
+          <div className="border-t border-border pt-3">
+            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">Additional specifications</p>
+            <dl className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+              {listing.additional_specifications.map((s, i) => (
+                <div key={i} className="flex justify-between gap-2 rounded-lg bg-secondary/40 px-2.5 py-1.5 text-xs"><dt className="text-muted-foreground">{s.label}</dt><dd className="text-right font-bold">{s.value}</dd></div>
+              ))}
+            </dl>
+          </div>
+        )}
+
         <div className="border-t border-border pt-3 text-xs text-muted-foreground">
           Posted by <span className="font-bold text-foreground">{listing.poster_name}</span>
           {listing.expires_at && <div className="mt-1 flex items-center gap-1"><Clock className="h-3 w-3" /> Expires {new Date(listing.expires_at).toLocaleDateString()}</div>}
         </div>
       </div>
+
+      {data?.quality_score != null && <QualityScore score={data.quality_score} checklist={data.quality_checklist} />}
 
       {error && <div className="rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>}
 
