@@ -49,6 +49,35 @@ export const NotificationType = {
   NEW_VEHICLE_UPDATE: "new_vehicle_update",
 };
 
+// Phase 10 — PlanCode & EntitlementKey registries (backend mirror of
+// src/lib/registries.js; Deno backend functions cannot import from src/).
+// PlanCode: controlled registry for Subscription.plan_code (§27, ADR-031).
+// SubscriptionPlan is configuration, not a table.
+export const PlanCode = {
+  FREE_MEMBER: "free_member",
+  PREMIUM_MEMBER: "premium_member",
+  FREE_BUSINESS: "free_business",
+  VERIFIED_BUSINESS: "verified_business",
+  PREMIUM_BUSINESS: "premium_business",
+};
+
+// EntitlementKey: controlled registry for entitlement definitions (§28,
+// ADR-034). Plan→entitlement mappings live in config (PLAN_ENTITLEMENTS in
+// base44/shared/entitlement.ts); only per-subscriber exceptions are persisted
+// (EntitlementOverride).
+export const EntitlementKey = {
+  CREATE_LISTING: "create_listing",
+  MAXIMUM_ACTIVE_LISTINGS: "maximum_active_listings",
+  CREATE_GROUP: "create_group",
+  MAXIMUM_GROUPS: "maximum_groups",
+  BUSINESS_PROFILE: "business_profile",
+  BUSINESS_ANALYTICS: "business_analytics",
+  PROMOTED_LISTING: "promoted_listing",
+  ADVANCED_SEARCH: "advanced_search",
+  PREMIUM_MEDIA_LIMITS: "premium_media_limits",
+  VERIFIED_BUSINESS_BADGE: "verified_business_badge",
+};
+
 export const SignalType = {
   EMAIL_VERIFIED: "email_verified",
   PHONE_VERIFIED: "phone_verified",

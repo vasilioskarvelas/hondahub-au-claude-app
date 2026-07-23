@@ -1,0 +1,55 @@
+{
+  "name": "Subscription",
+  "type": "object",
+  "properties": {
+    "subscriber_type": {
+      "type": "string",
+      "enum": [
+        "user",
+        "business"
+      ],
+      "description": "Polymorphic subscriber (DATABASE_SCHEMA \u00a727). USER or BUSINESS."
+    },
+    "subscriber_id": {
+      "type": "string",
+      "description": "FK\u2192User/Business depending on subscriber_type."
+    },
+    "plan_code": {
+      "type": "string",
+      "enum": [
+        "free_member",
+        "premium_member",
+        "free_business",
+        "verified_business",
+        "premium_business"
+      ],
+      "description": "Validated against the PlanCode registry (ADR-031). NOT a foreign key \u2014 SubscriptionPlan is explicitly configuration, not a table. No provider/provider_subscription_id fields exist on this entity (ADR-033 \u2014 Phase 10 scaffolding only; live billing is out of scope)."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "cancelled",
+        "expired"
+      ],
+      "default": "active",
+      "description": "Lifecycle. active \u2192 cancelled (subscriber-initiated) or expired (end-of-term). No billing action occurs in this phase \u2014 rows are scaffolded only; no live path creates a Subscription row (Phase 10 \u00a71)."
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the subscription became active."
+    },
+    "ended_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Nullable. Set when status transitions to cancelled/expired."
+    }
+  },
+  "required": [
+    "subscriber_type",
+    "subscriber_id",
+    "plan_code",
+    "status"
+  ]
+}

@@ -22,6 +22,7 @@ const moreNav = [
   { to: "/settings", label: "Settings", icon: SettingsIcon },
   { to: "/moderation", label: "Moderation", icon: Shield, modOnly: true },
   { to: "/admin/audit", label: "Audit Log", icon: ScrollText, modOnly: true },
+  { to: "/admin/entitlements", label: "Entitlements", icon: Crown, adminOnly: true },
 ];
 
 export default function Layout() {
@@ -29,7 +30,8 @@ export default function Layout() {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const { user } = useAuth();
   const isMod = user?.role === 'admin' || user?.account_tier === 'moderator';
-  const visibleMoreNav = moreNav.filter((item) => !item.modOnly || isMod);
+  const isAdmin = user?.role === 'admin';
+  const visibleMoreNav = moreNav.filter((item) => (!item.modOnly || isMod) && (!item.adminOnly || isAdmin));
 
   React.useEffect(() => {
     setMenuOpen(false);

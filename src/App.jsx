@@ -51,6 +51,7 @@ import Notifications from '@/pages/Notifications';
 import UserProfile from '@/pages/UserProfile';
 import AICommandCenter from '@/pages/AICommandCenter';
 import TestingCenter from '@/pages/TestingCenter';
+import EntitlementOverrides from '@/pages/EntitlementOverrides';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -120,6 +121,7 @@ const AuthenticatedApp = () => {
         <Route path="/user/:name" element={<UserProfile />} />
         <Route path="/ai-command-center" element={<AICommandCenter />} />
         <Route path="/testing" element={<TestingCenter />} />
+        <Route path="/admin/entitlements" element={<EntitlementOverrides />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>

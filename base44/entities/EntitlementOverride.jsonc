@@ -1,0 +1,57 @@
+{
+  "name": "EntitlementOverride",
+  "type": "object",
+  "properties": {
+    "subscriber_type": {
+      "type": "string",
+      "enum": [
+        "user",
+        "business"
+      ],
+      "description": "Polymorphic subscriber. Validated against the USER/BUSINESS subset of ReferenceTypes (DATABASE_SCHEMA \u00a728a)."
+    },
+    "subscriber_id": {
+      "type": "string",
+      "description": "FK\u2192User/Business depending on subscriber_type."
+    },
+    "entitlement_key": {
+      "type": "string",
+      "enum": [
+        "create_listing",
+        "maximum_active_listings",
+        "create_group",
+        "maximum_groups",
+        "business_profile",
+        "business_analytics",
+        "promoted_listing",
+        "advanced_search",
+        "premium_media_limits",
+        "verified_business_badge"
+      ],
+      "description": "Validated against the EntitlementKey registry (Phase 00). Exactly one of bool_value/numeric_value is populated (service-enforced), matching the entitlement's value type."
+    },
+    "bool_value": {
+      "type": "boolean",
+      "description": "Nullable. Set when the entitlement is boolean-valued. Exactly one of bool_value/numeric_value is populated (service-enforced)."
+    },
+    "numeric_value": {
+      "type": "number",
+      "description": "Nullable. Set when the entitlement is numeric-valued (a limit). Exactly one of bool_value/numeric_value is populated (service-enforced)."
+    },
+    "reason": {
+      "type": "string",
+      "description": "Required. Human-readable reason the override was created (audit/support trail). Set by the Admin at creation; never edited."
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Nullable. When set, the override naturally lapses at this time and resolution treats it as absent (Phase 10 lifecycle). Null = persists until removed by an Admin."
+    }
+  },
+  "required": [
+    "subscriber_type",
+    "subscriber_id",
+    "entitlement_key",
+    "reason"
+  ]
+}
