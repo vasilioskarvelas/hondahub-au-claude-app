@@ -59,6 +59,8 @@ export const NotificationType = Object.freeze({
   // Phase 08 additions — registry-controlled growth (open list per §11).
   NEW_MARKETPLACE_MESSAGE: "new_marketplace_message",
   LISTING_UPDATE: "listing_update",
+  // Phase 09 addition — Garage TimelineEntryPublished → vehicle followers.
+  NEW_VEHICLE_UPDATE: "new_vehicle_update",
 });
 
 /**

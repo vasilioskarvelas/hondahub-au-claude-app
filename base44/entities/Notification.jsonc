@@ -17,7 +17,10 @@
         "event_reminder",
         "moderation_outcome",
         "report_update",
-        "trust_tier_change"
+        "trust_tier_change",
+        "new_marketplace_message",
+        "listing_update",
+        "new_vehicle_update"
       ],
       "description": "Validated against the NotificationType registry. Open to registry-controlled growth \u2014 every value used must be added to the registry first, never accepted as an arbitrary string."
     },

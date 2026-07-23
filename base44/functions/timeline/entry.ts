@@ -3,6 +3,8 @@ import {
   ENTRY_TYPES, TIMELINE_ORIGIN, VEHICLE_VISIBILITY,
   err, getOwnedVehicle, inList, validateSingleLink,
 } from "../../shared/garage.ts";
+import { createNotification } from "../../shared/notifications.ts";
+import { NotificationType } from "../../shared/identity.ts";
 
 /**
  * TimelineService (Phase 03) — owns a vehicle's chronological narrative.
@@ -42,6 +44,32 @@ function notFuture(dateStr: string): boolean {
   return d.getTime() <= Date.now() + 24 * 3600 * 1000; // allow same day
 }
 
+/**
+ * TimelineEntryPublished → NotificationService (vehicle followers).
+ * Notifies every user following this vehicle that a new timeline entry was
+ * published. Private entries are never pushed to followers. The entry author
+ * is excluded (it's their own vehicle). Fire-and-forget: a notification
+ * failure never blocks the publish.
+ */
+async function notifyVehicleFollowers(base44: any, vehicleId: string, authorId: string, visibility: string | undefined) {
+  if (visibility === "private") return;
+  try {
+    const followers = await base44.asServiceRole.entities.Follow.filter({
+      target_type: "vehicle", target_id: vehicleId,
+    });
+    await Promise.all(followers.map((f: any) => {
+      if (f.follower_id === authorId) return Promise.resolve();
+      return createNotification(base44, {
+        recipient_id: f.follower_id,
+        notification_type: NotificationType.NEW_VEHICLE_UPDATE,
+        actor_id: authorId,
+        target_type: "vehicle",
+        target_id: vehicleId,
+      }).catch(() => {});
+    }));
+  } catch {}
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -62,7 +90,8 @@ Deno.serve(async (req) => {
       const v = validateEntryFields(body);
       if (v.error) return err('VALIDATION_FAILED', 422, v.error);
       const entry = await base44.entities.TimelineEntry.create({ ...v.d, vehicle_id, origin: 'manual' });
-      // Event: TimelineEntryPublished (follower notification deferred — no follower resolution yet).
+      // Event: TimelineEntryPublished → notify vehicle followers (Phase 09 completion).
+      await notifyVehicleFollowers(base44, vehicle_id, user.id, entry.visibility);
       return Response.json({ ok: true, entry });
     }
 
@@ -78,7 +107,8 @@ Deno.serve(async (req) => {
       const v = validateEntryFields(body);
       if (v.error) return err('VALIDATION_FAILED', 422, v.error);
       const entry = await base44.entities.TimelineEntry.create({ ...v.d, vehicle_id, origin: 'system_generated' });
-      // Event: TimelineEntryPublished.
+      // Event: TimelineEntryPublished → notify vehicle followers (Phase 09 completion).
+      await notifyVehicleFollowers(base44, vehicle_id, user.id, entry.visibility);
       return Response.json({ ok: true, entry, published_from_suggestion: true });
     }
 
