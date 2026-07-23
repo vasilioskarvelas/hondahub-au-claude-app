@@ -2,7 +2,7 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
-import { Upload, X, ImagePlus, Gavel, Tag, DollarSign, Crown, Star, TrendingUp, AlertTriangle, Home } from "lucide-react";
+import { Upload, X, ImagePlus, Gavel, Tag, DollarSign, Crown, Star, TrendingUp, AlertTriangle, Home, Car, Wrench } from "lucide-react";
 import { Select as RadixSelect, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 import { CHASSIS_CODES, ENGINE_CODES, AU_STATES, PART_CATEGORIES } from "@/components/Filters";
 import PhotoUploader from "@/components/listing/PhotoUploader";
@@ -151,6 +151,13 @@ export default function CreateListing() {
     <div className="mx-auto max-w-2xl space-y-5">
       <h1 className="text-2xl font-black">List your Honda</h1>
 
+      <Card title="What are you selling?">
+        <div className="grid grid-cols-2 gap-2">
+          <FormatButton active={form.type === "car"} onClick={() => set("type", "car")} icon={Car} label="Vehicle" sub="A complete car" />
+          <FormatButton active={form.type === "part"} onClick={() => set("type", "part")} icon={Wrench} label="Part" sub="A part or accessory" />
+        </div>
+      </Card>
+
       {/* Selling Format */}
       <Card title="Selling Format">
         <div className="grid grid-cols-3 gap-2">
@@ -173,19 +180,23 @@ export default function CreateListing() {
           <Input label={priceLabel + " *"} type="number" value={form.price} onChange={(v) => set("price", v)} />
           <Select label="Condition" value={form.condition} onChange={(v) => set("condition", v)} options={["new", "used", "refurbished", "for_parts"]} />
         </div>
-        <Input label="Model" value={form.model} onChange={(v) => set("model", v)} placeholder="Civic, Integra, S2000..." />
-        <div className="grid grid-cols-2 gap-3">
-          <Select label="Chassis Code" value={form.chassis_code} onChange={(v) => set("chassis_code", v)} options={CHASSIS_CODES} />
-          <Select label="Engine Code" value={form.engine_code} onChange={(v) => set("engine_code", v)} options={ENGINE_CODES} />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Input label="Year" type="number" value={form.year} onChange={(v) => set("year", v)} />
-          <Input label="Kilometres" type="number" value={form.kilometres} onChange={(v) => set("kilometres", v)} />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Select label="Transmission" value={form.transmission} onChange={(v) => set("transmission", v)} options={["manual", "auto", "other"]} />
-          <Select label="Car Type" value={form.car_type} onChange={(v) => set("car_type", v)} options={["street", "track", "project", "wrecking", "show"]} />
-        </div>
+        {form.type === "car" && (
+          <>
+            <Input label="Model" value={form.model} onChange={(v) => set("model", v)} placeholder="Civic, Integra, S2000..." />
+            <div className="grid grid-cols-2 gap-3">
+              <Select label="Chassis Code" value={form.chassis_code} onChange={(v) => set("chassis_code", v)} options={CHASSIS_CODES} />
+              <Select label="Engine Code" value={form.engine_code} onChange={(v) => set("engine_code", v)} options={ENGINE_CODES} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Input label="Year" type="number" value={form.year} onChange={(v) => set("year", v)} />
+              <Input label="Kilometres" type="number" value={form.kilometres} onChange={(v) => set("kilometres", v)} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Select label="Transmission" value={form.transmission} onChange={(v) => set("transmission", v)} options={["manual", "auto", "other"]} />
+              <Select label="Car Type" value={form.car_type} onChange={(v) => set("car_type", v)} options={["street", "track", "project", "wrecking", "show"]} />
+            </div>
+          </>
+        )}
         {form.type === "part" && (
           <>
             <Select label="Category" value={form.category} onChange={(v) => set("category", v)} options={PART_CATEGORIES} />
@@ -245,10 +256,14 @@ export default function CreateListing() {
           <Toggle label="Swap accepted" active={form.swap_accepted} onClick={() => set("swap_accepted", !form.swap_accepted)} />
           <Toggle label="Postage available" active={form.postage_available} onClick={() => set("postage_available", !form.postage_available)} />
           <Toggle label="Pickup" active={form.pickup} onClick={() => set("pickup", !form.pickup)} />
-          <Toggle label="Registered" active={form.registered} onClick={() => set("registered", !form.registered)} />
-          <Toggle label="Roadworthy" active={form.roadworthy} onClick={() => set("roadworthy", !form.roadworthy)} />
-          <Toggle label="Turbo" active={form.is_turbo} onClick={() => set("is_turbo", !form.is_turbo)} />
         </div>
+        {form.type === "car" && (
+          <div className="grid grid-cols-2 gap-2">
+            <Toggle label="Registered" active={form.registered} onClick={() => set("registered", !form.registered)} />
+            <Toggle label="Roadworthy" active={form.roadworthy} onClick={() => set("roadworthy", !form.roadworthy)} />
+            <Toggle label="Turbo" active={form.is_turbo} onClick={() => set("is_turbo", !form.is_turbo)} />
+          </div>
+        )}
       </Card>
 
       {/* Paid Promotions */}
