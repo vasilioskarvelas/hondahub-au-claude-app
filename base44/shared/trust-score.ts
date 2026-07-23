@@ -58,7 +58,7 @@ export async function awardSignalToUser(
     signal_type,
   });
   if (prior.length > 0) {
-    return { ok: true, trust_score, already_awarded: true, tier_changed: false };
+    return { ok: true, trust_score: trustScore, already_awarded: true, tier_changed: false };
   }
 
   const delta = SIGNAL_DELTAS[signal_type] || 0;
