@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
-import { AccountTier, SignalType, computeTier, isTierPromotion } from "../../shared/identity.ts";
+import { AccountTier, SignalType, NotificationType, computeTier, isTierPromotion } from "../../shared/identity.ts";
+import { createNotification } from "../../shared/notifications.ts";
 import { awardSignalToUser } from "../../shared/trust-score.ts";
 
 /**
