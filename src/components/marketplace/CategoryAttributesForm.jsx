@@ -15,7 +15,7 @@ function Field({ label, required, children }) {
   );
 }
 
-export default function CategoryAttributesForm({ category, values, onChange }) {
+export default function CategoryAttributesForm({ category, values, onChange, showShipping = true }) {
   if (category === "vehicle") return null;
   const showWheels = category === "wheels_tyres";
   const showDrivetrain = ["engine", "transmission", "forced_induction"].includes(category);
@@ -24,7 +24,7 @@ export default function CategoryAttributesForm({ category, values, onChange }) {
 
   return (
     <div className="space-y-3 rounded-xl border border-border p-3">
-      <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Part details</p>
+      <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Attributes</p>
 
       <Field label="Brand">
         <input
@@ -47,39 +47,43 @@ export default function CategoryAttributesForm({ category, values, onChange }) {
         </select>
       </Field>
 
-      <div className="grid grid-cols-2 gap-3">
-        <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={!!values.shipping_available}
-            onChange={(e) => onChange("shipping_available", e.target.checked)}
-          />
-          Shipping available
-        </label>
-        <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={values.pickup_available !== false}
-            onChange={(e) => onChange("pickup_available", e.target.checked)}
-          />
-          Pickup available
-        </label>
-      </div>
+      {showShipping && (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={!!values.shipping_available}
+                onChange={(e) => onChange("shipping_available", e.target.checked)}
+              />
+              Shipping available
+            </label>
+            <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={values.pickup_available !== false}
+                onChange={(e) => onChange("pickup_available", e.target.checked)}
+              />
+              Pickup available
+            </label>
+          </div>
 
-      {values.shipping_available && (
-        <Field label="Shipping cost (AUD)">
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            value={values.shipping_cost || ""}
-            onChange={(e) =>
-              onChange("shipping_cost_cents", e.target.value === "" ? null : Math.round(Number(e.target.value) * 100))
-            }
-            placeholder="0 = free shipping"
-            className={inputCls}
-          />
-        </Field>
+          {values.shipping_available && (
+            <Field label="Shipping cost (AUD)">
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={values.shipping_cost || ""}
+                onChange={(e) =>
+                  onChange("shipping_cost_cents", e.target.value === "" ? null : Math.round(Number(e.target.value) * 100))
+                }
+                placeholder="0 = free shipping"
+                className={inputCls}
+              />
+            </Field>
+          )}
+        </>
       )}
 
       {showWheels && (

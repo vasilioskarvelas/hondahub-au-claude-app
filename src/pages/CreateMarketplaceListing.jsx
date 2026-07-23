@@ -1,252 +1,312 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { ArrowLeft, Car, ImagePlus, Video } from "lucide-react";
-import CategoryAttributesForm from "@/components/marketplace/CategoryAttributesForm";
+import { ArrowLeft, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { applicableCategoryFields, DEFAULT_ATTRS, EMPTY_ATTRS } from "@/components/marketplace/categoryAttrs";
-import PhotoUploader from "@/components/listing/PhotoUploader";
-import VideoUploader from "@/components/marketplace/VideoUploader";
-import AdditionalSpecsEditor from "@/components/marketplace/AdditionalSpecsEditor";
-import QualityScore from "@/components/marketplace/QualityScore";
 import { computeListingQuality } from "@/lib/listingQuality";
+import ProgressBar from "@/components/marketplace/wizard/ProgressBar";
+import TypeStep from "@/components/marketplace/wizard/TypeStep";
+import VehicleStep from "@/components/marketplace/wizard/VehicleStep";
+import CategoryStep from "@/components/marketplace/wizard/CategoryStep";
+import DetailsStep from "@/components/marketplace/wizard/DetailsStep";
+import CompatibilityStep from "@/components/marketplace/wizard/CompatibilityStep";
+import SpecsStep from "@/components/marketplace/wizard/SpecsStep";
+import FormatStep from "@/components/marketplace/wizard/FormatStep";
+import PhotosStep from "@/components/marketplace/wizard/PhotosStep";
+import VideoStep from "@/components/marketplace/wizard/VideoStep";
+import PricingStep from "@/components/marketplace/wizard/PricingStep";
+import ShippingStep from "@/components/marketplace/wizard/ShippingStep";
+import LocationStep from "@/components/marketplace/wizard/LocationStep";
+import DescriptionStep from "@/components/marketplace/wizard/DescriptionStep";
+import ReviewStep from "@/components/marketplace/wizard/ReviewStep";
+import { VEHICLE_STEPS, PART_STEPS, isStepComplete } from "@/components/marketplace/wizard/constants";
 
-const CATEGORIES = [
-  { v: "vehicle", l: "Vehicle" }, { v: "engine", l: "Engine" }, { v: "transmission", l: "Transmission" },
-  { v: "forced_induction", l: "Forced Induction" }, { v: "wheels_tyres", l: "Wheels & Tyres" },
-  { v: "suspension", l: "Suspension" }, { v: "brakes", l: "Brakes" }, { v: "electronics", l: "Electronics" },
-  { v: "interior", l: "Interior" }, { v: "exterior", l: "Exterior" }, { v: "performance_part", l: "Performance Part" },
-  { v: "tools_equipment", l: "Tools & Equipment" }, { v: "other", l: "Other" },
-];
-const CONDITIONS = [
-  { v: "new", l: "New" }, { v: "used", l: "Used" }, { v: "for_parts_or_repair", l: "For parts or repair" },
-];
-const PRICE_TYPES = [
-  { v: "fixed", l: "Fixed" }, { v: "negotiable", l: "Negotiable" }, { v: "poa", l: "Price on ask" }, { v: "free", l: "Free" },
-];
+const EMPTY = {
+  flow: null, listing_type: "for_sale", category: "", title: "", description: "",
+  price_type: "fixed", price: "", condition: "used", quantity: "1",
+  primary_vehicle_id: "", compatible_make: "", compatible_model: "", compatible_chassis_code: "",
+  compatible_year_from: "", compatible_year_to: "", location_general: "",
+  photo_urls: [], video_urls: [], additional_specifications: [],
+  ...DEFAULT_ATTRS, ...EMPTY_ATTRS,
+};
 
 export default function CreateMarketplaceListing() {
   const { id } = useParams();
   const navigate = useNavigate();
   const editing = !!id;
+
+  const [f, setF] = useState(EMPTY);
+  const [stepIndex, setStepIndex] = useState(0);
+  const [draftId, setDraftId] = useState(id || null);
   const [vehicles, setVehicles] = useState([]);
   const [busy, setBusy] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [savedAt, setSavedAt] = useState(null);
   const [error, setError] = useState("");
-  const [loadedStatus, setLoadedStatus] = useState(null);
-  const [f, setF] = useState({
-    listing_type: "for_sale", category: "engine", title: "", description: "",
-    price_type: "fixed", price: "", condition: "used", quantity: "1",
-    primary_vehicle_id: "", compatible_make: "", compatible_model: "", compatible_chassis_code: "",
-    compatible_year_from: "", compatible_year_to: "", location_general: "",
-    photo_urls: [], video_urls: [], additional_specifications: [],
-    ...DEFAULT_ATTRS, ...EMPTY_ATTRS,
-  });
+  const [loaded, setLoaded] = useState(false);
 
+  const fRef = useRef(f); useEffect(() => { fRef.current = f; }, [f]);
+  const draftIdRef = useRef(draftId); useEffect(() => { draftIdRef.current = draftId; }, [draftId]);
+  const vehiclesRef = useRef(vehicles); useEffect(() => { vehiclesRef.current = vehicles; }, [vehicles]);
+  const dirtyRef = useRef(false);
+  const savingRef = useRef(false);
+
+  const steps = useMemo(() => {
+    if (!f.flow) return ["type"];
+    return f.flow === "vehicle" ? VEHICLE_STEPS : PART_STEPS;
+  }, [f.flow]);
+
+  const quality = useMemo(
+    () => computeListingQuality({ ...f, category: f.flow === "vehicle" ? "vehicle" : f.category }),
+    [f],
+  );
+
+  const markDirty = () => { dirtyRef.current = true; };
+  const field = useCallback((k, v) => { markDirty(); setF((prev) => ({ ...prev, [k]: v })); }, []);
+  const setPhotos = useCallback((u) => { markDirty(); setF((prev) => ({ ...prev, photo_urls: typeof u === "function" ? u(prev.photo_urls) : u })); }, []);
+  const setVideos = useCallback((u) => { markDirty(); setF((prev) => ({ ...prev, video_urls: typeof u === "function" ? u(prev.video_urls) : u })); }, []);
+  const setSpecs = useCallback((u) => { markDirty(); setF((prev) => ({ ...prev, additional_specifications: typeof u === "function" ? u(prev.additional_specifications) : u })); }, []);
+
+  // Auto-derived title for vehicle listings, from the selected Garage vehicle.
+  const autoTitle = () => {
+    const form = fRef.current;
+    if (form.flow !== "vehicle") return "";
+    const v = vehiclesRef.current.find((x) => x.id === form.primary_vehicle_id);
+    if (!v) return "";
+    return [v.year, v.make, v.model].filter(Boolean).join(" ") + (v.chassis_code ? ` ${v.chassis_code}` : "") + (v.nickname ? ` — ${v.nickname}` : "");
+  };
+
+  const buildPayload = (title) => {
+    const form = fRef.current;
+    const p = {
+      listing_type: form.listing_type,
+      category: form.category,
+      title: title || form.title.trim(),
+      description: form.description.trim() || undefined,
+      price_type: form.price_type,
+      condition: form.condition,
+      quantity: Number(form.quantity) || 1,
+      location_general: form.location_general.trim() || undefined,
+      primary_vehicle_id: form.primary_vehicle_id || undefined,
+      photo_urls: form.photo_urls,
+      video_urls: form.video_urls,
+      additional_specifications: form.additional_specifications,
+    };
+    p.price_cents = (form.price_type === "fixed" || form.price_type === "negotiable") ? Math.round(Number(form.price) * 100) : null;
+    if (form.category !== "vehicle") {
+      p.compatible_make = form.compatible_make.trim() || undefined;
+      p.compatible_model = form.compatible_model.trim() || undefined;
+      p.compatible_chassis_code = form.compatible_chassis_code.trim() || undefined;
+      p.compatible_year_from = form.compatible_year_from === "" ? undefined : Number(form.compatible_year_from);
+      p.compatible_year_to = form.compatible_year_to === "" ? undefined : Number(form.compatible_year_to);
+      for (const key of applicableCategoryFields(form.category)) {
+        if (key === "shipping_cost_cents") {
+          p.shipping_cost_cents = form.shipping_available ? Math.round((Number(form.shipping_cost) || 0) * 100) : null;
+          continue;
+        }
+        const val = form[key];
+        if (val === "" || val === undefined || val === null) continue;
+        p[key] = val;
+      }
+    }
+    return p;
+  };
+
+  const saveDraft = async ({ silent = false } = {}) => {
+    if (savingRef.current) return null;
+    const form = fRef.current;
+    const title = form.title.trim() || (form.flow === "vehicle" ? autoTitle() : "");
+    const hasId = !!draftIdRef.current;
+    if (!title && !hasId) return null; // not enough to create a draft yet
+    savingRef.current = true;
+    if (!silent) setSaving(true);
+    try {
+      const payload = buildPayload(title);
+      let res;
+      if (hasId) {
+        res = await base44.functions.invoke("marketplace", { action: "updateListing", listing_id: draftIdRef.current, ...payload });
+      } else {
+        res = await base44.functions.invoke("marketplace", { action: "createListingDraft", ...payload });
+        if (res.data?.ok) { setDraftId(res.data.listing_id); draftIdRef.current = res.data.listing_id; }
+      }
+      if (res.data?.ok) { dirtyRef.current = false; setSavedAt(Date.now()); return res.data; }
+      if (!silent) setError(res.data?.error?.message || res.data?.error || "Save failed");
+    } catch (e) {
+      if (!silent) setError(e.message);
+    } finally {
+      savingRef.current = false;
+      if (!silent) setSaving(false);
+    }
+    return null;
+  };
+
+  // Load garage vehicles + existing draft (resume at first incomplete step).
   useEffect(() => {
     (async () => {
-      try {
-        const vs = await base44.entities.Vehicle.list();
-        setVehicles(vs || []);
-      } catch {}
+      try { const vs = await base44.entities.Vehicle.list(); setVehicles(vs || []); } catch {}
       if (editing) {
-        const res = await base44.functions.invoke("marketplace", { action: "getListing", listing_id: id });
-        const l = res.data?.listing;
-        if (l) {
-          setLoadedStatus(l.status);
-          setF((prev) => ({
-            ...prev, listing_type: l.listing_type || "for_sale", category: l.category || "engine", title: l.title || "",
-            description: l.description || "", price_type: l.price_type || "fixed",
-            price: l.price_cents != null ? String(l.price_cents / 100) : "", condition: l.condition || "used",
-            quantity: String(l.quantity ?? 1), primary_vehicle_id: l.primary_vehicle_id || "",
-            compatible_make: l.compatible_make || "", compatible_model: l.compatible_model || "",
-            compatible_chassis_code: l.compatible_chassis_code || "",
-            compatible_year_from: l.compatible_year_from ?? "", compatible_year_to: l.compatible_year_to ?? "",
-            location_general: l.location_general || "",
-            photo_urls: l.photo_urls || [], video_urls: l.video_urls || [],
-            additional_specifications: l.additional_specifications || [],
-            ...DEFAULT_ATTRS, ...EMPTY_ATTRS,
-            brand: l.brand || "", oem_or_aftermarket: l.oem_or_aftermarket || "",
-            shipping_available: l.shipping_available ?? false, pickup_available: l.pickup_available ?? true,
-            shipping_cost: l.shipping_cost_cents != null ? String(l.shipping_cost_cents / 100) : "",
-            wheel_diameter_inches: l.wheel_diameter_inches ?? "", wheel_width_inches: l.wheel_width_inches ?? "",
-            wheel_offset_mm: l.wheel_offset_mm ?? "", wheel_pcd: l.wheel_pcd || "", wheel_quantity: l.wheel_quantity ?? "",
-            tyres_included: l.tyres_included ?? false, tyre_tread_percentage: l.tyre_tread_percentage ?? "",
-            component_kilometres: l.component_kilometres ?? "", tested_before_listing: l.tested_before_listing || "",
-            warranty_included: l.warranty_included ?? false, lock_status: l.lock_status || "", tuned: l.tuned ?? false,
-          }));
-        }
+        try {
+          const res = await base44.functions.invoke("marketplace", { action: "getListing", listing_id: id });
+          const l = res.data?.listing;
+          if (l) {
+            const flow = l.category === "vehicle" ? "vehicle" : "part";
+            const loaded = {
+              ...EMPTY, flow,
+              listing_type: l.listing_type || "for_sale", category: l.category || "",
+              title: l.title || "", description: l.description || "",
+              price_type: l.price_type || "fixed", price: l.price_cents != null ? String(l.price_cents / 100) : "",
+              condition: l.condition || "used", quantity: String(l.quantity ?? 1),
+              primary_vehicle_id: l.primary_vehicle_id || "",
+              compatible_make: l.compatible_make || "", compatible_model: l.compatible_model || "",
+              compatible_chassis_code: l.compatible_chassis_code || "",
+              compatible_year_from: l.compatible_year_from ?? "", compatible_year_to: l.compatible_year_to ?? "",
+              location_general: l.location_general || "",
+              photo_urls: l.photo_urls || [], video_urls: l.video_urls || [],
+              additional_specifications: l.additional_specifications || [],
+              brand: l.brand || "", oem_or_aftermarket: l.oem_or_aftermarket || "",
+              shipping_available: l.shipping_available ?? false, pickup_available: l.pickup_available ?? true,
+              shipping_cost: l.shipping_cost_cents != null ? String(l.shipping_cost_cents / 100) : "",
+              wheel_diameter_inches: l.wheel_diameter_inches ?? "", wheel_width_inches: l.wheel_width_inches ?? "",
+              wheel_offset_mm: l.wheel_offset_mm ?? "", wheel_pcd: l.wheel_pcd || "", wheel_quantity: l.wheel_quantity ?? "",
+              tyres_included: l.tyres_included ?? false, tyre_tread_percentage: l.tyre_tread_percentage ?? "",
+              component_kilometres: l.component_kilometres ?? "", tested_before_listing: l.tested_before_listing || "",
+              warranty_included: l.warranty_included ?? false, lock_status: l.lock_status || "", tuned: l.tuned ?? false,
+            };
+            setF(loaded); fRef.current = loaded;
+            setDraftId(l.id); draftIdRef.current = l.id;
+            const arr = flow === "vehicle" ? VEHICLE_STEPS : PART_STEPS;
+            let idx = arr.length - 1;
+            for (let i = 0; i < arr.length; i++) { if (!isStepComplete(arr[i], loaded)) { idx = i; break; } }
+            setStepIndex(idx);
+          }
+        } catch {}
       }
+      setLoaded(true);
     })();
   }, [id]);
 
-  const isVehicleForSale = f.category === "vehicle" && f.listing_type === "for_sale";
-  const showCompat = f.category !== "vehicle";
-  const showPrice = f.price_type === "fixed" || f.price_type === "negotiable";
-  const showQuality = !editing || loadedStatus === "draft";
-  const quality = computeListingQuality(f);
+  // Auto-save every 30s while editing (only when there's something to save).
+  useEffect(() => {
+    const t = setInterval(() => {
+      if (!dirtyRef.current) return;
+      const form = fRef.current;
+      const title = form.title.trim() || (form.flow === "vehicle" ? autoTitle() : "");
+      if (title || draftIdRef.current) saveDraft({ silent: true });
+    }, 30000);
+    return () => clearInterval(t);
+  }, []);
 
-  const field = (k, v) => setF({ ...f, [k]: v });
-  const setPhotos = (updater) => setF((prev) => ({ ...prev, photo_urls: typeof updater === "function" ? updater(prev.photo_urls) : updater }));
-  const setVideos = (updater) => setF((prev) => ({ ...prev, video_urls: typeof updater === "function" ? updater(prev.video_urls) : updater }));
-  const setSpecs = (updater) => setF((prev) => ({ ...prev, additional_specifications: typeof updater === "function" ? updater(prev.additional_specifications) : updater }));
+  // Scroll to top on step change (mobile UX).
+  useEffect(() => { window.scrollTo({ top: 0, behavior: "smooth" }); }, [stepIndex]);
 
-  const setCategory = (cat) => setF({ ...f, category: cat, ...DEFAULT_ATTRS, ...EMPTY_ATTRS });
+  const chooseFlow = (flow) => {
+    markDirty();
+    if (flow === "vehicle") {
+      setF((prev) => ({ ...prev, flow, category: "vehicle", ...DEFAULT_ATTRS, ...EMPTY_ATTRS }));
+    } else {
+      setF((prev) => ({ ...prev, flow, category: "", primary_vehicle_id: "", ...DEFAULT_ATTRS, ...EMPTY_ATTRS }));
+    }
+    setStepIndex(1);
+  };
 
-  const submit = async (publish) => {
-    if (!f.title.trim() || busy) return;
-    setBusy(publish ? "publish" : "draft"); setError("");
+  const chooseCategory = (cat) => {
+    markDirty();
+    setF((prev) => ({ ...prev, category: cat, ...DEFAULT_ATTRS, ...EMPTY_ATTRS }));
+    setStepIndex(2);
+  };
+
+  const selectVehicle = (vid) => {
+    markDirty();
+    setF((prev) => {
+      const v = vehiclesRef.current.find((x) => x.id === vid);
+      const t = v ? [v.year, v.make, v.model].filter(Boolean).join(" ") + (v.chassis_code ? ` ${v.chassis_code}` : "") + (v.nickname ? ` — ${v.nickname}` : "") : "";
+      return { ...prev, primary_vehicle_id: vid, title: prev.title || t };
+    });
+  };
+
+  const next = async () => {
+    if (!isStepComplete(steps[stepIndex], f)) return;
+    await saveDraft();
+    setStepIndex((i) => Math.min(i + 1, steps.length - 1));
+  };
+  const back = () => setStepIndex((i) => Math.max(i - 1, 0));
+  const jump = (i) => { if (i <= stepIndex) setStepIndex(i); };
+
+  const publish = async () => {
+    setBusy("publish"); setError("");
     try {
-      const payload = {
-        listing_type: f.listing_type, category: f.category, title: f.title.trim(),
-        description: f.description.trim() || undefined, price_type: f.price_type, condition: f.condition,
-        quantity: Number(f.quantity) || 1, location_general: f.location_general.trim() || undefined,
-        primary_vehicle_id: f.primary_vehicle_id || undefined,
-        compatible_year_from: f.compatible_year_from === "" ? undefined : Number(f.compatible_year_from),
-        compatible_year_to: f.compatible_year_to === "" ? undefined : Number(f.compatible_year_to),
-        photo_urls: f.photo_urls, video_urls: f.video_urls,
-        additional_specifications: f.additional_specifications,
-      };
-      if (showPrice) {
-        const dollars = f.price === "" ? NaN : Number(f.price);
-        if (Number.isNaN(dollars) || dollars < 0) { setError("Enter a valid price."); setBusy(""); return; }
-        payload.price_cents = Math.round(dollars * 100);
-      } else {
-        payload.price_cents = null;
-      }
-      if (showCompat) {
-        payload.compatible_make = f.compatible_make.trim() || undefined;
-        payload.compatible_model = f.compatible_model.trim() || undefined;
-        payload.compatible_chassis_code = f.compatible_chassis_code.trim() || undefined;
-      }
-      const applicable = applicableCategoryFields(f.category);
-      for (const key of applicable) {
-        if (key === "shipping_cost_cents") {
-          payload.shipping_cost_cents = f.shipping_available ? Math.round((Number(f.shipping_cost) || 0) * 100) : null;
-          continue;
-        }
-        const val = f[key];
-        if (val === "" || val === undefined) continue;
-        payload[key] = val;
-      }
-      let res;
-      if (editing) {
-        res = await base44.functions.invoke("marketplace", { action: "updateListing", listing_id: id, ...payload });
-        if (publish && res.data?.ok) res = await base44.functions.invoke("marketplace", { action: "publishListing", listing_id: id });
-      } else {
-        res = await base44.functions.invoke("marketplace", { action: "createListingDraft", ...payload });
-        if (publish && res.data?.ok) res = await base44.functions.invoke("marketplace", { action: "publishListing", listing_id: res.data.listing_id });
-      }
-      if (res.data?.ok) navigate(`/marketplace/${res.data.listing_id || id}`);
-      else setError(res.data?.details?.message || res.data?.error || "Failed");
+      await saveDraft();
+      const did = draftIdRef.current;
+      if (!did) { setError("Could not save the draft before publishing."); setBusy(""); return; }
+      const res = await base44.functions.invoke("marketplace", { action: "publishListing", listing_id: did });
+      if (res.data?.ok) navigate(`/marketplace/${did}`);
+      else setError(res.data?.error?.message || res.data?.error || "Publish failed");
     } catch (e) { setError(e.message); } finally { setBusy(""); }
+  };
+
+  const curKey = steps[stepIndex];
+  const curComplete = isStepComplete(curKey, f);
+  const isType = curKey === "type";
+  const isReview = curKey === "review";
+
+  const renderStep = () => {
+    switch (curKey) {
+      case "type": return <TypeStep flow={f.flow} onChoose={chooseFlow} />;
+      case "vehicle": return <VehicleStep vehicles={vehicles} primary_vehicle_id={f.primary_vehicle_id} onSelect={selectVehicle} />;
+      case "category": return <CategoryStep category={f.category} onSelect={chooseCategory} />;
+      case "details": return <DetailsStep f={f} field={field} />;
+      case "compatibility": return <CompatibilityStep f={f} field={field} />;
+      case "specs": return <SpecsStep f={f} setSpecs={setSpecs} />;
+      case "format": return <FormatStep f={f} field={field} />;
+      case "photos": return <PhotosStep f={f} setPhotos={setPhotos} />;
+      case "video": return <VideoStep f={f} setVideos={setVideos} />;
+      case "pricing": return <PricingStep f={f} field={field} />;
+      case "shipping": return <ShippingStep f={f} field={field} />;
+      case "location": return <LocationStep f={f} field={field} />;
+      case "description": return <DescriptionStep f={f} field={field} flow={f.flow} />;
+      case "review": return <ReviewStep f={f} vehicles={vehicles} quality={quality} busy={busy} onPublish={publish} />;
+      default: return null;
+    }
   };
 
   return (
     <div className="mx-auto max-w-lg space-y-5">
-      <Link to="/marketplace" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" /> Marketplace</Link>
+      <Link to="/marketplace" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+        <ArrowLeft className="h-4 w-4" /> Marketplace
+      </Link>
+
       <div>
-        <h1 className="text-2xl font-black tracking-tighter">{editing ? "Edit listing" : "Post a listing"}</h1>
-        <p className="text-sm text-muted-foreground">Trusted Member+ publishes straight to active; New Member submits for review.</p>
+        <h1 className="text-2xl font-black tracking-tighter">Create a Marketplace Listing</h1>
+        {!isType && (
+          <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+            {saving ? <span className="flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Saving…</span>
+              : savedAt ? <span>Saved</span>
+              : <span>Draft auto-saves as you go</span>}
+          </div>
+        )}
       </div>
+
+      {!isType && <ProgressBar steps={steps} currentIndex={stepIndex} onJump={jump} />}
+
       {error && <div className="rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>}
 
-      <div className="space-y-4 rounded-2xl border border-border bg-card p-4">
-        <div className="grid grid-cols-2 gap-2">
-          {[{ v: "for_sale", l: "For sale" }, { v: "wanted", l: "Wanted" }].map((o) => (
-            <button key={o.v} type="button" onClick={() => field("listing_type", o.v)} className={`rounded-xl border p-3 text-sm font-bold ${f.listing_type === o.v ? "border-primary bg-primary/10" : "border-border"}`}>{o.l}</button>
-          ))}
-        </div>
-        <div>
-          <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Category</label>
-          <select value={f.category} onChange={(e) => setCategory(e.target.value)} className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary">
-            {CATEGORIES.map((c) => <option key={c.v} value={c.v}>{c.l}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Title</label>
-          <input value={f.title} onChange={(e) => field("title", e.target.value)} maxLength={140} placeholder="e.g. B16 cylinder head" className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary" />
-        </div>
-        <div>
-          <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Description</label>
-          <textarea value={f.description} onChange={(e) => field("description", e.target.value)} rows={4} className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary" />
-          <p className="mt-1 text-right text-[10px] text-muted-foreground">{f.description.length} chars</p>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Price type</label>
-            <select value={f.price_type} onChange={(e) => field("price_type", e.target.value)} className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary">
-              {PRICE_TYPES.map((p) => <option key={p.v} value={p.v}>{p.l}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Condition</label>
-            <select value={f.condition} onChange={(e) => field("condition", e.target.value)} className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary">
-              {CONDITIONS.map((c) => <option key={c.v} value={c.v}>{c.l}</option>)}
-            </select>
-          </div>
-        </div>
-        {showPrice && (
-          <div>
-            <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Price (AUD)</label>
-            <input type="number" value={f.price} onChange={(e) => field("price", e.target.value)} placeholder="0" className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary" />
-          </div>
-        )}
-        <div>
-          <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Quantity</label>
-          <input type="number" min="1" value={f.quantity} onChange={(e) => field("quantity", e.target.value)} className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary" />
-        </div>
-
-        {isVehicleForSale && (
-          <div className="rounded-xl border border-primary/30 bg-primary/5 p-3">
-            <label className="flex items-center gap-1 text-xs font-bold uppercase tracking-wide text-primary"><Car className="h-3.5 w-3.5" /> Vehicle (required)</label>
-            <select value={f.primary_vehicle_id} onChange={(e) => field("primary_vehicle_id", e.target.value)} className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary">
-              <option value="">Select your vehicle...</option>
-              {vehicles.map((v) => <option key={v.id} value={v.id}>{v.year} {v.make} {v.model}{v.nickname ? ` — ${v.nickname}` : ""}</option>)}
-            </select>
-            {vehicles.length === 0 && <p className="mt-1 text-xs text-destructive">Add a vehicle to your garage first.</p>}
-          </div>
-        )}
-
-        {showCompat && (
-          <div className="space-y-3 rounded-xl border border-border p-3">
-            <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Compatibility (optional)</p>
-            <div className="grid grid-cols-2 gap-2">
-              <input value={f.compatible_make} onChange={(e) => field("compatible_make", e.target.value)} placeholder="Make" className="rounded-lg border border-border bg-background px-2.5 py-2 text-xs outline-none focus:border-primary" />
-              <input value={f.compatible_model} onChange={(e) => field("compatible_model", e.target.value)} placeholder="Model" className="rounded-lg border border-border bg-background px-2.5 py-2 text-xs outline-none focus:border-primary" />
-              <input value={f.compatible_chassis_code} onChange={(e) => field("compatible_chassis_code", e.target.value)} placeholder="Chassis code" className="rounded-lg border border-border bg-background px-2.5 py-2 text-xs outline-none focus:border-primary" />
-              <div className="flex gap-1">
-                <input type="number" value={f.compatible_year_from} onChange={(e) => field("compatible_year_from", e.target.value)} placeholder="Year from" className="w-full rounded-lg border border-border bg-background px-2.5 py-2 text-xs outline-none focus:border-primary" />
-                <input type="number" value={f.compatible_year_to} onChange={(e) => field("compatible_year_to", e.target.value)} placeholder="to" className="w-full rounded-lg border border-border bg-background px-2.5 py-2 text-xs outline-none focus:border-primary" />
-              </div>
-            </div>
-          </div>
-        )}
-
-        <CategoryAttributesForm category={f.category} values={f} onChange={field} />
-
-        <div className="space-y-2">
-          <label className="flex items-center gap-1 text-xs font-bold uppercase tracking-wide text-muted-foreground"><ImagePlus className="h-3.5 w-3.5" /> Photos</label>
-          <PhotoUploader photos={f.photo_urls} setPhotos={setPhotos} />
-        </div>
-
-        <div className="space-y-2">
-          <label className="flex items-center gap-1 text-xs font-bold uppercase tracking-wide text-muted-foreground"><Video className="h-3.5 w-3.5" /> Video</label>
-          <VideoUploader videos={f.video_urls} setVideos={setVideos} />
-        </div>
-
-        <details className="rounded-xl border border-border p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-wide text-muted-foreground">Anything else buyers should know?</summary>
-          <div className="mt-3"><AdditionalSpecsEditor specs={f.additional_specifications} setSpecs={setSpecs} /></div>
-        </details>
-
-        <input value={f.location_general} onChange={(e) => field("location_general", e.target.value)} placeholder="City/region" className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary" />
+      <div className="rounded-2xl border border-border bg-card p-5">
+        {loaded || !editing ? renderStep() : <div className="py-12 text-center text-sm text-muted-foreground">Loading draft…</div>}
       </div>
 
-      {showQuality && <QualityScore score={quality.score} checklist={quality.checklist} />}
-
-      <div className="flex gap-2">
-        <button disabled={!!busy || !f.title.trim()} onClick={() => submit(false)} className="flex-1 rounded-xl border border-border py-3 text-sm font-bold disabled:opacity-50">{busy === "draft" ? "Saving..." : "Save draft"}</button>
-        <button disabled={!!busy || !f.title.trim()} onClick={() => submit(true)} className="flex-1 rounded-xl bg-primary py-3 text-sm font-bold text-primary-foreground glow-red disabled:opacity-50">{busy === "publish" ? "Publishing..." : "Publish"}</button>
-      </div>
+      {!isType && !isReview && (
+        <div className="flex items-center gap-2">
+          <button onClick={back} disabled={stepIndex === 0} className="inline-flex items-center gap-1 rounded-xl border border-border px-4 py-2.5 text-sm font-bold disabled:opacity-40">
+            <ChevronLeft className="h-4 w-4" /> Back
+          </button>
+          <button onClick={next} disabled={!curComplete} className="inline-flex flex-1 items-center justify-center gap-1 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground glow-red disabled:opacity-50">
+            Next <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+      {!isType && !isReview && !curComplete && (
+        <p className="text-center text-xs text-muted-foreground">Complete this step to continue.</p>
+      )}
     </div>
   );
 }
