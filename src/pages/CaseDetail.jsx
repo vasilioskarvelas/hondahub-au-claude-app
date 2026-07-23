@@ -62,6 +62,11 @@ export default function CaseDetail() {
   };
   const resolve = (outcome) => call({ action: "resolveCase", case_id: id, outcome }, `Resolved (${outcome})`);
   const reopen = () => call({ action: "reopenCase", case_id: id }, "Reopened");
+  const escalate = () => {
+    const r = window.prompt("Reason for escalation (required):");
+    if (!r || !r.trim()) return;
+    call({ action: "escalateCase", case_id: id, reason: r.trim() }, "Escalated");
+  };
   const setPriority = (priority, severity) => call({ action: "setCasePriority", case_id: id, priority, severity }, "Priority updated");
   const resolveAppeal = (decision) => {
     const pending = data.actions.find((a) => a.appeal_status === "requested" || a.appeal_status === "under_review");
@@ -118,6 +123,7 @@ export default function CaseDetail() {
       <div className="flex flex-wrap gap-2">
         {!resolved && <button onClick={() => resolve("upheld")} disabled={busy} className="rounded-xl border border-primary/40 px-4 py-2 text-sm font-medium text-primary disabled:opacity-50">Resolve · Upheld</button>}
         {!resolved && <button onClick={() => resolve("dismissed")} disabled={busy} className="rounded-xl border border-border px-4 py-2 text-sm font-medium disabled:opacity-50">Resolve · Dismissed</button>}
+        {!resolved && c.status !== "escalated" && <button onClick={escalate} disabled={busy} className="rounded-xl border border-amber-500/40 px-4 py-2 text-sm font-medium text-amber-400 disabled:opacity-50">Escalate</button>}
         {resolved && <button onClick={reopen} disabled={busy} className="inline-flex items-center gap-1.5 rounded-xl border border-border px-4 py-2 text-sm font-medium disabled:opacity-50"><RotateCcw className="h-4 w-4" /> Reopen</button>}
         {pendingAppeal && <button onClick={() => resolveAppeal("overturned")} disabled={busy} className="rounded-xl border border-amber-500/40 px-4 py-2 text-sm font-medium text-amber-400 disabled:opacity-50">Appeal · Overturn</button>}
         {pendingAppeal && <button onClick={() => resolveAppeal("upheld")} disabled={busy} className="rounded-xl border border-border px-4 py-2 text-sm font-medium disabled:opacity-50">Appeal · Uphold</button>}

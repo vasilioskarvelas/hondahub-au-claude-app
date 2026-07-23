@@ -69,6 +69,10 @@ export const AuditActionType = Object.freeze({
   LISTING_REMOVED_BY_MODERATION: "listing_removed_by_moderation",
   TRUST_TIER_OVERRIDDEN: "trust_tier_overridden",
   FINANCIAL_CHANGE_APPROVED: "financial_change_approved",
+  // Phase 05 additions — required by this phase's own audit-logging rules (§2.8):
+  REPORT_FILED: "report_filed",                       // written by ModerationService.fileReport() (§2.1/§5.1)
+  MODERATION_ACTION_APPLIED: "moderation_action_applied", // the mirrored AuditLog entry every ModerationAction creates (§2.5/§5.2)
+  MODERATION_CASE_STATUS_CHANGED: "moderation_case_status_changed", // every ModerationCase.status transition (§2.2)
 });
 
 /**

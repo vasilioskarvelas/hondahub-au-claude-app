@@ -26,6 +26,10 @@ export const AuditActionType = Object.freeze({
   LISTING_REMOVED_BY_MODERATION: "listing_removed_by_moderation",
   TRUST_TIER_OVERRIDDEN: "trust_tier_overridden",
   FINANCIAL_CHANGE_APPROVED: "financial_change_approved",
+  // Phase 05 additions — required by this phase's own audit-logging rules (§2.8):
+  REPORT_FILED: "report_filed",
+  MODERATION_ACTION_APPLIED: "moderation_action_applied",
+  MODERATION_CASE_STATUS_CHANGED: "moderation_case_status_changed",
 });
 
 // Report target subset of ReferenceTypes (DATABASE_SCHEMA §22).

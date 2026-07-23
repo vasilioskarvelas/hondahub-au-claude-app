@@ -89,13 +89,23 @@ Deno.serve(async (req) => {
         recipient_id: user.id, notification_type: NotificationType.REPORT_UPDATE,
         actor_id: user.id, target_type: "report", target_id: report.id,
       }).catch(() => {});
+      // §2.1/§5.1 — report filing is always audit-logged (report_filed).
+      await writeAuditLog(base44, {
+        action: AuditActionType.REPORT_FILED,
+        actor_type: ACTOR_TYPE.USER, actor_id: user.id,
+        target_type, target_id,
+        context: JSON.stringify({ report_id: report.id, category }),
+      }).catch(() => {});
       return json({ ok: true, report });
     }
 
     // ---- recordAppeal (the affected user appeals a ModerationAction applied to them) ----
+    // §7.2 payload { moderation_action_id } (action_id accepted for back-compat).
     if (action === "recordAppeal") {
       if (!user) return err("AUTH_REQUIRED", 401);
-      const modAction = await base44.asServiceRole.entities.ModerationAction.get(body.action_id).catch(() => null);
+      const actionId = body.moderation_action_id || body.action_id;
+      if (!actionId) return err("VALIDATION_FAILED", 422, { moderation_action_id: "required" });
+      const modAction = await base44.asServiceRole.entities.ModerationAction.get(actionId).catch(() => null);
       if (!modAction) return err("RESOURCE_NOT_FOUND", 404);
       // Only the affected content author may appeal (own enforcement record).
       const authorId = await resolveContentAuthor(base44, modAction.target_type, modAction.target_id);
@@ -106,7 +116,7 @@ Deno.serve(async (req) => {
         return err("VALIDATION_FAILED", 422, { appeal: "appeal already recorded" });
       }
       // Appeal-status update is the sanctioned appeal-field mutation (not action_type/actor/reason).
-      const updated = await base44.asServiceRole.entities.ModerationAction.update(body.action_id, {
+      const updated = await base44.asServiceRole.entities.ModerationAction.update(actionId, {
         appeal_status: APPEAL_STATUS.REQUESTED,
         appealed_at: new Date().toISOString(),
       });
@@ -159,12 +169,24 @@ Deno.serve(async (req) => {
     }
 
     // ---- assignCase ----
+    // §7.2 payload { case_id, moderator_id? } — moderator_id optional (self-assign when omitted).
     if (action === "assignCase") {
       const theCase = await base44.asServiceRole.entities.ModerationCase.get(body.case_id).catch(() => null);
       if (!theCase) return err("RESOURCE_NOT_FOUND", 404);
-      const next: any = { assigned_moderator_id: body.assigned_moderator_id || null };
+      const assignee = body.moderator_id || body.assigned_moderator_id || null;
+      const next: any = { assigned_moderator_id: assignee };
+      const fromStatus = theCase.status;
       if (!theCase.assigned_moderator_id) next.status = CASE_STATUS.ASSIGNED;
       const updated = await base44.asServiceRole.entities.ModerationCase.update(body.case_id, next);
+      // §2.2 — audit the open→assigned status transition when it occurs.
+      if (next.status && next.status !== fromStatus) {
+        await writeAuditLog(base44, {
+          action: AuditActionType.MODERATION_CASE_STATUS_CHANGED,
+          actor_type: isAdmin(user) ? ACTOR_TYPE.ADMIN : ACTOR_TYPE.MODERATOR, actor_id: user.id,
+          target_type: "moderation_case", target_id: body.case_id,
+          context: JSON.stringify({ from: fromStatus, to: next.status, assigned_moderator_id: assignee }),
+        }).catch(() => {});
+      }
       return json({ ok: true, case: updated });
     }
 
@@ -194,6 +216,26 @@ Deno.serve(async (req) => {
       if (typeof body.ai_priority_score === "number") update.ai_priority_score = body.ai_priority_score;
       const updated = await base44.asServiceRole.entities.ModerationCase.update(body.case_id, update);
       return json({ ok: true, case: updated });
+    }
+
+    // ---- escalateCase (Mod/Admin) — open/assigned/in_review → escalated (§3.2/§6.4) ----
+    if (action === "escalateCase") {
+      const theCase = await base44.asServiceRole.entities.ModerationCase.get(body.case_id).catch(() => null);
+      if (!theCase) return err("RESOURCE_NOT_FOUND", 404);
+      if ([CASE_STATUS.RESOLVED_UPHELD, CASE_STATUS.RESOLVED_DISMISSED, CASE_STATUS.ESCALATED].includes(theCase.status)) {
+        return err("INVALID_STATE_TRANSITION", 409, { case: "case is already resolved or escalated" });
+      }
+      const reason = (body.reason || "").trim();
+      const fromStatus = theCase.status;
+      const updatedCase = await base44.asServiceRole.entities.ModerationCase.update(body.case_id, { status: CASE_STATUS.ESCALATED });
+      // §2.2 — every case status change is audit-logged (moderation_case_status_changed).
+      await writeAuditLog(base44, {
+        action: AuditActionType.MODERATION_CASE_STATUS_CHANGED,
+        actor_type: isAdmin(user) ? ACTOR_TYPE.ADMIN : ACTOR_TYPE.MODERATOR, actor_id: user.id,
+        target_type: "moderation_case", target_id: body.case_id,
+        context: JSON.stringify({ from: fromStatus, to: CASE_STATUS.ESCALATED, reason }),
+      }).catch(() => {});
+      return json({ ok: true, case: updatedCase });
     }
 
     // ---- applyAction (Mod/Admin ONLY — AI hard-rejected structurally) ----
@@ -232,15 +274,16 @@ Deno.serve(async (req) => {
       //    NEVER write to the target entity table directly from here.
       const contentResult = await applyContentAction(base44, target_type, target_id, action_type);
 
-      // 3. ModerationActionApplied → audit-log mirror for listing_removed (the AuditActionType value).
-      if (action_type === ModerationActionType.LISTING_REMOVED) {
-        await writeAuditLog(base44, {
-          action: AuditActionType.LISTING_REMOVED_BY_MODERATION,
-          actor_type: isAdmin(user) ? ACTOR_TYPE.ADMIN : ACTOR_TYPE.MODERATOR,
-          actor_id: user.id,
-          target_type, target_id, context: reason,
-        }).catch(() => {});
-      }
+      // 3. §2.5/§5.2 — EVERY ModerationAction mirrors a moderation_action_applied AuditLog entry
+      //    (the specific action_type is carried in context). listing_removed_by_moderation remains
+      //    in the registry for other consumers but the generic mirror is moderation_action_applied.
+      await writeAuditLog(base44, {
+        action: AuditActionType.MODERATION_ACTION_APPLIED,
+        actor_type: isAdmin(user) ? ACTOR_TYPE.ADMIN : ACTOR_TYPE.MODERATOR,
+        actor_id: user.id,
+        target_type, target_id,
+        context: JSON.stringify({ moderation_action_id: modAction.id, action_type, reason }),
+      }).catch(() => {});
 
       // 4. ModerationActionApplied → moderation_outcome notification to the content author.
       const authorId = await resolveContentAuthor(base44, target_type, target_id);
@@ -265,17 +308,28 @@ Deno.serve(async (req) => {
       if (theCase.status === CASE_STATUS.ESCALATED && !isAdmin(user)) {
         return err("PERMISSION_DENIED", 403, { case: "only an admin may resolve an escalated case" });
       }
-      const outcome = body.outcome; // "upheld" | "dismissed"
-      if (!["upheld", "dismissed"].includes(outcome)) return err("VALIDATION_FAILED", 422, { outcome: "must be upheld or dismissed" });
-      const newStatus = outcome === "upheld" ? CASE_STATUS.RESOLVED_UPHELD : CASE_STATUS.RESOLVED_DISMISSED;
+      // §3.2 outcome: resolved_upheld | resolved_dismissed (short form upheld/dismissed accepted for back-compat).
+      const rawOutcome = (body.outcome || "").trim();
+      const upheld = rawOutcome === "upheld" || rawOutcome === CASE_STATUS.RESOLVED_UPHELD;
+      const dismissed = rawOutcome === "dismissed" || rawOutcome === CASE_STATUS.RESOLVED_DISMISSED;
+      if (!upheld && !dismissed) return err("VALIDATION_FAILED", 422, { outcome: "must be resolved_upheld or resolved_dismissed" });
+      const newStatus = upheld ? CASE_STATUS.RESOLVED_UPHELD : CASE_STATUS.RESOLVED_DISMISSED;
+      const fromStatus = theCase.status;
       const updated = await base44.asServiceRole.entities.ModerationCase.update(body.case_id, {
         status: newStatus, resolved_at: new Date().toISOString(),
       });
+      // §2.2 — audit the case status change (moderation_case_status_changed).
+      await writeAuditLog(base44, {
+        action: AuditActionType.MODERATION_CASE_STATUS_CHANGED,
+        actor_type: isAdmin(user) ? ACTOR_TYPE.ADMIN : ACTOR_TYPE.MODERATOR, actor_id: user.id,
+        target_type: "moderation_case", target_id: body.case_id,
+        context: JSON.stringify({ from: fromStatus, to: newStatus }),
+      }).catch(() => {});
       // Update linked reports to resolved/dismissed (kept in sync by ModerationService).
       const reports = await base44.asServiceRole.entities.Report.filter({ moderation_case_id: body.case_id, status: REPORT_STATUS.CONSOLIDATED });
       for (const r of reports) {
         await base44.asServiceRole.entities.Report.update(r.id, {
-          status: outcome === "upheld" ? REPORT_STATUS.RESOLVED : REPORT_STATUS.DISMISSED,
+          status: upheld ? REPORT_STATUS.RESOLVED : REPORT_STATUS.DISMISSED,
         });
       }
       return json({ ok: true, case: updated });
@@ -285,26 +339,40 @@ Deno.serve(async (req) => {
     if (action === "reopenCase") {
       const theCase = await base44.asServiceRole.entities.ModerationCase.get(body.case_id).catch(() => null);
       if (!theCase) return err("RESOURCE_NOT_FOUND", 404);
+      if (theCase.status !== CASE_STATUS.RESOLVED_UPHELD && theCase.status !== CASE_STATUS.RESOLVED_DISMISSED) {
+        return err("VALIDATION_FAILED", 422, { case: "case is not resolved" });
+      }
+      const fromStatus = theCase.status;
       const updated = await base44.asServiceRole.entities.ModerationCase.update(body.case_id, {
         status: CASE_STATUS.OPEN, resolved_at: null,
       });
+      // §2.2 — audit the reopen transition (moderation_case_status_changed).
+      await writeAuditLog(base44, {
+        action: AuditActionType.MODERATION_CASE_STATUS_CHANGED,
+        actor_type: isAdmin(user) ? ACTOR_TYPE.ADMIN : ACTOR_TYPE.MODERATOR, actor_id: user.id,
+        target_type: "moderation_case", target_id: body.case_id,
+        context: JSON.stringify({ from: fromStatus, to: CASE_STATUS.OPEN }),
+      }).catch(() => {});
       return json({ ok: true, case: updated });
     }
 
     // ---- resolveAppeal (ADMIN ONLY) ----
+    // §7.2 payload { moderation_action_id, outcome } (action_id/decision accepted for back-compat).
     if (action === "resolveAppeal") {
       if (!isAdmin(user)) {
         return err("PERMISSION_DENIED", 403, { appeal: "only an admin may resolve an appeal" });
       }
-      const modAction = await base44.asServiceRole.entities.ModerationAction.get(body.action_id).catch(() => null);
+      const actionId = body.moderation_action_id || body.action_id;
+      if (!actionId) return err("VALIDATION_FAILED", 422, { moderation_action_id: "required" });
+      const modAction = await base44.asServiceRole.entities.ModerationAction.get(actionId).catch(() => null);
       if (!modAction) return err("RESOURCE_NOT_FOUND", 404);
       if (modAction.appeal_status !== APPEAL_STATUS.REQUESTED && modAction.appeal_status !== APPEAL_STATUS.UNDER_REVIEW) {
         return err("VALIDATION_FAILED", 422, { appeal: "no pending appeal on this action" });
       }
-      const decision = body.decision; // "upheld" | "overturned"
-      if (!["upheld", "overturned"].includes(decision)) return err("VALIDATION_FAILED", 422, { decision: "must be upheld or overturned" });
+      const decision = body.outcome || body.decision; // "upheld" | "overturned" (§7.2: outcome)
+      if (!["upheld", "overturned"].includes(decision)) return err("VALIDATION_FAILED", 422, { outcome: "must be upheld or overturned" });
       // Sanctioned appeal-field mutation on the original row.
-      const updated = await base44.asServiceRole.entities.ModerationAction.update(body.action_id, {
+      const updated = await base44.asServiceRole.entities.ModerationAction.update(actionId, {
         appeal_status: decision === "upheld" ? APPEAL_STATUS.UPHELD : APPEAL_STATUS.OVERTURNED,
         appeal_resolved_at: new Date().toISOString(), appeal_resolved_by: user.id,
       });
@@ -322,6 +390,13 @@ Deno.serve(async (req) => {
         });
         // Call the delegate to restore the content.
         await applyContentAction(base44, modAction.target_type, modAction.target_id, ModerationActionType.CONTENT_RESTORED);
+        // §2.5/§5.2 — the reversing ModerationAction also mirrors a moderation_action_applied audit entry.
+        await writeAuditLog(base44, {
+          action: AuditActionType.MODERATION_ACTION_APPLIED,
+          actor_type: ACTOR_TYPE.ADMIN, actor_id: user.id,
+          target_type: modAction.target_type, target_id: modAction.target_id,
+          context: JSON.stringify({ moderation_action_id: reversal.id, action_type: ModerationActionType.CONTENT_RESTORED, reverses: modAction.id }),
+        }).catch(() => {});
         // Notify the author of the restoration.
         const authorId = await resolveContentAuthor(base44, modAction.target_type, modAction.target_id);
         if (authorId) {
@@ -335,20 +410,32 @@ Deno.serve(async (req) => {
     }
 
     // ---- authorisePrivateMessageAccess (Mod/Admin) ----
-    // Grants scoped, temporary access to Marketplace message content only while an
-    // active Report references the message. Marketplace messages land in Phase 08;
-    // the authorization decision is implemented now.
+    // §7.2 payload { moderator_id, conversation_or_message_id, report_id }. Grants scoped,
+    // temporary access to Marketplace message content only while an active Report references
+    // the message. Marketplace messages land in Phase 08; the authorization decision is implemented now.
     if (action === "authorisePrivateMessageAccess") {
-      const target_type = body.target_type || "marketplace_message";
-      const target_id = body.target_id;
-      if (!target_id) return err("VALIDATION_FAILED", 422, { target_id: "required" });
-      const activeReports = await base44.asServiceRole.entities.Report.filter({
-        target_type, target_id, status: REPORT_STATUS.OPEN,
-      });
-      if (activeReports.length === 0) {
-        return json({ ok: true, authorised: false, reason: "no active report references this message" });
+      const messageId = body.conversation_or_message_id || body.target_id;
+      if (!messageId) return err("VALIDATION_FAILED", 422, { conversation_or_message_id: "required" });
+      const targetType = body.target_type || "marketplace_message";
+      let activeReports: any[] = [];
+      if (body.report_id) {
+        const report = await base44.asServiceRole.entities.Report.get(body.report_id).catch(() => null);
+        if (!report || report.status !== REPORT_STATUS.OPEN || report.target_id !== messageId) {
+          return err("PRIVATE_MESSAGE_ACCESS_NOT_AUTHORISED", 403, { access: "report does not actively reference this message" });
+        }
+        activeReports = [report];
+      } else {
+        activeReports = await base44.asServiceRole.entities.Report.filter({
+          target_type: targetType, target_id: messageId, status: REPORT_STATUS.OPEN,
+        });
       }
-      return json({ ok: true, authorised: true, report_id: activeReports[0].id });
+      if (activeReports.length === 0) {
+        return err("PRIVATE_MESSAGE_ACCESS_NOT_AUTHORISED", 403, { access: "no active report references this message" });
+      }
+      // Scoped, temporary grant (1h). No persisted entity — the grant is a derived token;
+      // re-validation on each subsequent read still requires an active Report (§6.14).
+      const expires_at = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+      return json({ ok: true, authorised: true, access_grant_id: `${activeReports[0].id}:${messageId}`, report_id: activeReports[0].id, expires_at });
     }
 
     // ---- listQueue (mod queue, sorted by priority DESC then created_at ASC) ----
