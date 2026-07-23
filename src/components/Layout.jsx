@@ -1,6 +1,6 @@
 import React from "react";
 import { Outlet, Link, useLocation } from "react-router-dom";
-import { Home, CalendarDays, User, MessageCircle, Search, Crown, Users, Gift, ShoppingBag, Bell, MoreHorizontal, Settings as SettingsIcon, Wrench, Cpu, FlaskConical, Shield, ScrollText, Gauge } from "lucide-react";
+import { Home, CalendarDays, User, MessageCircle, Search, Crown, Users, Gift, ShoppingBag, Bell, MoreHorizontal, Settings as SettingsIcon, Wrench, Cpu, FlaskConical, Shield, ScrollText, Gauge, LayoutDashboard } from "lucide-react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/lib/AuthContext';
 
@@ -20,6 +20,7 @@ const moreNav = [
   { to: "/garage", label: "Garage", icon: Wrench },
   { to: "/profile", label: "Profile", icon: User },
   { to: "/settings", label: "Settings", icon: SettingsIcon },
+  { to: "/admin", label: "Admin", icon: LayoutDashboard, modOnly: true },
   { to: "/moderation", label: "Moderation", icon: Shield, modOnly: true },
   { to: "/admin/audit", label: "Audit Log", icon: ScrollText, modOnly: true },
   { to: "/admin/entitlements", label: "Entitlements", icon: Crown, adminOnly: true },

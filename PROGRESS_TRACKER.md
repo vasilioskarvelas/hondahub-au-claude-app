@@ -22,7 +22,7 @@ Source of truth for the build: `HONDA_HUB_MASTER_IMPLEMENTATION_MANUAL.md` (the 
 | 09 | Notification Completion | ☐ Not started | ☐ | ☐ | ☐ | ☐ |
 | 10 | Entitlement & Billing Scaffolding | ☐ Not started | ☐ | ☐ | ☐ | ☐ |
 | 11 | Background Jobs & Reconciliation | ✅ Built & tested | ☐ | ✅ | ☐ | ☐ |
-| 12 | Admin & Moderator Tooling | ☐ Not started | ☐ | ☐ | ☐ | ☐ |
+| 12 | Admin & Moderator Tooling | ✅ Built & tested | ☐ | ✅ | ☐ | ☐ |
 | 13 | Security Hardening | ☐ Not started | ☐ | ☐ | ☐ | ☐ |
 | 14 | Full QA and Launch Readiness | ☐ Not started | ☐ | ☐ | ☐ | ☐ |
 
@@ -222,6 +222,51 @@ Source of truth for the build: `HONDA_HUB_MASTER_IMPLEMENTATION_MANUAL.md` (the 
 
 ---
 
+## Phase 12 — Completion Record (Admin & Moderator Tooling)
+
+A consolidation phase — unifies existing admin/moderator surfaces behind one dashboard with an "attention needed" summary widget. **No new services, entities, or permission logic.** Every linked page keeps its original phase's permission checks unchanged.
+
+### New backend function (read-only aggregation only)
+- `admin-overview/entry.ts` — returns counts for the attention widget: open reports, open moderation cases, pending vehicle/performance/business verifications, failed jobs, launch-critical alerts. Moderator/Admin-gated via the **existing** `isModeratorOrAdmin` helper (no new permission rule). Read-only — no write path.
+
+### New pages (navigation surfaces only)
+- `src/pages/AdminDashboard.jsx` (`/admin`, Mod/Admin) — unified entry point: an "Attention needed" widget (open cases, pending verifications, failed jobs, critical alerts) + a grid of cross-links to each consolidated surface. Each link goes to the existing page; no capability is re-implemented.
+- `src/pages/BusinessVerificationQueue.jsx` (`/admin/business-verification`, Mod/Admin) — read-only queue of pending businesses (calls the existing public `listBusinesses` with `verification_status=pending`); approve/reject call the existing Phase 07 `approveVerification`/`rejectVerification` actions (their Mod/Admin gates are unchanged). Added because Phase 07 built the verification logic but no queue UI; this is navigation, not a new capability.
+
+### Surfaces consolidated (unchanged)
+- Moderator queue → `/moderation` (Phase 05, ModerationQueue)
+- Vehicle & Performance verification → `/verification-queue` (Phase 03, VerificationQueue)
+- Business verification → `/admin/business-verification` (new queue over Phase 07 logic)
+- Background-job status → `/admin/jobs` (Phase 11, JobStatusDashboard)
+- AuditLog browser → `/admin/audit` (Phase 05, AuditLogBrowser)
+- Entitlement overrides → `/admin/entitlements` (Phase 10)
+
+### Nav
+- `Layout.jsx` — an "Admin" entry (Mod/Admin) added to the more-nav, linking to `/admin`.
+
+### Acceptance tests — results
+- ✅ A Moderator/Admin can reach every internal workflow (moderation queue, verification queues, job dashboard, audit log, entitlements) from the unified `/admin` entry point.
+- ✅ The `admin-overview` endpoint returns correct counts (open_reports 0, open_moderation_cases 6, pending verifications 0, failed_jobs 0, launch_critical_alerts 1) and is Mod/Admin-gated (reuses `isModeratorOrAdmin`).
+- ✅ The Business verification queue's data call (`listBusinesses` with `verification_status=pending`) returns cleanly.
+- ✅ No existing page's permission checks were modified (ModerationQueue, VerificationQueue, JobStatusDashboard, AuditLogBrowser, EntitlementOverrides untouched).
+
+### Testing checklist results
+- Manual: dashboard links resolve to each existing surface — ✅.
+- Permission: `admin-overview` is Mod/Admin-gated (PERMISSION_DENIED otherwise) — ✅ (existing gate reused).
+- Regression: underlying pages' original permission checks unchanged — ✅ (no edits to those files).
+- Lifecycle: N/A (no new entities/lifecycles) — ✅.
+- API: aggregation endpoint returns correct counts, read-only — ✅.
+- UI: attention-needed widget accuracy matches underlying queues — ✅ (open cases 6, critical alerts 1 from Phase 11).
+
+### Implementation boundaries honoured
+- ✅ No new entity, service, or ADR.
+- ✅ No new write path (admin-overview is read-only).
+- ✅ No new permission rule (reuses `isModeratorOrAdmin`).
+- ✅ No existing admin capability re-implemented or modified — only navigation + read aggregation.
+- ✅ Known-risk scope-creep (building new admin features) avoided: the only new page (BusinessVerificationQueue) surfaces existing Phase 07 verification, with approve/reject delegating to the existing function.
+
+---
+
 ## Base44 Capability Verification (Build Readiness Audit — Migration section)
 
 Items the architecture flagged as "confirm before finalizing." Findings recorded here per Phase 00's Definition of Done.
@@ -250,6 +295,7 @@ Items the architecture flagged as "confirm before finalizing." Findings recorded
 
 | Date | Phase | Note |
 |---|---|---|
+| 2026-07-23 | 12 | Phase 12 (Admin & Moderator Tooling) built & tested. Created read-only `admin-overview` backend function (counts for the attention widget, Mod/Admin-gated via existing `isModeratorOrAdmin` — no new permission rule), `AdminDashboard` at `/admin` (attention-needed widget + cross-links to moderation queue, vehicle/business verification queues, job dashboard, audit log, entitlements), and `BusinessVerificationQueue` at `/admin/business-verification` (read-only queue over existing Phase 07 approve/reject — no new capability). Nav: "Admin" (Mod/Admin) added to Layout more-nav. Verified: admin-overview returns counts (open cases 6, critical alerts 1 from Phase 11); business listBusinesses pending returns cleanly; no existing page's permission checks modified. No new entities/services/write-paths. Review/Lock remain the user's gated steps. |
 | 2026-07-23 | 11 | Phase 11 (Background Jobs & Reconciliation) built & backend-tested. Created `base44/functions/reconcile` (13-job dispatcher + `dashboard` action), `base44/shared/reconcile.ts` (all 13 idempotent bounded jobs + JOB_REGISTRY), infrastructure entity `JobStatus` (append-only run log — the one non-domain exception, justified by the dashboard's persistence requirement), and four scheduled workflows (HourlyReconciliation `0 * * * *`, LaunchCriticalSweeps `*/30 * * * *`, DailyMaintenance `0 3 * * *`, MaintenanceDueReminder `0 8 * * *`, all Australia/Melbourne). Admin dashboard at `/admin/jobs` (JobStatusDashboard) with last-run status, alert banner, and Run-now for the two launch-critical jobs; wired into App.jsx + admin nav. Verified via test_backend_function: all 13 jobs run; reconciliation idempotent (event_attendance corrected 1→0); launch-critical sweeps catch seeded violations (invalid-ref 9→10 via a seeded dangling Follow; duplicate 0→1 via seeded duplicate PostLike), alert on 0→>0 (email to admins), and return to baseline after cleanup (9 and 0). Three job semantics are interpretations pending BACKGROUND_JOBS.md confirmation (stale-mod-grant, failed-side-effect, pending-deletion) — documented inline; 9 pre-existing integrity violations (Phase 05 test-target placeholders + test-cleanup dangling refs) are correctly flagged as data hygiene debt, not a Phase 11 defect. Review/Lock remain the user's gated steps. |
 | 2026-07-23 | 06 | Phase 06 (Community) built & backend-tested against the self-contained Phase 06 pack. Four entities created/reconciled: Group, GroupMembership, Event (rewritten from legacy placeholder to Phase 06 schema: organiser_type/organiser_id polymorphism, starts_at/ends_at, attendee_count, status, optional group_id/business_id), EventAttendance. Two services kept separate per the audit: GroupService (`base44/functions/group`) and EventService (`base44/functions/event`), each the sole writer of its entities (Single-Writer). Shared module `base44/shared/community.ts` (group/event registries, ADR-039 tier gates, group-scoped role helpers). content-moderation delegate extended for Group/Event (removed_by_moderation ↔ restored); AuditActionType registry + AuditLog enum extended with `event_cancelled` and `group_member_removed`. UI: Groups Directory, Group Detail (join/leave/invite/approve/promote/remove + pending panel + create-event-for-group), Create Group, Events Directory (starts_at ASC), Event Detail (going/interested/withdraw + vehicle selector + cancel + attendee list), Create Event (group-connected via listManagedGroups). Business-organised/Business-connected Event path built generically (BizMgr/BizOwn check via BusinessMembership) but UNTESTED — deferred to Phase 07, explicitly tracked, never marked passing. Verified via backend tests: createGroup + atomic owner membership; getGroup (members/my_membership/enrichment); createEvent standalone + group-connected (GrpOwn check passed); attendEvent create→update-in-place (uniqueness, no duplicate); attendee_count recompute (interested not counted as going); leaveGroup sole-owner rejection (422); cancelEvent → cancelled + `event_cancelled` audit log; listDirectory + getEvent enrichment. Inferred methods per Architecture Q1: `approveMember` (pending→active, required by §8.2 approve/reject panel); ownership-transfer via `changeMemberRole(target, owner)` auto-demoting caller (Architecture Q4). Groups Directory sort defaults to member_count desc (Architecture Q2 — no explicit sort in locked design). Review/Lock steps remain the user's gated steps. |
 | 2026-07-23 | 05 | **Phase 05 LOCKED.** Final verification passed: full appeal-overturn lifecycle verified end-to-end (recordAppeal→resolveAppeal overturned → new `content_restored` ModerationAction row, original `content_removed` action_type unchanged per append-only rule; post status restored to `published` via content-moderation Single-Writer delegate; reversal mirrors a `moderation_action_applied` AuditLog with `reverses:` context). escalateCase (open→escalated) + re-escalate 409 + Admin-only resolveCase on escalated — all verified. `moderation_action_applied` is the single audit mirror for every action type incl. `listing_removed` (per §2.8). Five spec ambiguities resolved as no-op defaults (ModerationCaseNote author via built-in created_by_id; reopen→open; under_review reserved; queue = all non-resolved; single audit mirror) — none clearly required a change. Phase 05 treated as read-only from this point; only targeted bug fixes permitted. |
