@@ -40,11 +40,16 @@ export async function createNotification(
     throw new Error(`createNotification: invalid target_type ${target_type}`);
   }
 
+  // Phase 09: in-app delivery succeeds at row creation (the Notification row
+  // existing IS the delivery — it is shown in the recipient's inbox). External
+  // delivery channels (email/push), when integrated, will drive 'failed' rows
+  // that the NotificationDeliveryRetry job retries with exponential backoff.
   return await base44.asServiceRole.entities.Notification.create({
     recipient_id,
     notification_type,
     actor_id,
     target_type,
     target_id,
+    delivery_status: "sent",
   });
 }

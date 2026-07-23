@@ -46,10 +46,16 @@ function notFuture(dateStr: string): boolean {
 
 /**
  * TimelineEntryPublished → NotificationService (vehicle followers).
- * Notifies every user following this vehicle that a new timeline entry was
- * published. Private entries are never pushed to followers. The entry author
- * is excluded (it's their own vehicle). Fire-and-forget: a notification
- * failure never blocks the publish.
+ * Notifies the users following this vehicle that a new timeline entry was
+ * published — but only those who could actually SEE the entry, respecting the
+ * same visibility check as the entry itself:
+ *   - private              → nobody (owner only).
+ *   - approved_connections → only vehicle-followers who are also an approved
+ *                            connection of the owner (a mutual user-follow).
+ *   - public / followers   → every (non-author) vehicle-follower.
+ * A follower who could not see the entry never receives a notification about
+ * it. The entry author is always excluded (it's their own vehicle).
+ * Fire-and-forget: a notification failure never blocks the publish.
  */
 async function notifyVehicleFollowers(base44: any, vehicleId: string, authorId: string, visibility: string | undefined) {
   if (visibility === "private") return;
@@ -57,16 +63,43 @@ async function notifyVehicleFollowers(base44: any, vehicleId: string, authorId: 
     const followers = await base44.asServiceRole.entities.Follow.filter({
       target_type: "vehicle", target_id: vehicleId,
     });
-    await Promise.all(followers.map((f: any) => {
-      if (f.follower_id === authorId) return Promise.resolve();
-      return createNotification(base44, {
+    const eligible = followers.filter((f: any) => f.follower_id !== authorId);
+    if (eligible.length === 0) return;
+
+    // approved_connections: a vehicle-follower sees the entry (and is notified)
+    // only if they are also an approved connection of the owner. With no
+    // separate connection-approval entity, an "approved connection" is a
+    // mutual user-follow (the owner follows them back). Everyone else is
+    // excluded — a follower who is not an approved connection does not receive
+    // a notification about an entry they cannot see.
+    if (visibility === "approved_connections") {
+      const authorFollows = await base44.asServiceRole.entities.Follow.filter({
+        follower_id: authorId, target_type: "user",
+      });
+      const connectionIds = new Set(authorFollows.map((f: any) => f.target_id));
+      const connected = eligible.filter((f: any) => connectionIds.has(f.follower_id));
+      await Promise.all(connected.map((f: any) =>
+        createNotification(base44, {
+          recipient_id: f.follower_id,
+          notification_type: NotificationType.NEW_VEHICLE_UPDATE,
+          actor_id: authorId,
+          target_type: "vehicle",
+          target_id: vehicleId,
+        }).catch(() => {}),
+      ));
+      return;
+    }
+
+    // public / followers — notify every (non-author) vehicle-follower.
+    await Promise.all(eligible.map((f: any) =>
+      createNotification(base44, {
         recipient_id: f.follower_id,
         notification_type: NotificationType.NEW_VEHICLE_UPDATE,
         actor_id: authorId,
         target_type: "vehicle",
         target_id: vehicleId,
-      }).catch(() => {});
-    }));
+      }).catch(() => {}),
+    ));
   } catch {}
 }
 

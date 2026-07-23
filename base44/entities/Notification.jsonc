@@ -40,6 +40,27 @@
       "type": "string",
       "format": "date-time",
       "description": "Null = unread."
+    },
+    "delivery_status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "sent",
+        "failed",
+        "permanently_failed"
+      ],
+      "default": "sent",
+      "description": "Phase 09 delivery lifecycle. In-app notifications are delivered at row creation (createNotification writes 'sent'). 'failed' rows are retried by the NotificationDeliveryRetry workflow; after the 5th failed retry attempt the row is marked 'permanently_failed' and excluded from all future runs (retained for support/debugging, never deleted). 'pending' is reserved for future async external delivery channels (email/push) not yet integrated."
+    },
+    "retry_count": {
+      "type": "number",
+      "default": 0,
+      "description": "Phase 09: number of failed delivery retries performed for this notification. Incremented on each failed retry attempt; reset to 0 on successful delivery (sent)."
+    },
+    "last_attempt_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Phase 09: timestamp of the most recent delivery attempt. Drives the exponential backoff (1,2,4,8,16 min) for the retry job's due check."
     }
   },
   "required": [

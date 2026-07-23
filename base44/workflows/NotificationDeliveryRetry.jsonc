@@ -1,0 +1,45 @@
+{
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "*/30 * * * *",
+      "one_time_date": null,
+      "timezone": "Australia/Melbourne",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "name": "Notification Delivery Retry",
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "notification_delivery_retry",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "retry_failed_notifications": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "notification-retry",
+            "args": {}
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Retry failed notification deliveries",
+            "description": "Best-effort retry, exponential backoff (1,2,4,8,16 min), max 5 attempts."
+          }
+        }
+      }
+    ]
+  },
+  "description": "Every 30 minutes: retries Notification rows with delivery_status='failed' (exponential backoff 1,2,4,8,16 min, max 5 attempts). After the 5th failed attempt the row is marked permanently_failed and excluded from future runs. Class C best-effort \u2014 a delivery failure never affects the authoritative write that triggered the notification."
+}
