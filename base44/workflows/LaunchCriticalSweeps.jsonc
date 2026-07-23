@@ -1,0 +1,63 @@
+{
+  "name": "Launch Critical Sweeps",
+  "description": "Every 30 minutes: the two launch-critical integrity sweeps \u2014 invalid polymorphic references and duplicate active records. Alerts (email to admins on 0\u2192>0 transition + dashboard alert state) on any violation found.",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "*/30 * * * *",
+      "one_time_date": null,
+      "timezone": "Australia/Melbourne",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "launch_critical_sweeps",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "invalid_refs": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "reconcile",
+            "args": {
+              "action": "invalid_polymorphic_reference_sweep"
+            }
+          },
+          "then": "duplicate_records",
+          "x-base44": {
+            "title": "Invalid polymorphic reference sweep",
+            "description": "launch-critical"
+          }
+        }
+      },
+      {
+        "duplicate_records": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "reconcile",
+            "args": {
+              "action": "duplicate_active_record_detection"
+            }
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Duplicate active-record detection",
+            "description": "launch-critical"
+          }
+        }
+      }
+    ]
+  }
+}

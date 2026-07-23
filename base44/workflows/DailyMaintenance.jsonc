@@ -1,0 +1,106 @@
+{
+  "name": "Daily Maintenance",
+  "description": "Daily 03:00: pending-deletion processing, stale moderation-access-grant expiry, AuditLog append-only integrity, orphaned-Media cleanup, generic failed-side-effect retry. Idempotent.",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "0 3 * * *",
+      "one_time_date": null,
+      "timezone": "Australia/Melbourne",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "daily_maintenance",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "pending_deletion": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "reconcile",
+            "args": {
+              "action": "pending_deletion_processing"
+            }
+          },
+          "then": "stale_grants",
+          "x-base44": {
+            "title": "Pending-deletion processing"
+          }
+        }
+      },
+      {
+        "stale_grants": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "reconcile",
+            "args": {
+              "action": "stale_moderation_access_grant_expiry"
+            }
+          },
+          "then": "auditlog_integrity",
+          "x-base44": {
+            "title": "Stale mod-grant expiry"
+          }
+        }
+      },
+      {
+        "auditlog_integrity": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "reconcile",
+            "args": {
+              "action": "auditlog_append_only_integrity"
+            }
+          },
+          "then": "orphaned_media",
+          "x-base44": {
+            "title": "AuditLog integrity"
+          }
+        }
+      },
+      {
+        "orphaned_media": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "reconcile",
+            "args": {
+              "action": "orphaned_media_cleanup"
+            }
+          },
+          "then": "failed_side_effects",
+          "x-base44": {
+            "title": "Orphaned Media cleanup"
+          }
+        }
+      },
+      {
+        "failed_side_effects": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "reconcile",
+            "args": {
+              "action": "failed_side_effect_retry"
+            }
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Failed-side-effect retry"
+          }
+        }
+      }
+    ]
+  }
+}

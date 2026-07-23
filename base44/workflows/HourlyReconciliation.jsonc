@@ -1,0 +1,107 @@
+{
+  "name": "Hourly Reconciliation",
+  "description": "Every hour: reconcile denormalized counters (Post likes/comments, Business review aggregate, Event attendance, Group members, Marketplace conversation count) against their source-of-truth entities. Idempotent.",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "0 * * * *",
+      "one_time_date": null,
+      "timezone": "Australia/Melbourne",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "hourly_reconciliation",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "post_counters": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "reconcile",
+            "args": {
+              "action": "post_counter_reconciliation"
+            }
+          },
+          "then": "business_reviews",
+          "x-base44": {
+            "title": "Post counters",
+            "description": "likes/comments"
+          }
+        }
+      },
+      {
+        "business_reviews": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "reconcile",
+            "args": {
+              "action": "business_review_aggregate_reconciliation"
+            }
+          },
+          "then": "event_attendance",
+          "x-base44": {
+            "title": "Business review aggregate"
+          }
+        }
+      },
+      {
+        "event_attendance": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "reconcile",
+            "args": {
+              "action": "event_attendance_reconciliation"
+            }
+          },
+          "then": "group_members",
+          "x-base44": {
+            "title": "Event attendance count"
+          }
+        }
+      },
+      {
+        "group_members": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "reconcile",
+            "args": {
+              "action": "group_member_reconciliation"
+            }
+          },
+          "then": "marketplace_conversations",
+          "x-base44": {
+            "title": "Group member count"
+          }
+        }
+      },
+      {
+        "marketplace_conversations": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "reconcile",
+            "args": {
+              "action": "marketplace_conversation_count_reconciliation"
+            }
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Marketplace conversation count"
+          }
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "name": "JobStatus",
+  "type": "object",
+  "properties": {
+    "job_name": {
+      "type": "string",
+      "description": "Phase 11 background-job registry name. Append-only run log (one row per job execution)."
+    },
+    "run_status": {
+      "type": "string",
+      "enum": [
+        "success",
+        "failure"
+      ],
+      "description": "success = the job completed without throwing; failure = an exception was caught."
+    },
+    "alerts": {
+      "type": "number",
+      "default": 0,
+      "description": "Violation/alert count. >0 for the two launch-critical jobs means an alert state (surfaced on the dashboard + emailed to admins on the 0\u2192>0 transition). Non-critical jobs use 0 unless they surface integrity violations."
+    },
+    "alert_details": {
+      "type": "string",
+      "description": "JSON string of violation details (capped). Nullable."
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "finished_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "is_launch_critical": {
+      "type": "boolean",
+      "default": false
+    },
+    "summary": {
+      "type": "string",
+      "description": "Short human-readable run summary."
+    }
+  },
+  "required": [
+    "job_name",
+    "run_status"
+  ]
+}
