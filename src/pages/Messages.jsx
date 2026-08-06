@@ -1,6 +1,6 @@
 import React from "react";
 import { base44 } from "@/api/base44Client";
-import { Send, MessageCircle, ArrowLeft, Paperclip, X, FileText } from "lucide-react";
+import { Send, MessageCircle, ArrowLeft, Paperclip, X, FileText, Plus } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 
 export default function Messages() {
@@ -15,7 +15,29 @@ export default function Messages() {
   const [attachment, setAttachment] = React.useState(null);
   const [uploading, setUploading] = React.useState(false);
   const [enlargedImage, setEnlargedImage] = React.useState(null);
+  const [showNew, setShowNew] = React.useState(false);
+  const [recipient, setRecipient] = React.useState("");
+  const [starting, setStarting] = React.useState(false);
+  const [newError, setNewError] = React.useState(null);
   const fileInputRef = React.useRef(null);
+
+  const startConversation = async () => {
+    const name = recipient.trim();
+    if (!name || starting) return;
+    setStarting(true); setNewError(null);
+    try {
+      const conv = await base44.entities.Conversation.create({ participant_name: name, last_message: "" });
+      setConversations((c) => [conv, ...c]);
+      setActive(conv);
+      setShowThread(true);
+      setShowNew(false);
+      setRecipient("");
+    } catch (e) {
+      setNewError(e.message || "Could not start conversation");
+    } finally {
+      setStarting(false);
+    }
+  };
 
   const loadConversations = () => {
     base44.entities.Conversation.list("-updated_date", 50).then((c) => {
@@ -95,7 +117,10 @@ export default function Messages() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-black">Messages</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-black">Messages</h1>
+        <button onClick={() => setShowNew(true)} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-sm font-bold text-primary-foreground"><Plus className="h-4 w-4" /> New</button>
+      </div>
       <div className="grid gap-4 lg:grid-cols-3">
         <div className={`rounded-2xl border border-border bg-card ${showThread ? "hidden lg:block" : "block"}`}>
           {loading ? (
@@ -103,7 +128,10 @@ export default function Messages() {
           ) : conversations.length === 0 ? (
             <div className="p-6 text-center text-sm text-muted-foreground">
               <MessageCircle className="mx-auto mb-2 h-8 w-8" />
-              No conversations yet. Message a seller from a listing.
+              No conversations yet.
+              <div className="mt-3">
+                <button onClick={() => setShowNew(true)} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground"><Plus className="h-4 w-4" /> New conversation</button>
+              </div>
             </div>
           ) : (
             conversations.map((c) => (
@@ -191,6 +219,24 @@ export default function Messages() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setEnlargedImage(null)}>
           <img src={enlargedImage} alt="" className="max-h-[90vh] max-w-full rounded-xl" />
           <button className="absolute right-4 top-4 rounded-full bg-black/50 p-2 text-white"><X className="h-5 w-5" /></button>
+        </div>
+      )}
+
+      {showNew && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setShowNew(false)}>
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-bold">New conversation</h2>
+              <button onClick={() => setShowNew(false)} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">Enter the recipient's display name or @handle to start a direct conversation.</p>
+            {newError && <div className="mt-2 rounded-lg border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">{newError}</div>}
+            <input value={recipient} onChange={(e) => setRecipient(e.target.value)} placeholder="Recipient name or @handle" className="mt-3 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+            <div className="mt-3 flex justify-end gap-2">
+              <button onClick={() => setShowNew(false)} className="rounded-xl border border-border px-4 py-2 text-sm font-medium">Cancel</button>
+              <button onClick={startConversation} disabled={!recipient.trim() || starting} className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground disabled:opacity-50">{starting ? "Starting..." : "Start"}</button>
+            </div>
+          </div>
         </div>
       )}
     </div>

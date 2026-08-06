@@ -12,6 +12,7 @@ import AuctionBidding from "@/components/AuctionBidding";
 import PromoteListing from "@/components/PromoteListing";
 import ShareModal from "@/components/ShareModal";
 import ListingEngagement from "@/components/ListingEngagement";
+import ReportDialog from "@/components/moderation/ReportDialog";
 import { getCurrentUser } from "@/lib/userIdentity";
 
 export default function ListingDetail() {
@@ -25,6 +26,7 @@ export default function ListingDetail() {
   const [checkingOut, setCheckingOut] = React.useState(false);
   const [topOffer, setTopOffer] = React.useState(null);
   const [showShare, setShowShare] = React.useState(false);
+  const [reportOpen, setReportOpen] = React.useState(false);
 
   React.useEffect(() => {
     base44.entities.Listing.get(id).then((l) => {
@@ -243,7 +245,7 @@ export default function ListingDetail() {
               <button onClick={() => setShowShare(true)} className="flex flex-col items-center gap-0.5 rounded-xl border border-border py-2 text-xs text-muted-foreground hover:border-primary hover:text-foreground">
                 <Share2 className="h-4 w-4" /> Share
               </button>
-              <button onClick={() => window.open(`mailto:?subject=Report: ${listing.title}&body=Reporting listing ${listing.id}`, "_self")} className="flex flex-col items-center gap-0.5 rounded-xl border border-border py-2 text-xs text-muted-foreground hover:border-primary hover:text-foreground">
+              <button onClick={() => setReportOpen(true)} className="flex flex-col items-center gap-0.5 rounded-xl border border-border py-2 text-xs text-muted-foreground hover:border-primary hover:text-foreground">
                 <Flag className="h-4 w-4" /> Report
               </button>
             </div>
@@ -281,6 +283,8 @@ export default function ListingDetail() {
       {showOffer && <OfferModal listing={listing} onClose={() => setShowOffer(false)} />}
 
       {showShare && <ShareModal title={listing.title} url={window.location.href} onClose={() => setShowShare(false)} />}
+
+      <ReportDialog targetType="listing" targetId={listing.id} open={reportOpen} onClose={() => setReportOpen(false)} />
     </div>
   );
 }

@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { ArrowLeft, MessageSquare, Tag, Clock, RefreshCw, Trash2, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, MessageSquare, Tag, Clock, RefreshCw, Trash2, CheckCircle2, Flag } from "lucide-react";
 import CategoryAttributeDisplay from "@/components/marketplace/CategoryAttributeDisplay";
 import QualityScore from "@/components/marketplace/QualityScore";
+import ReportDialog from "@/components/moderation/ReportDialog";
 
 const STATUS_META = {
   active: { l: "Active", c: "text-emerald-400" },
@@ -36,6 +37,7 @@ export default function MarketplaceListingDetail() {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [me, setMe] = useState(null);
+  const [reportOpen, setReportOpen] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -151,7 +153,12 @@ export default function MarketplaceListingDetail() {
         {isMod && listing.status === "pending_review" && (
           <button disabled={busy === "appr"} onClick={() => call("approveListing", { listing_id: id }, "appr")} className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">{busy === "appr" ? "..." : "Approve"}</button>
         )}
+        {!isOwner && me && (
+          <button onClick={() => setReportOpen(true)} className="inline-flex items-center gap-1.5 rounded-xl border border-border px-4 py-2.5 text-sm font-bold text-muted-foreground hover:border-primary hover:text-foreground"><Flag className="h-4 w-4" /> Report</button>
+        )}
       </div>
+
+      <ReportDialog targetType="listing" targetId={listing.id} open={reportOpen} onClose={() => setReportOpen(false)} />
     </div>
   );
 }

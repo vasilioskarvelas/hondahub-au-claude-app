@@ -15,11 +15,18 @@ export default function Profile() {
   const [coverId, setCoverId] = React.useState(null);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
   const navigate = useNavigate();
 
   const load = async () => {
+    setLoading(true); setError(null);
+    let timer;
     try {
-      const u = await base44.auth.me();
+      const u = await Promise.race([
+        base44.auth.me(),
+        new Promise((_, rej) => { timer = setTimeout(() => rej(new Error("Session check timed out. Tap Retry.")), 12000); }),
+      ]);
+      clearTimeout(timer);
       setUser(u);
       setAvatarId(u.avatar_media_id || null);
       setCoverId(u.cover_media_id || null);
@@ -30,11 +37,17 @@ export default function Profile() {
         location_general: u.location_general || "",
         phone: u.phone || "",
       });
-      // Lazy-init TrustScore (UserRegistered → TrustScoreService.initialize).
-      const res = await base44.functions.invoke("trust-score", { action: "init" });
-      setTrustScore(res.data?.trust_score || null);
+      // Lazy-init TrustScore (UserRegistered → TrustScoreService.initialize) — non-blocking.
+      try {
+        const res = await base44.functions.invoke("trust-score", { action: "init" });
+        setTrustScore(res.data?.trust_score || null);
+      } catch { /* trust score is non-blocking; profile still loads */ }
     } catch (e) {
-      setError(e.message);
+      clearTimeout(timer);
+      if (e?.status === 401 || e?.status === 403) { navigate("/login"); return; }
+      setError(e?.message || "Could not load your session");
+    } finally {
+      setLoading(false);
     }
   };
   React.useEffect(() => { load(); }, []);
@@ -69,8 +82,22 @@ export default function Profile() {
     await base44.auth.logout("/");
   };
 
-  if (!user) {
+  if (loading) {
     return <div className="flex h-64 items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-secondary border-t-primary" /></div>;
+  }
+  if (!user) {
+    return (
+      <div className="mx-auto max-w-lg">
+        <div className="rounded-2xl border border-destructive/40 bg-destructive/10 p-6 text-center">
+          <h2 className="text-base font-bold text-destructive">Couldn't load your profile</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{error || "Your session could not be loaded."}</p>
+          <div className="mt-4 flex justify-center gap-2">
+            <button onClick={load} className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground">Retry</button>
+            <button onClick={() => navigate("/login")} className="rounded-xl border border-border px-4 py-2 text-sm font-medium">Sign in</button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   const tier = trustScore?.current_tier || user.account_tier || AccountTier.NEW_MEMBER;

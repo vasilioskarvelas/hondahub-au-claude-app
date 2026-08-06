@@ -4,7 +4,7 @@ import { Plus } from "lucide-react";
 import { getCurrentUser } from "@/lib/userIdentity";
 import StoryViewer from "./StoryViewer";
 
-export default function StoriesBar() {
+export default function StoriesBar({ onCreatePost }) {
   const [stories, setStories] = React.useState([]);
   const [viewing, setViewing] = React.useState(null);
   const [uploading, setUploading] = React.useState(false);
@@ -52,7 +52,7 @@ export default function StoriesBar() {
     <>
       <div className="flex gap-3 overflow-x-auto border-b border-border px-3 py-3 scrollbar-hide">
         {/* Your Story */}
-        <button onClick={() => (myGroupIndex >= 0 ? setViewing(myGroupIndex) : fileInputRef.current?.click())} className="flex shrink-0 flex-col items-center gap-1">
+        <button onClick={() => (onCreatePost ? onCreatePost() : myGroupIndex >= 0 ? setViewing(myGroupIndex) : fileInputRef.current?.click())} className="flex shrink-0 flex-col items-center gap-1">
           <div className="relative">
             <div className={`rounded-full p-0.5 ${myGroupIndex >= 0 && !isViewed(storyGroups[myGroupIndex]) ? "bg-gradient-to-tr from-primary to-amber-400" : "bg-secondary"}`}>
               <div className="rounded-full border-2 border-background p-0.5">

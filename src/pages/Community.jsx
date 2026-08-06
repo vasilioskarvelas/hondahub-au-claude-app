@@ -150,7 +150,7 @@ export default function Community() {
       <AnimatePresence mode="wait">
         {view === "feed" && (
           <motion.div key="feed" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
-            <StoriesBar />
+            <StoriesBar onCreatePost={() => setShowCreate(true)} />
 
             {/* Engine club chips */}
             <div className="flex gap-2 overflow-x-auto border-b border-border px-4 py-2 scrollbar-hide">
@@ -219,7 +219,7 @@ export default function Community() {
         )}
       </AnimatePresence>
 
-      {showCreate && <CreatePostModal onClose={() => setShowCreate(false)} onSaved={() => { setShowCreate(false); load(); }} />}
+      <CreatePostModal open={showCreate} onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); load(); }} />
     </div>
   );
 }

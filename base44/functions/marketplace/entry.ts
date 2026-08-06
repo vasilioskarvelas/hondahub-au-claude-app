@@ -638,6 +638,7 @@ Deno.serve(async (req) => {
         ? (conversation.poster_id === user.id ? "buyer" : "seller")
         : (conversation.poster_id === user.id ? "seller" : "buyer");
       // Read-tracking: mark the caller's read pointer on view (Section E.2).
+      const isPoster = conversation.poster_id === user.id;
       const readField = isPoster ? "poster_last_read_at" : "initiator_last_read_at";
       const nowIso = new Date().toISOString();
       const updated = await base44.entities.MarketplaceConversation.update(body.conversation_id, { [readField]: nowIso });
