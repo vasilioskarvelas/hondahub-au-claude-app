@@ -1,0 +1,63 @@
+# .github/workflows/honda-hub-tests.yml
+# Place this file at .github/workflows/honda-hub-tests.yml in the repo.
+# Runs the Playwright journey suites against the deployed QA app and, on failure,
+# uploads the HTML report as a build artifact. Results also auto-report into the
+# in-app Testing Command Centre (/testing) via the test-runner backend function.
+
+name: Honda Hub Tests
+
+on:
+  schedule:
+    - cron: '0 16 * * *'   # 02:00 Australia/Melbourne (UTC+10) — nightly full run
+  push:
+    branches: [main]
+  workflow_dispatch: {}     # allow manual runs from the Actions tab
+
+concurrency:
+  group: honda-hub-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps
+
+      - name: Run Playwright suites
+        run: npx playwright test
+        env:
+          HONDA_HUB_URL:      ${{ secrets.HONDA_HUB_URL }}
+          TEST_ADMIN_EMAIL:   ${{ secrets.TEST_ADMIN_EMAIL }}
+          TEST_ADMIN_PASSWORD: ${{ secrets.TEST_ADMIN_PASSWORD }}
+          TEST_USER1_EMAIL:   ${{ secrets.TEST_USER1_EMAIL }}
+          TEST_USER1_PASSWORD: ${{ secrets.TEST_USER1_PASSWORD }}
+          TEST_USER2_EMAIL:   ${{ secrets.TEST_USER2_EMAIL }}
+          TEST_USER2_PASSWORD: ${{ secrets.TEST_USER2_PASSWORD }}
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14
+
+# Notes
+# - Cron is UTC. 0 16 * * * = 02:00 next day in Australia/Melbourne during AEST (UTC+10).
+#   During AEDT (UTC+11) this fires at 03:00 local; adjust to '0 15 * * *' if you want a
+#   fixed 02:00 local year-round, or accept the one-hour daylight-saving drift.
+# - `npm ci` requires package-lock.json (present in the repo). If Playwright isn't yet a
+#   devDependency, add it: `npm install -D @playwright/test` and commit the lockfile change.
+# - Add the secrets under Settings → Secrets and variables → Actions. Use ONLY TEST_ accounts.
