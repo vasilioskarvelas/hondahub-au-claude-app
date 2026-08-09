@@ -18,6 +18,7 @@ export default function Home() {
   const [partnerDiscounts, setPartnerDiscounts] = React.useState([]);
   const [trending, setTrending] = React.useState([]);
   const [communityPosts, setCommunityPosts] = React.useState([]);
+  const [liveCounts, setLiveCounts] = React.useState({ listings: 0, garage_builds: 0, members: 0 });
 
   React.useEffect(() => {
     base44.entities.Listing.filter({}, "-created_date", 12).then((l) => {
@@ -30,20 +31,18 @@ export default function Home() {
     base44.entities.PartnerDiscount.list("-created_date", 20).then((d) => setPartnerDiscounts(d));
     base44.entities.Listing.filter({ status: "active" }, "-views", 6).then((t) => setTrending(t));
     base44.entities.CommunityPost.list("-likes", 100).then((p) => setCommunityPosts(p));
+    base44.functions.invoke("homepage-stats", {}).then((res) => {
+      if (res.data?.ok) setLiveCounts(res.data.counts);
+    }).catch(() => {});
   }, []);
 
   const featuredCars = listings.filter((l) => l.type === "car" && l.featured);
   const featuredParts = listings.filter((l) => l.type === "part" && l.featured);
 
   const stats = {
-    total: listings.length,
-    cars: listings.filter((l) => l.type === "car").length,
-    parts: listings.filter((l) => l.type === "part").length,
-    sellers: new Set(listings.map((l) => l.seller_name).filter(Boolean)).size,
-    members: new Set([
-      ...listings.map((l) => l.seller_name),
-      ...communityPosts.map((p) => p.author_name),
-    ].filter(Boolean)).size,
+    total: liveCounts.listings,
+    garageCars: liveCounts.garage_builds,
+    members: liveCounts.members,
     prizeValue: 500,
   };
 
