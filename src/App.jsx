@@ -18,7 +18,6 @@ import Events from '@/pages/Events';
 import Messages from '@/pages/Messages';
 import Settings from '@/pages/Settings';
 import Pricing from '@/pages/Pricing';
-import Community from '@/pages/Community';
 import Shop from '@/pages/PartnerDiscounts';
 import Giveaway from '@/pages/Giveaway';
 import Garage from '@/pages/Garage';
