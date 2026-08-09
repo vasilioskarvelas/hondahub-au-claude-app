@@ -140,9 +140,8 @@ function hasNonEmptyArray(a: any): boolean { return Array.isArray(a) && a.length
  * Returns { score (0–100), checklist (ordered { key, label, ok }) }.
  * For vehicle listings the Compatibility component is omitted and the score is
  * scaled from the remaining 80 points. Compatibility is satisfied by an active
- * seller selection — the ADR-043 plural arrays if present, else the ADR-042
- * singular compatible_model/compatible_chassis_code (the defaulting
- * compatible_make="Honda" does not represent an active choice).
+ * seller selection in any of the three ADR-043 bounded-enum arrays
+ * (compatible_models, compatible_chassis_codes, compatible_engine_families).
  */
 export function computeListingQualityScore(listing: any): { score: number; checklist: { key: string; label: string; ok: boolean }[] } {
   const photos = Array.isArray(listing.photo_urls) ? listing.photo_urls.length : 0;
