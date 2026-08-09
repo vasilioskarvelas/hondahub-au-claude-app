@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
@@ -57,6 +58,12 @@ import BusinessVerificationQueue from '@/pages/BusinessVerificationQueue';
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin, checkAppState } = useAuth();
 
+  useEffect(() => {
+    if (authError?.type === 'auth_required') {
+      navigateToLogin();
+    }
+  }, [authError, navigateToLogin]);
+
   if (isLoadingPublicSettings || isLoadingAuth) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-background">
@@ -68,14 +75,11 @@ const AuthenticatedApp = () => {
   if (authError) {
     if (authError.type === 'user_not_registered') {
       return <UserNotRegisteredError />;
-    } else if (authError.type === 'auth_required') {
-      navigateToLogin();
-      return null;
     }
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-background p-4">
         <div className="mx-auto max-w-md rounded-2xl border border-destructive/40 bg-destructive/10 p-6 text-center">
-          <h2 className="text-base font-bold text-destructive">Couldn't load the app</h2>
+          <h2 className="text-base font-bold text-destructive">Unable to load Honda Hub</h2>
           <p className="mt-1 text-sm text-muted-foreground">{authError.message || "Your session could not be loaded."}</p>
           <div className="mt-4 flex justify-center gap-2">
             <button onClick={() => checkAppState()} className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground">Retry</button>

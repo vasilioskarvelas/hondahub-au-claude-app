@@ -2,12 +2,14 @@ import React from "react";
 import { base44 } from "@/api/base44Client";
 import { Settings, MapPin, Save, LogOut } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/lib/AuthContext";
 import TierBadge from "@/components/identity/TierBadge";
 import MediaField from "@/components/identity/MediaField";
 import { AccountTier } from "@/lib/registries";
 
 export default function Profile() {
-  const [user, setUser] = React.useState(null);
+  const { user: authUser, checkAppState } = useAuth();
+  const [user, setUser] = React.useState(authUser);
   const [trustScore, setTrustScore] = React.useState(null);
   const [editing, setEditing] = React.useState(false);
   const [form, setForm] = React.useState({});
@@ -15,42 +17,27 @@ export default function Profile() {
   const [coverId, setCoverId] = React.useState(null);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState(null);
-  const [loading, setLoading] = React.useState(true);
   const navigate = useNavigate();
 
-  const load = async () => {
-    setLoading(true); setError(null);
-    let timer;
-    try {
-      const u = await Promise.race([
-        base44.auth.me(),
-        new Promise((_, rej) => { timer = setTimeout(() => rej(new Error("Session check timed out. Tap Retry.")), 12000); }),
-      ]);
-      clearTimeout(timer);
-      setUser(u);
-      setAvatarId(u.avatar_media_id || null);
-      setCoverId(u.cover_media_id || null);
-      setForm({
-        handle: u.handle || "",
-        display_name: u.display_name || u.full_name || "",
-        bio: u.bio || "",
-        location_general: u.location_general || "",
-        phone: u.phone || "",
-      });
-      // Lazy-init TrustScore (UserRegistered → TrustScoreService.initialize) — non-blocking.
-      try {
-        const res = await base44.functions.invoke("trust-score", { action: "init" });
-        setTrustScore(res.data?.trust_score || null);
-      } catch { /* trust score is non-blocking; profile still loads */ }
-    } catch (e) {
-      clearTimeout(timer);
-      if (e?.status === 401 || e?.status === 403) { navigate("/login"); return; }
-      setError(e?.message || "Could not load your session");
-    } finally {
-      setLoading(false);
-    }
-  };
-  React.useEffect(() => { load(); }, []);
+  // Use the globally-bootstrapped user from AuthContext (no separate API call,
+  // no separate 12s timeout — the global bootstrap handles all of that).
+  React.useEffect(() => {
+    if (!authUser) return;
+    setUser(authUser);
+    setAvatarId(authUser.avatar_media_id || null);
+    setCoverId(authUser.cover_media_id || null);
+    setForm({
+      handle: authUser.handle || "",
+      display_name: authUser.display_name || authUser.full_name || "",
+      bio: authUser.bio || "",
+      location_general: authUser.location_general || "",
+      phone: authUser.phone || "",
+    });
+    // Lazy-init TrustScore — non-blocking.
+    base44.functions.invoke("trust-score", { action: "init" })
+      .then((res) => setTrustScore(res.data?.trust_score || null))
+      .catch(() => {});
+  }, [authUser]);
 
   const handleSave = async () => {
     setSaving(true); setError(null);
@@ -82,9 +69,6 @@ export default function Profile() {
     await base44.auth.logout("/");
   };
 
-  if (loading) {
-    return <div className="flex h-64 items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-secondary border-t-primary" /></div>;
-  }
   if (!user) {
     return (
       <div className="mx-auto max-w-lg">
@@ -92,7 +76,7 @@ export default function Profile() {
           <h2 className="text-base font-bold text-destructive">Couldn't load your profile</h2>
           <p className="mt-1 text-sm text-muted-foreground">{error || "Your session could not be loaded."}</p>
           <div className="mt-4 flex justify-center gap-2">
-            <button onClick={load} className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground">Retry</button>
+            <button onClick={() => checkAppState()} className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground">Retry</button>
             <button onClick={() => navigate("/login")} className="rounded-xl border border-border px-4 py-2 text-sm font-medium">Sign in</button>
           </div>
         </div>

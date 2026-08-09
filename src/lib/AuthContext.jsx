@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
 import { appParams } from '@/lib/app-params';
 import { createAxiosClient } from '@base44/sdk/dist/utils/axios-client';
@@ -13,16 +13,21 @@ export const AuthProvider = ({ children }) => {
   const [authError, setAuthError] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [appPublicSettings, setAppPublicSettings] = useState(null); // Contains only { id, public_settings }
+  const bootstrapIdRef = useRef(0);
 
   useEffect(() => {
     checkAppState();
+    return () => { bootstrapIdRef.current++; };
   }, []);
 
   const checkAppState = async () => {
+    const bootstrapId = ++bootstrapIdRef.current;
+    let settingsTimer;
     try {
       setIsLoadingPublicSettings(true);
+      setIsLoadingAuth(true);
       setAuthError(null);
-      
+
       // First, check app public settings (with token if available)
       // This will tell us if auth is required, user not registered, etc.
       const appClient = createAxiosClient({
@@ -33,28 +38,31 @@ export const AuthProvider = ({ children }) => {
         token: appParams.token, // Include token if available
         interceptResponses: true
       });
-      
+
       try {
-        let settingsTimer;
         const publicSettings = await Promise.race([
           appClient.get(`/prod/public-settings/by-id/${appParams.appId}`),
           new Promise((_, rej) => { settingsTimer = setTimeout(() => rej(new Error("Connection timed out. Tap Retry.")), 12000); }),
         ]);
         clearTimeout(settingsTimer);
+        if (bootstrapIdRef.current !== bootstrapId) return; // stale — a newer bootstrap started
         setAppPublicSettings(publicSettings);
-        
+
         // If we got the app public settings successfully, check if user is authenticated
         if (appParams.token) {
-          await checkUserAuth();
+          await checkUserAuth(bootstrapId);
         } else {
           setIsLoadingAuth(false);
           setIsAuthenticated(false);
           setAuthChecked(true);
         }
+        if (bootstrapIdRef.current !== bootstrapId) return; // stale
         setIsLoadingPublicSettings(false);
       } catch (appError) {
+        clearTimeout(settingsTimer);
+        if (bootstrapIdRef.current !== bootstrapId) return; // stale
         console.error('App state check failed:', appError);
-        
+
         // Handle app-level errors
         if (appError.status === 403 && appError.data?.extra_data?.reason) {
           const reason = appError.data.extra_data.reason;
@@ -84,6 +92,7 @@ export const AuthProvider = ({ children }) => {
         setIsLoadingAuth(false);
       }
     } catch (error) {
+      if (bootstrapIdRef.current !== bootstrapId) return; // stale
       console.error('Unexpected error:', error);
       setAuthError({
         type: 'unknown',
@@ -94,25 +103,28 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const checkUserAuth = async () => {
+  const checkUserAuth = async (bootstrapId) => {
+    let authTimer;
     try {
       setIsLoadingAuth(true);
-      let authTimer;
       const currentUser = await Promise.race([
         base44.auth.me(),
         new Promise((_, rej) => { authTimer = setTimeout(() => rej(new Error("Session check timed out. Tap Retry.")), 12000); }),
       ]);
       clearTimeout(authTimer);
+      if (bootstrapId !== undefined && bootstrapIdRef.current !== bootstrapId) return; // stale
       setUser(currentUser);
       setIsAuthenticated(true);
       setIsLoadingAuth(false);
       setAuthChecked(true);
     } catch (error) {
+      clearTimeout(authTimer);
+      if (bootstrapId !== undefined && bootstrapIdRef.current !== bootstrapId) return; // stale
       console.error('User auth check failed:', error);
       setIsLoadingAuth(false);
       setIsAuthenticated(false);
       setAuthChecked(true);
-      
+
       if (error.status === 401 || error.status === 403) {
         setAuthError({
           type: 'auth_required',
@@ -130,7 +142,7 @@ export const AuthProvider = ({ children }) => {
   const logout = (shouldRedirect = true) => {
     setUser(null);
     setIsAuthenticated(false);
-    
+
     if (shouldRedirect) {
       // Use the SDK's logout method which handles token cleanup and redirect
       base44.auth.logout(window.location.href);
@@ -146,9 +158,9 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      isAuthenticated, 
+    <AuthContext.Provider value={{
+      user,
+      isAuthenticated,
       isLoadingAuth,
       isLoadingPublicSettings,
       authError,
