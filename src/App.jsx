@@ -15,7 +15,6 @@ import ListingDetail from '@/pages/ListingDetail';
 import CreateListing from '@/pages/CreateListing';
 import Profile from '@/pages/Profile';
 import Events from '@/pages/Events';
-import Messages from '@/pages/Messages';
 import Settings from '@/pages/Settings';
 import Pricing from '@/pages/Pricing';
 import Shop from '@/pages/PartnerDiscounts';
