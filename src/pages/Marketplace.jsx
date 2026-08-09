@@ -26,6 +26,9 @@ const SORT_OPTIONS = [
   { v: "price_desc", l: "Price: high to low" },
   { v: "views", l: "Most viewed" },
 ];
+const FILTER_MODELS = [{ v: "civic", l: "Civic" }, { v: "integra", l: "Integra" }, { v: "accord", l: "Accord" }, { v: "crv", l: "CR-V" }, { v: "s2000", l: "S2000" }, { v: "nsx", l: "NSX" }, { v: "other", l: "Other" }];
+const FILTER_CHASSIS = [{ v: "eg", l: "EG" }, { v: "ek", l: "EK" }, { v: "dc2", l: "DC2" }, { v: "dc5", l: "DC5" }, { v: "ep3", l: "EP3" }, { v: "fn2", l: "FN2" }, { v: "cl7", l: "CL7" }, { v: "cl9", l: "CL9" }, { v: "fd2", l: "FD2" }, { v: "fk8", l: "FK8" }, { v: "fl5", l: "FL5" }, { v: "other", l: "Other" }];
+const FILTER_ENGINES = [{ v: "d_series", l: "D-Series" }, { v: "b_series", l: "B-Series" }, { v: "k_series", l: "K-Series" }, { v: "j_series", l: "J-Series" }, { v: "f_series", l: "F-Series" }, { v: "h_series", l: "H-Series" }, { v: "other", l: "Other" }];
 
 function priceLabel(l) {
   if (l.price_type === "free") return "Free";
@@ -38,7 +41,8 @@ export default function Marketplace() {
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({
-    listing_type: "", category: "", search: "", compatible_make: "", compatible_year: "",
+    listing_type: "", category: "", search: "",
+    compatible_models: [], compatible_chassis_codes: [], compatible_engine_families: [], compatible_year: "",
     brand: "", oem_or_aftermarket: "", shipping_available: false, pickup_available: false, sort: "",
   });
 
@@ -49,7 +53,9 @@ export default function Marketplace() {
       if (filters.listing_type) args.listing_type = filters.listing_type;
       if (filters.category) args.category = filters.category;
       if (filters.search) args.search = filters.search;
-      if (filters.compatible_make) args.compatible_make = filters.compatible_make;
+      if (filters.compatible_models?.length) args.compatible_models = filters.compatible_models;
+      if (filters.compatible_chassis_codes?.length) args.compatible_chassis_codes = filters.compatible_chassis_codes;
+      if (filters.compatible_engine_families?.length) args.compatible_engine_families = filters.compatible_engine_families;
       if (filters.compatible_year) args.compatible_year = Number(filters.compatible_year);
       if (filters.brand) args.brand = filters.brand;
       if (filters.oem_or_aftermarket) args.oem_or_aftermarket = filters.oem_or_aftermarket;
@@ -106,9 +112,23 @@ export default function Marketplace() {
           })}
         </div>
         {(filters.category && filters.category !== "vehicle") && (
-          <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
+          <div className="space-y-2 border-t border-border pt-3">
             <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Compatibility:</span>
-            <input value={filters.compatible_make} onChange={(e) => setFilters({ ...filters, compatible_make: e.target.value })} placeholder="Make" className="w-40 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs outline-none focus:border-primary" />
+            <div className="flex flex-wrap gap-1.5">
+              {FILTER_MODELS.map((o) => { const sel = filters.compatible_models.includes(o.v); return (
+                <button key={o.v} onClick={() => setFilters((f) => ({ ...f, compatible_models: sel ? f.compatible_models.filter((v) => v !== o.v) : [...f.compatible_models, o.v] }))} className={`rounded-full px-2.5 py-1 text-xs font-bold transition ${sel ? "bg-primary text-primary-foreground" : "border border-border text-muted-foreground"}`}>{o.l}</button>
+              ); })}
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {FILTER_CHASSIS.map((o) => { const sel = filters.compatible_chassis_codes.includes(o.v); return (
+                <button key={o.v} onClick={() => setFilters((f) => ({ ...f, compatible_chassis_codes: sel ? f.compatible_chassis_codes.filter((v) => v !== o.v) : [...f.compatible_chassis_codes, o.v] }))} className={`rounded-full px-2.5 py-1 text-xs font-bold transition ${sel ? "bg-primary text-primary-foreground" : "border border-border text-muted-foreground"}`}>{o.l}</button>
+              ); })}
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {FILTER_ENGINES.map((o) => { const sel = filters.compatible_engine_families.includes(o.v); return (
+                <button key={o.v} onClick={() => setFilters((f) => ({ ...f, compatible_engine_families: sel ? f.compatible_engine_families.filter((v) => v !== o.v) : [...f.compatible_engine_families, o.v] }))} className={`rounded-full px-2.5 py-1 text-xs font-bold transition ${sel ? "bg-primary text-primary-foreground" : "border border-border text-muted-foreground"}`}>{o.l}</button>
+              ); })}
+            </div>
             <input value={filters.compatible_year} onChange={(e) => setFilters({ ...filters, compatible_year: e.target.value })} placeholder="Year" className="w-24 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs outline-none focus:border-primary" />
           </div>
         )}

@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/AuthContext';
 
 const mainNav = [
   { to: "/", label: "Home", icon: Home },
-  { to: "/market", label: "Market", icon: ShoppingBag },
+  { to: "/marketplace", label: "Market", icon: ShoppingBag },
   { to: "/feed", label: "Feed", icon: Users },
   { to: "/events", label: "Events", icon: CalendarDays },
   { to: "/shop", label: "Shop", icon: ShoppingBag },
@@ -91,13 +91,13 @@ export default function Layout() {
             <Link to="/notifications" className="relative rounded-lg p-2 text-muted-foreground hover:bg-secondary hover:text-foreground">
               <Bell className="h-5 w-5" />
             </Link>
-            <Link to="/market" className="rounded-lg p-2 text-muted-foreground hover:bg-secondary hover:text-foreground md:hidden">
+            <Link to="/marketplace" className="rounded-lg p-2 text-muted-foreground hover:bg-secondary hover:text-foreground md:hidden">
               <Search className="h-5 w-5" />
             </Link>
             <Link to="/pricing" className="rounded-lg p-2 text-muted-foreground hover:bg-secondary hover:text-foreground">
               <Crown className="h-5 w-5" />
             </Link>
-            <Link to="/messages" className="relative rounded-lg p-2 text-muted-foreground hover:bg-secondary hover:text-foreground">
+            <Link to="/conversations" className="relative rounded-lg p-2 text-muted-foreground hover:bg-secondary hover:text-foreground">
               <MessageCircle className="h-5 w-5" />
             </Link>
           </div>

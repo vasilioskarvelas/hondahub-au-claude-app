@@ -96,18 +96,61 @@
       "type": "string",
       "description": "FK\u2192Vehicle. Required when category=vehicle AND listing_type=for_sale \u2014 must be owned by the poster (ownership validated via ReferenceResolverService + created_by_id check). Optional compatibility-context for other categories."
     },
-    "compatible_make": {
-      "type": "string",
-      "default": "Honda",
-      "description": "Compatibility filter. Only applies when category != vehicle."
+    "compatible_models": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "civic",
+          "integra",
+          "accord",
+          "crv",
+          "s2000",
+          "nsx",
+          "other"
+        ]
+      },
+      "default": [],
+      "description": "ADR-043 compatibility filter. Bounded enum array. Only applies when category != vehicle; must be empty for vehicle listings (server-enforced CATEGORY_FIELD_MISMATCH)."
     },
-    "compatible_model": {
-      "type": "string",
-      "description": "Compatibility filter. Only applies when category != vehicle."
+    "compatible_chassis_codes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "eg",
+          "ek",
+          "dc2",
+          "dc5",
+          "ep3",
+          "fn2",
+          "cl7",
+          "cl9",
+          "fd2",
+          "fk8",
+          "fl5",
+          "other"
+        ]
+      },
+      "default": [],
+      "description": "ADR-043 compatibility filter. Bounded enum array. Only applies when category != vehicle; must be empty for vehicle listings (server-enforced CATEGORY_FIELD_MISMATCH)."
     },
-    "compatible_chassis_code": {
-      "type": "string",
-      "description": "Compatibility filter (e.g. 'EK9'). Only applies when category != vehicle."
+    "compatible_engine_families": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "d_series",
+          "b_series",
+          "k_series",
+          "j_series",
+          "f_series",
+          "h_series",
+          "other"
+        ]
+      },
+      "default": [],
+      "description": "ADR-043 compatibility filter. Bounded enum array. Only applies when category != vehicle; must be empty for vehicle listings (server-enforced CATEGORY_FIELD_MISMATCH)."
     },
     "compatible_year_from": {
       "type": "number",

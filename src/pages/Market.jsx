@@ -57,7 +57,7 @@ export default function Market() {
           <h1 className="text-2xl font-black tracking-tighter">Marketplace</h1>
           <p className="text-sm text-muted-foreground">Browse cars and parts from Honda enthusiasts across Australia.</p>
         </div>
-        <Link to="/create" className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground glow-red">
+        <Link to="/marketplace/create" className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground glow-red">
           <Plus className="h-4 w-4" /> List
         </Link>
       </div>

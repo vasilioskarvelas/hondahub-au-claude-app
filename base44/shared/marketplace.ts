@@ -166,9 +166,7 @@ export function computeListingQualityScore(listing: any): { score: number; check
   const compatActive =
     hasNonEmptyArray(listing.compatible_models) ||
     hasNonEmptyArray(listing.compatible_chassis_codes) ||
-    hasNonEmptyArray(listing.compatible_engine_families) ||
-    !!(listing.compatible_model && String(listing.compatible_model).trim()) ||
-    !!(listing.compatible_chassis_code && String(listing.compatible_chassis_code).trim());
+    hasNonEmptyArray(listing.compatible_engine_families);
   const compatPoints = compatActive ? 20 : 0;
   const score = photosPoints + descPoints + compatPoints + videoPoints;
   return { score, checklist: [
@@ -188,6 +186,47 @@ export function computeListingQualityScore(listing: any): { score: number; check
 
 export const OemOrAftermarket = Object.freeze({ OEM: "oem", AFTERMARKET: "aftermarket", NOT_APPLICABLE: "not_applicable" });
 export const OEM_OR_AFTERMARKET_VALUES = Object.values(OemOrAftermarket);
+
+// ADR-043 — Bounded enum arrays for compatibility matching.
+export const COMPATIBLE_MODEL_VALUES = ["civic", "integra", "accord", "crv", "s2000", "nsx", "other"];
+export const COMPATIBLE_CHASSIS_CODE_VALUES = ["eg", "ek", "dc2", "dc5", "ep3", "fn2", "cl7", "cl9", "fd2", "fk8", "fl5", "other"];
+export const COMPATIBLE_ENGINE_FAMILY_VALUES = ["d_series", "b_series", "k_series", "j_series", "f_series", "h_series", "other"];
+export const COMPATIBILITY_FIELDS = ["compatible_models", "compatible_chassis_codes", "compatible_engine_families"];
+
+/**
+ * ADR-043 — Validates the three bounded-enum compatibility arrays.
+ * For vehicle listings, any non-empty submitted value is rejected with
+ * CATEGORY_FIELD_MISMATCH (per ADR-042's established pattern).
+ * Returns { ok, fields } where fields contains the cleaned, deduplicated arrays.
+ */
+export function validateCompatibilityFields(category: string, payload: any): { ok: true; fields: any } | { ok: false; error: { code: string; field: string; message: string } } {
+  const fields: any = {};
+  const isVehicle = category === ListingCategory.VEHICLE;
+  const configs = [
+    { key: "compatible_models", allowed: COMPATIBLE_MODEL_VALUES },
+    { key: "compatible_chassis_codes", allowed: COMPATIBLE_CHASSIS_CODE_VALUES },
+    { key: "compatible_engine_families", allowed: COMPATIBLE_ENGINE_FAMILY_VALUES },
+  ];
+  for (const { key, allowed } of configs) {
+    if (payload[key] === undefined) continue;
+    if (isVehicle) {
+      if (payload[key] !== null && (!Array.isArray(payload[key]) || payload[key].length > 0)) {
+        return { ok: false, error: { code: "CATEGORY_FIELD_MISMATCH", field: key, message: "Compatibility fields do not apply to vehicle listings." } };
+      }
+      fields[key] = [];
+      continue;
+    }
+    if (payload[key] === null) { fields[key] = []; continue; }
+    if (!Array.isArray(payload[key])) return { ok: false, error: { code: "VALIDATION_FAILED", field: key, message: "must be an array" } };
+    const cleaned: string[] = [];
+    for (const v of payload[key]) {
+      if (!allowed.includes(v)) return { ok: false, error: { code: "VALIDATION_FAILED", field: key, message: `invalid value: ${v}` } };
+      if (!cleaned.includes(v)) cleaned.push(v);
+    }
+    fields[key] = cleaned;
+  }
+  return { ok: true, fields };
+}
 export const TestedBeforeListing = Object.freeze({
   COMPRESSION_TESTED: "compression_tested",
   LEAK_DOWN_TESTED: "leak_down_tested",

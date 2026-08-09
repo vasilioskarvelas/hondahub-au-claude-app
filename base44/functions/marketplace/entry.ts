@@ -44,6 +44,7 @@ import {
   TERMINAL_STATUSES, detectContactSharing,
   validateCategoryAttributes, applicableCategoryFields, CATEGORY_ATTR_FIELDS, OEM_OR_AFTERMARKET_VALUES,
   validateAdditionalSpecifications, computeListingQualityScore,
+  validateCompatibilityFields, COMPATIBILITY_FIELDS,
   onListingCompleted, onListingExpired, onMarketplaceConversationStarted, onMarketplaceMessageSent,
 } from "../../shared/marketplace.ts";
 import { meetsCreationTier, meetsParticipationTier, accountInGoodStanding } from "../../shared/community.ts";
@@ -122,17 +123,13 @@ Deno.serve(async (req) => {
       const fields: any = {
         title, listing_type, category, poster_id: user.id,
         price_type, price_cents, condition, quantity,
-        compatible_make: ListingCategory.VEHICLE === category ? null : "Honda",
         status: ListingStatus.DRAFT, view_count: 0, conversation_count: 0,
         photo_urls: [], video_urls: [], additional_specifications: [],
       };
       if (body.description !== undefined) fields.description = (body.description || "").trim().slice(0, DESCRIPTION_MAX) || null;
       if (body.location_general !== undefined) fields.location_general = (body.location_general || "").trim() || null;
-      // Compatibility fields only accepted when category != vehicle.
+      // Compatibility year range — only accepted when category != vehicle.
       if (category !== ListingCategory.VEHICLE) {
-        for (const f of ["compatible_make", "compatible_model", "compatible_chassis_code"]) {
-          if (body[f] !== undefined) fields[f] = (body[f] || "").trim() || null;
-        }
         for (const f of ["compatible_year_from", "compatible_year_to"]) {
           if (body[f] !== undefined && body[f] !== null) {
             const y = Number(body[f]);
@@ -141,6 +138,11 @@ Deno.serve(async (req) => {
           }
         }
       }
+      // ADR-043: bounded-enum compatibility arrays (validated for all categories;
+      // vehicle category rejects non-empty values with CATEGORY_FIELD_MISMATCH).
+      const compatRes = validateCompatibilityFields(category, body);
+      if (!compatRes.ok) return err(compatRes.error.code, 422, { field: compatRes.error.field, message: compatRes.error.message });
+      Object.assign(fields, compatRes.fields);
       // ADR-042 category attributes — validate + reject category-mismatched fields.
       const catAttr = validateCategoryAttributes(category, body, {});
       if (!catAttr.ok) return err(catAttr.error.code, 422, { field: catAttr.error.field, message: catAttr.error.message });
@@ -212,10 +214,8 @@ Deno.serve(async (req) => {
       }
       if (body.location_general !== undefined) upd.location_general = (body.location_general || "").trim() || null;
       const effectiveCategory = upd.category || listing.category;
+      // Compatibility year range — only accepted when category != vehicle.
       if (effectiveCategory !== ListingCategory.VEHICLE) {
-        for (const f of ["compatible_make", "compatible_model", "compatible_chassis_code"]) {
-          if (body[f] !== undefined) upd[f] = (body[f] || "").trim() || null;
-        }
         for (const f of ["compatible_year_from", "compatible_year_to"]) {
           if (body[f] !== undefined && body[f] !== null) {
             const y = Number(body[f]);
@@ -223,6 +223,13 @@ Deno.serve(async (req) => {
             upd[f] = y;
           }
         }
+      }
+      // ADR-043: bounded-enum compatibility arrays (validated for all categories;
+      // vehicle category rejects non-empty values with CATEGORY_FIELD_MISMATCH).
+      {
+        const compatRes = validateCompatibilityFields(effectiveCategory, body);
+        if (!compatRes.ok) return err(compatRes.error.code, 422, { field: compatRes.error.field, message: compatRes.error.message });
+        Object.assign(upd, compatRes.fields);
       }
       // ADR-042 category attributes — validate against the final category, reject
       // mismatched submitted fields, and null out stale group fields on category change.
@@ -560,17 +567,18 @@ Deno.serve(async (req) => {
         const loc = String(body.location_general).toLowerCase();
         listings = listings.filter((l: any) => (l.location_general || "").toLowerCase().includes(loc));
       }
-      if (body.compatible_make) {
-        const m = String(body.compatible_make).toLowerCase();
-        listings = listings.filter((l: any) => (l.compatible_make || "").toLowerCase() === m);
+      // ADR-043: intersection-match filters for bounded-enum compatibility arrays.
+      if (Array.isArray(body.compatible_models) && body.compatible_models.length > 0) {
+        const requested = body.compatible_models;
+        listings = listings.filter((l: any) => Array.isArray(l.compatible_models) && l.compatible_models.some((v: string) => requested.includes(v)));
       }
-      if (body.compatible_model) {
-        const m = String(body.compatible_model).toLowerCase();
-        listings = listings.filter((l: any) => (l.compatible_model || "").toLowerCase().includes(m));
+      if (Array.isArray(body.compatible_chassis_codes) && body.compatible_chassis_codes.length > 0) {
+        const requested = body.compatible_chassis_codes;
+        listings = listings.filter((l: any) => Array.isArray(l.compatible_chassis_codes) && l.compatible_chassis_codes.some((v: string) => requested.includes(v)));
       }
-      if (body.compatible_chassis_code) {
-        const c = String(body.compatible_chassis_code).toLowerCase();
-        listings = listings.filter((l: any) => (l.compatible_chassis_code || "").toLowerCase() === c);
+      if (Array.isArray(body.compatible_engine_families) && body.compatible_engine_families.length > 0) {
+        const requested = body.compatible_engine_families;
+        listings = listings.filter((l: any) => Array.isArray(l.compatible_engine_families) && l.compatible_engine_families.some((v: string) => requested.includes(v)));
       }
       if (body.compatible_year) {
         const y = Number(body.compatible_year);

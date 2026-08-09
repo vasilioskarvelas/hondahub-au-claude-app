@@ -3,7 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { Link } from "react-router-dom";
 import { CalendarDays, Gift, ArrowRight, MapPin, Ticket, Star, Eye, Mail, ShieldCheck, TrendingUp, Flame, Users } from "lucide-react";
 
-import ListingCard from "@/components/ListingCard";
+import MarketplaceListingCard from "@/components/MarketplaceListingCard";
 import Hero from "@/components/home/Hero";
 import PartnerWall from "@/components/home/PartnerWall";
 import Benefits from "@/components/home/Benefits";
@@ -17,27 +17,25 @@ export default function Home() {
   const [communitySpotlight, setCommunitySpotlight] = React.useState(null);
   const [partnerDiscounts, setPartnerDiscounts] = React.useState([]);
   const [trending, setTrending] = React.useState([]);
-  const [communityPosts, setCommunityPosts] = React.useState([]);
   const [liveCounts, setLiveCounts] = React.useState({ listings: 0, garage_builds: 0, members: 0 });
 
   React.useEffect(() => {
-    base44.entities.Listing.filter({}, "-created_date", 12).then((l) => {
-      setListings(l);
+    base44.functions.invoke("marketplace", { action: "listListings", limit: 12 }).then((res) => {
+      setListings(res.data?.listings || []);
       setLoading(false);
     });
     base44.entities.Event.filter({ status: "published" }, "starts_at", 10).then((e) => { const upcoming = e.find((x) => new Date(x.starts_at).getTime() >= Date.now()); setNextEvent(upcoming || null); });
     base44.entities.Giveaway.filter({ status: "active" }, "-created_date", 1).then((g) => setActiveGiveaway(g[0] || null));
-    base44.entities.CommunityPost.filter({}, "-likes", 1).then((p) => setCommunitySpotlight(p[0] || null));
+    base44.functions.invoke("social", { action: "listFeed", limit: 1 }).then((res) => setCommunitySpotlight(res.data?.posts?.[0] || null)).catch(() => setCommunitySpotlight(null));
     base44.entities.PartnerDiscount.list("-created_date", 20).then((d) => setPartnerDiscounts(d));
-    base44.entities.Listing.filter({ status: "active" }, "-views", 6).then((t) => setTrending(t));
-    base44.entities.CommunityPost.list("-likes", 100).then((p) => setCommunityPosts(p));
+    base44.functions.invoke("marketplace", { action: "listListings", sort: "views", limit: 6 }).then((res) => setTrending(res.data?.listings || []));
     base44.functions.invoke("homepage-stats", {}).then((res) => {
       if (res.data?.ok) setLiveCounts(res.data.counts);
     }).catch(() => {});
   }, []);
 
-  const featuredCars = listings.filter((l) => l.type === "car" && l.featured);
-  const featuredParts = listings.filter((l) => l.type === "part" && l.featured);
+  const featuredCars = listings.filter((l) => l.category === "vehicle");
+  const featuredParts = listings.filter((l) => l.category !== "vehicle");
 
   const stats = {
     total: liveCounts.listings,
@@ -117,7 +115,7 @@ export default function Home() {
             <span className="ml-auto rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-semibold text-primary">Premium</span>
           </div>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            {featuredCars.slice(0, 4).map((l) => <ListingCard key={l.id} listing={l} />)}
+            {featuredCars.slice(0, 4).map((l) => <MarketplaceListingCard key={l.id} listing={l} />)}
           </div>
         </section>
       )}
@@ -130,7 +128,7 @@ export default function Home() {
             <span className="ml-auto rounded-full bg-secondary px-2.5 py-0.5 text-xs font-semibold text-muted-foreground">Most Viewed</span>
           </div>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-            {trending.slice(0, 6).map((l) => <ListingCard key={l.id} listing={l} />)}
+            {trending.slice(0, 6).map((l) => <MarketplaceListingCard key={l.id} listing={l} />)}
           </div>
         </section>
       )}
@@ -149,18 +147,18 @@ export default function Home() {
           </div>
         ) : featuredParts.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center">
-            <p className="text-sm text-muted-foreground">No featured parts yet. <Link to="/market" className="text-primary">Browse all parts →</Link></p>
+            <p className="text-sm text-muted-foreground">No featured parts yet. <Link to="/marketplace" className="text-primary">Browse all parts →</Link></p>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            {featuredParts.slice(0, 4).map((l) => <ListingCard key={l.id} listing={l} />)}
+            {featuredParts.slice(0, 4).map((l) => <MarketplaceListingCard key={l.id} listing={l} />)}
           </div>
         )}
       </section>
 
       {featuredCars.length === 0 && featuredParts.length === 0 && (
         <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center">
-          <p className="text-sm text-muted-foreground">No featured listings yet. <Link to="/market" className="text-primary">Browse the market →</Link></p>
+          <p className="text-sm text-muted-foreground">No featured listings yet. <Link to="/marketplace" className="text-primary">Browse the market →</Link></p>
         </div>
       )}
 
@@ -169,25 +167,25 @@ export default function Home() {
           <div className="mb-3 flex items-center gap-2">
             <Users className="h-5 w-5 text-primary" />
             <h2 className="text-lg font-bold">Community Spotlight</h2>
-            <Link to="/community" className="ml-auto text-xs text-primary">See more <ArrowRight className="inline h-3 w-3" /></Link>
+            <Link to="/feed" className="ml-auto text-xs text-primary">See more <ArrowRight className="inline h-3 w-3" /></Link>
           </div>
-          <Link to="/community" className="group flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 transition hover:border-primary/50 sm:flex-row">
+          <Link to={`/post/${communitySpotlight.id}`} className="group flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 transition hover:border-primary/50 sm:flex-row">
             <div className="h-32 w-full overflow-hidden rounded-xl bg-secondary sm:h-24 sm:w-32">
-              {communitySpotlight.photos && communitySpotlight.photos[0] ? (
-                <img src={communitySpotlight.photos[0]} alt={communitySpotlight.author_name} className="h-full w-full object-cover transition group-hover:scale-105" />
+              {communitySpotlight.media_url ? (
+                <img src={communitySpotlight.media_url} alt={communitySpotlight.caption || "post"} className="h-full w-full object-cover transition group-hover:scale-105" />
               ) : (
                 <div className="flex h-full items-center justify-center"><Users className="h-8 w-8 text-muted-foreground/40" /></div>
               )}
             </div>
             <div className="flex-1">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-bold">{communitySpotlight.author_name}</span>
-                {communitySpotlight.chassis_code && <span className="font-mono text-xs text-primary">{communitySpotlight.chassis_code}</span>}
+                <span className="text-sm font-bold">{communitySpotlight.author?.display_name || communitySpotlight.author?.handle || "Honda Enthusiast"}</span>
+                {communitySpotlight.vehicle?.chassis_code && <span className="font-mono text-xs text-primary">{communitySpotlight.vehicle.chassis_code}</span>}
               </div>
               <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{communitySpotlight.caption}</p>
               <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
-                <span>❤️ {communitySpotlight.likes} likes</span>
-                {communitySpotlight.engine_family && <span className="rounded bg-secondary px-1.5 py-0.5 font-semibold">{communitySpotlight.engine_family} Series</span>}
+                <span>❤️ {communitySpotlight.like_count || 0} likes</span>
+                <span>💬 {communitySpotlight.comment_count || 0} comments</span>
               </div>
             </div>
           </Link>

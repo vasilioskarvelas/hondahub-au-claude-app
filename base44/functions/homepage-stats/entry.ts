@@ -12,9 +12,8 @@ export default async function(req) {
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const e = base44.asServiceRole.entities;
-    const [marketplaceListings, legacyListings, vehicles, users] = await Promise.all([
+    const [marketplaceListings, vehicles, users] = await Promise.all([
       e.MarketplaceListing.filter({ status: { $in: ["active", "reserved", "completed"] } }, "-created_date", 500).catch(() => []),
-      e.Listing.filter({ status: "active" }, "-created_date", 500).catch(() => []),
       e.Vehicle.list("-created_date", 500).catch(() => []),
       e.User.list("-created_date", 500).catch(() => []),
     ]);
@@ -22,7 +21,7 @@ export default async function(req) {
     return Response.json({
       ok: true,
       counts: {
-        listings: (marketplaceListings as any[]).length + (legacyListings as any[]).length,
+        listings: (marketplaceListings as any[]).length,
         garage_builds: (vehicles as any[]).length,
         members: (users as any[]).length,
       },

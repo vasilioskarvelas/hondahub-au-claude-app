@@ -3,9 +3,9 @@ import { Link } from "react-router-dom";
 import { ShoppingCart, Wrench, Users, Gift, CalendarDays, Percent } from "lucide-react";
 
 const benefits = [
-  { icon: ShoppingCart, title: "Marketplace", desc: "Buy & sell Honda builds and parts", to: "/market", color: "from-primary/20 to-transparent" },
+  { icon: ShoppingCart, title: "Marketplace", desc: "Buy & sell Honda builds and parts", to: "/marketplace", color: "from-primary/20 to-transparent" },
   { icon: Wrench, title: "Garage", desc: "Showcase your build with full specs", to: "/garage", color: "from-primary/20 to-transparent" },
-  { icon: Users, title: "Social Feed", desc: "Share posts, photos & reels", to: "/community", color: "from-primary/20 to-transparent" },
+  { icon: Users, title: "Social Feed", desc: "Share posts, photos & reels", to: "/feed", color: "from-primary/20 to-transparent" },
   { icon: Percent, title: "Workshop Discounts", desc: "Exclusive partner savings", to: "/shop", color: "from-primary/20 to-transparent" },
   { icon: Gift, title: "Monthly Giveaways", desc: "Win parts, mods & accessories", to: "/giveaway", color: "from-primary/20 to-transparent" },
   { icon: CalendarDays, title: "Events", desc: "Meets, cruises & track days", to: "/events", color: "from-primary/20 to-transparent" },

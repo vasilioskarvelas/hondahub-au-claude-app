@@ -1,7 +1,7 @@
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
@@ -57,7 +57,7 @@ import AdminDashboard from '@/pages/AdminDashboard';
 import BusinessVerificationQueue from '@/pages/BusinessVerificationQueue';
 
 const AuthenticatedApp = () => {
-  const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
+  const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin, checkAppState } = useAuth();
 
   if (isLoadingPublicSettings || isLoadingAuth) {
     return (
@@ -74,6 +74,18 @@ const AuthenticatedApp = () => {
       navigateToLogin();
       return null;
     }
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-background p-4">
+        <div className="mx-auto max-w-md rounded-2xl border border-destructive/40 bg-destructive/10 p-6 text-center">
+          <h2 className="text-base font-bold text-destructive">Couldn't load the app</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{authError.message || "Your session could not be loaded."}</p>
+          <div className="mt-4 flex justify-center gap-2">
+            <button onClick={() => checkAppState()} className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground">Retry</button>
+            <button onClick={navigateToLogin} className="rounded-xl border border-border px-4 py-2 text-sm font-medium">Sign in</button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -84,16 +96,16 @@ const AuthenticatedApp = () => {
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route element={<Layout />}>
         <Route path="/" element={<Home />} />
-        <Route path="/market" element={<Market />} />
-        <Route path="/listing/:id" element={<ListingDetail />} />
-        <Route path="/create" element={<CreateListing />} />
+        <Route path="/market" element={<Navigate to="/marketplace" replace />} />
+        <Route path="/listing/:id" element={<Navigate to="/marketplace" replace />} />
+        <Route path="/create" element={<Navigate to="/marketplace/create" replace />} />
         <Route path="/events" element={<Events />} />
         <Route path="/event/:id" element={<EventDetail />} />
-        <Route path="/messages" element={<Messages />} />
+        <Route path="/messages" element={<Navigate to="/conversations" replace />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/pricing" element={<Pricing />} />
-        <Route path="/community" element={<Community />} />
+        <Route path="/community" element={<Navigate to="/feed" replace />} />
         <Route path="/shop" element={<Shop />} />
         <Route path="/giveaway" element={<Giveaway />} />
         <Route path="/garage" element={<Garage />} />

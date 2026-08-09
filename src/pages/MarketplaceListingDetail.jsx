@@ -108,7 +108,14 @@ export default function MarketplaceListingDetail() {
           {listing.condition && <div><span className="text-muted-foreground">Condition</span><br /><span className="font-bold capitalize">{listing.condition.replace(/_/g, " ")}</span></div>}
           {listing.quantity > 1 && <div><span className="text-muted-foreground">Quantity</span><br /><span className="font-bold">{listing.quantity}</span></div>}
           {listing.location_general && <div className="col-span-2"><span className="text-muted-foreground">Location</span><br /><span className="font-bold">{listing.location_general}</span></div>}
-          {listing.compatible_make && <div className="col-span-2"><span className="text-muted-foreground">Fits</span><br /><span className="font-bold">{listing.compatible_make} {listing.compatible_model || ""} {listing.compatible_chassis_code || ""} {listing.compatible_year_from ? `(${listing.compatible_year_from}${listing.compatible_year_to ? `–${listing.compatible_year_to}` : "+"})` : ""}</span></div>}
+          {((listing.compatible_models?.length > 0) || (listing.compatible_chassis_codes?.length > 0) || (listing.compatible_engine_families?.length > 0) || listing.compatible_year_from) && (
+            <div className="col-span-2"><span className="text-muted-foreground">Fits</span><br /><span className="font-bold capitalize">{[
+              ...(listing.compatible_models || []),
+              ...(listing.compatible_chassis_codes || []),
+              ...(listing.compatible_engine_families || []).map((v) => v.replace(/_/g, " ")),
+              listing.compatible_year_from ? `${listing.compatible_year_from}${listing.compatible_year_to ? `–${listing.compatible_year_to}` : "+"}` : null,
+            ].filter(Boolean).join(", ")}</span></div>
+          )}
         </div>
 
         <CategoryAttributeDisplay listing={listing} vehicle={data?.vehicle} />

@@ -27,7 +27,7 @@ export default function Hero({ stats }) {
         </p>
 
         <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-          <Link to="/market" className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-bold text-primary-foreground glow-red transition hover:scale-105">
+          <Link to="/marketplace" className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-bold text-primary-foreground glow-red transition hover:scale-105">
             Browse Marketplace <ArrowRight className="h-4 w-4" />
           </Link>
           <Link to="/giveaway" className="inline-flex items-center gap-2 rounded-full border border-border bg-card/80 px-6 py-3 text-sm font-bold backdrop-blur transition hover:border-primary/50">

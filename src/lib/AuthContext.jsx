@@ -35,7 +35,12 @@ export const AuthProvider = ({ children }) => {
       });
       
       try {
-        const publicSettings = await appClient.get(`/prod/public-settings/by-id/${appParams.appId}`);
+        let settingsTimer;
+        const publicSettings = await Promise.race([
+          appClient.get(`/prod/public-settings/by-id/${appParams.appId}`),
+          new Promise((_, rej) => { settingsTimer = setTimeout(() => rej(new Error("Connection timed out. Tap Retry.")), 12000); }),
+        ]);
+        clearTimeout(settingsTimer);
         setAppPublicSettings(publicSettings);
         
         // If we got the app public settings successfully, check if user is authenticated
@@ -91,9 +96,13 @@ export const AuthProvider = ({ children }) => {
 
   const checkUserAuth = async () => {
     try {
-      // Now check if the user is authenticated
       setIsLoadingAuth(true);
-      const currentUser = await base44.auth.me();
+      let authTimer;
+      const currentUser = await Promise.race([
+        base44.auth.me(),
+        new Promise((_, rej) => { authTimer = setTimeout(() => rej(new Error("Session check timed out. Tap Retry.")), 12000); }),
+      ]);
+      clearTimeout(authTimer);
       setUser(currentUser);
       setIsAuthenticated(true);
       setIsLoadingAuth(false);
@@ -104,11 +113,15 @@ export const AuthProvider = ({ children }) => {
       setIsAuthenticated(false);
       setAuthChecked(true);
       
-      // If user auth fails, it might be an expired token
       if (error.status === 401 || error.status === 403) {
         setAuthError({
           type: 'auth_required',
           message: 'Authentication required'
+        });
+      } else {
+        setAuthError({
+          type: 'unknown',
+          message: error.message || 'Could not load your session'
         });
       }
     }

@@ -28,12 +28,12 @@ export function computeListingQuality(form) {
     };
   }
 
-  // Compatibility is satisfied by an active seller selection. The defaulting
-  // compatible_make="Honda" does not count; compatible_model or
-  // compatible_chassis_code (the ADR-042 singular fields) do.
+  // Compatibility is satisfied by an active seller selection in any of the
+  // three ADR-043 bounded enum arrays.
   const compatActive =
-    !!(form.compatible_model && String(form.compatible_model).trim()) ||
-    !!(form.compatible_chassis_code && String(form.compatible_chassis_code).trim());
+    (Array.isArray(form.compatible_models) && form.compatible_models.length > 0) ||
+    (Array.isArray(form.compatible_chassis_codes) && form.compatible_chassis_codes.length > 0) ||
+    (Array.isArray(form.compatible_engine_families) && form.compatible_engine_families.length > 0);
   const compatPoints = compatActive ? 20 : 0;
   const score = photosPoints + descPoints + compatPoints + videoPoints;
   return {

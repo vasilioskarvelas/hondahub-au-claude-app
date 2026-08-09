@@ -24,7 +24,7 @@ import { VEHICLE_STEPS, PART_STEPS, isStepComplete } from "@/components/marketpl
 const EMPTY = {
   flow: null, listing_type: "for_sale", category: "", title: "", description: "",
   price_type: "fixed", price: "", condition: "used", quantity: "1",
-  primary_vehicle_id: "", compatible_make: "", compatible_model: "", compatible_chassis_code: "",
+  primary_vehicle_id: "", compatible_models: [], compatible_chassis_codes: [], compatible_engine_families: [],
   compatible_year_from: "", compatible_year_to: "", location_general: "",
   photo_urls: [], video_urls: [], additional_specifications: [],
   ...DEFAULT_ATTRS, ...EMPTY_ATTRS,
@@ -94,9 +94,9 @@ export default function CreateMarketplaceListing() {
     };
     p.price_cents = (form.price_type === "fixed" || form.price_type === "negotiable") ? Math.round(Number(form.price) * 100) : null;
     if (form.category !== "vehicle") {
-      p.compatible_make = form.compatible_make.trim() || undefined;
-      p.compatible_model = form.compatible_model.trim() || undefined;
-      p.compatible_chassis_code = form.compatible_chassis_code.trim() || undefined;
+      p.compatible_models = form.compatible_models || [];
+      p.compatible_chassis_codes = form.compatible_chassis_codes || [];
+      p.compatible_engine_families = form.compatible_engine_families || [];
       p.compatible_year_from = form.compatible_year_from === "" ? undefined : Number(form.compatible_year_from);
       p.compatible_year_to = form.compatible_year_to === "" ? undefined : Number(form.compatible_year_to);
       for (const key of applicableCategoryFields(form.category)) {
@@ -157,8 +157,9 @@ export default function CreateMarketplaceListing() {
               price_type: l.price_type || "fixed", price: l.price_cents != null ? String(l.price_cents / 100) : "",
               condition: l.condition || "used", quantity: String(l.quantity ?? 1),
               primary_vehicle_id: l.primary_vehicle_id || "",
-              compatible_make: l.compatible_make || "", compatible_model: l.compatible_model || "",
-              compatible_chassis_code: l.compatible_chassis_code || "",
+              compatible_models: l.compatible_models || [],
+              compatible_chassis_codes: l.compatible_chassis_codes || [],
+              compatible_engine_families: l.compatible_engine_families || [],
               compatible_year_from: l.compatible_year_from ?? "", compatible_year_to: l.compatible_year_to ?? "",
               location_general: l.location_general || "",
               photo_urls: l.photo_urls || [], video_urls: l.video_urls || [],

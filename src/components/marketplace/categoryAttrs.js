@@ -65,4 +65,7 @@ export const EMPTY_ATTRS = {
   component_kilometres: "",
   tested_before_listing: "",
   lock_status: "",
+  compatible_models: [],
+  compatible_chassis_codes: [],
+  compatible_engine_families: [],
 };
