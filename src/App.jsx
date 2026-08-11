@@ -13,7 +13,6 @@ import Layout from '@/components/Layout';
 import Home from '@/pages/Home';
 import Market from '@/pages/Market';
 import ListingDetail from '@/pages/ListingDetail';
-import CreateListing from '@/pages/CreateListing';
 import Profile from '@/pages/Profile';
 import Events from '@/pages/Events';
 import Settings from '@/pages/Settings';
@@ -54,6 +53,7 @@ import EntitlementOverrides from '@/pages/EntitlementOverrides';
 import JobStatusDashboard from '@/pages/JobStatusDashboard';
 import AdminDashboard from '@/pages/AdminDashboard';
 import BusinessVerificationQueue from '@/pages/BusinessVerificationQueue';
+import ProfileLoadError from '@/pages/ProfileLoadError';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin, checkAppState } = useAuth();
@@ -96,7 +96,9 @@ const AuthenticatedApp = () => {
       <Route path="/register" element={<Register />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/profile/load-error" element={<ProfileLoadError />} />
       <Route element={<Layout />}>
+        {/* Public-browsable routes — no authentication required */}
         <Route path="/" element={<Home />} />
         <Route path="/market" element={<Navigate to="/marketplace" replace />} />
         <Route path="/listing/:id" element={<Navigate to="/marketplace" replace />} />
@@ -104,44 +106,47 @@ const AuthenticatedApp = () => {
         <Route path="/events" element={<Events />} />
         <Route path="/event/:id" element={<EventDetail />} />
         <Route path="/messages" element={<Navigate to="/conversations" replace />} />
-        <Route path="/profile" element={<Profile />} />
-        <Route path="/settings" element={<Settings />} />
         <Route path="/pricing" element={<Pricing />} />
         <Route path="/community" element={<Navigate to="/feed" replace />} />
         <Route path="/shop" element={<Shop />} />
         <Route path="/giveaway" element={<Giveaway />} />
-        <Route path="/garage" element={<Garage />} />
-        <Route path="/garage/:id" element={<GarageCarDetail />} />
-        <Route path="/vehicle/create" element={<Garage />} />
         <Route path="/vehicle/:id" element={<VehicleDetail />} />
-        <Route path="/verification-queue" element={<VerificationQueue />} />
         <Route path="/user/:name/garage" element={<UserGarage />} />
         <Route path="/groups" element={<Groups />} />
-        <Route path="/group/create" element={<CreateGroup />} />
         <Route path="/group/:id" element={<GroupDetail />} />
-        <Route path="/event/create" element={<CreateEvent />} />
         <Route path="/feed" element={<Feed />} />
         <Route path="/post/:id" element={<PostDetail />} />
-        <Route path="/connections" element={<Connections />} />
-        <Route path="/connections/:name" element={<Connections />} />
-        <Route path="/moderation" element={<ModerationQueue />} />
-        <Route path="/moderation/case/:id" element={<CaseDetail />} />
-        <Route path="/admin/audit" element={<AuditLogBrowser />} />
         <Route path="/marketplace" element={<Marketplace />} />
-        <Route path="/marketplace/create" element={<CreateMarketplaceListing />} />
         <Route path="/marketplace/:id" element={<MarketplaceListingDetail />} />
-        <Route path="/marketplace/:id/edit" element={<CreateMarketplaceListing />} />
-        <Route path="/conversations" element={<Conversations />} />
-        <Route path="/conversation/:id" element={<ConversationThread />} />
-
-        <Route path="/notifications" element={<Notifications />} />
         <Route path="/user/:name" element={<UserProfile />} />
-        <Route path="/ai-command-center" element={<AICommandCenter />} />
-        <Route path="/testing" element={<TestingCenter />} />
-        <Route path="/admin/entitlements" element={<EntitlementOverrides />} />
-        <Route path="/admin/jobs" element={<JobStatusDashboard />} />
-        <Route path="/admin/business-verification" element={<BusinessVerificationQueue />} />
-        <Route path="/admin" element={<AdminDashboard />} />
+
+        {/* Protected routes — authentication required */}
+        <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="/garage" element={<Garage />} />
+          <Route path="/garage/:id" element={<GarageCarDetail />} />
+          <Route path="/vehicle/create" element={<Garage />} />
+          <Route path="/verification-queue" element={<VerificationQueue />} />
+          <Route path="/group/create" element={<CreateGroup />} />
+          <Route path="/event/create" element={<CreateEvent />} />
+          <Route path="/connections" element={<Connections />} />
+          <Route path="/connections/:name" element={<Connections />} />
+          <Route path="/moderation" element={<ModerationQueue />} />
+          <Route path="/moderation/case/:id" element={<CaseDetail />} />
+          <Route path="/admin/audit" element={<AuditLogBrowser />} />
+          <Route path="/marketplace/create" element={<CreateMarketplaceListing />} />
+          <Route path="/marketplace/:id/edit" element={<CreateMarketplaceListing />} />
+          <Route path="/conversations" element={<Conversations />} />
+          <Route path="/conversation/:id" element={<ConversationThread />} />
+          <Route path="/notifications" element={<Notifications />} />
+          <Route path="/ai-command-center" element={<AICommandCenter />} />
+          <Route path="/testing" element={<TestingCenter />} />
+          <Route path="/admin/entitlements" element={<EntitlementOverrides />} />
+          <Route path="/admin/jobs" element={<JobStatusDashboard />} />
+          <Route path="/admin/business-verification" element={<BusinessVerificationQueue />} />
+          <Route path="/admin" element={<AdminDashboard />} />
+        </Route>
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>
