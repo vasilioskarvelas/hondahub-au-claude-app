@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
+import { checkRateLimit, rateLimitResponse } from '../../shared/rate-limit.ts';
 
 /**
  * MediaService (Phase 02) — media lifecycle for the platform (ADR-011).
@@ -31,6 +32,12 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const action = body.action || 'list';
+
+    // Rate limiting (abuse mitigation): counts caller's own recent records; see shared/rate-limit.ts
+    if (action === 'create') {
+      const rl = await checkRateLimit(base44, user?.id, 'Media', [{ limit: 60, windowSec: 3600 }, { limit: 300, windowSec: 86400 }]);
+      if (rl.limited) return rateLimitResponse(rl.retryAfter);
+    }
 
     if (action === 'create') {
       const { file_url, media_type, mime_type, width, height, alt_text, source, is_public, thumbnail_url } = body;
