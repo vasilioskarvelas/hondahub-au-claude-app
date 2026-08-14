@@ -11,8 +11,6 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import Layout from '@/components/Layout';
 // Add page imports here
 import Home from '@/pages/Home';
-import Market from '@/pages/Market';
-import ListingDetail from '@/pages/ListingDetail';
 import Profile from '@/pages/Profile';
 import Events from '@/pages/Events';
 import Settings from '@/pages/Settings';
