@@ -56,11 +56,6 @@ import ProfileLoadError from '@/pages/ProfileLoadError';
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin, checkAppState } = useAuth();
 
-  useEffect(() => {
-    if (authError?.type === 'auth_required') {
-      navigateToLogin();
-    }
-  }, [authError, navigateToLogin]);
 
   if (isLoadingPublicSettings || isLoadingAuth) {
     return (
@@ -70,7 +65,7 @@ const AuthenticatedApp = () => {
     );
   }
 
-  if (authError) {
+  if (authError && authError.type !== 'auth_required') {
     if (authError.type === 'user_not_registered') {
       return <UserNotRegisteredError />;
     }
