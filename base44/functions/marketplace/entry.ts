@@ -37,6 +37,7 @@
  *    listing_type at render time (never assumes poster=seller).
  */
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.40";
+import { checkRateLimit, rateLimitResponse } from "../../shared/rate-limit.ts";
 import {
   LISTING_TYPE_VALUES, LISTING_CATEGORY_VALUES, LISTING_CONDITION_VALUES, PRICE_TYPE_VALUES,
   ListingStatus, ListingType, ListingCategory, ListingCondition, PriceType, MessageStatus,
@@ -93,6 +94,20 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me().catch(() => null);
     const body = await req.json().catch(() => ({}));
     const action = body.action;
+
+    // Rate limiting (abuse mitigation): counts caller's own recent records; see shared/rate-limit.ts
+    if (action === "createListingDraft") {
+      const rl = await checkRateLimit(base44, user?.id, "MarketplaceListing", [{ limit: 10, windowSec: 3600 }, { limit: 50, windowSec: 86400 }]);
+      if (rl.limited) return rateLimitResponse(rl.retryAfter);
+    }
+    if (action === "startConversation") {
+      const rl = await checkRateLimit(base44, user?.id, "MarketplaceConversation", [{ limit: 30, windowSec: 60 }]);
+      if (rl.limited) return rateLimitResponse(rl.retryAfter);
+    }
+    if (action === "sendMessage") {
+      const rl = await checkRateLimit(base44, user?.id, "MarketplaceMessage", [{ limit: 30, windowSec: 60 }]);
+      if (rl.limited) return rateLimitResponse(rl.retryAfter);
+    }
 
     // ============ createListingDraft (F.1 — any tier, good standing) ============
     if (action === "createListingDraft") {
