@@ -39,6 +39,7 @@
  *                             trust signal) is already a valid TrustScoreEvent signal_type.
  */
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.40";
+import { checkRateLimit, rateLimitResponse } from "../../shared/rate-limit.ts";
 import { createNotification } from "../../shared/notifications.ts";
 import { NotificationType } from "../../shared/identity.ts";
 import {
@@ -64,6 +65,12 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me().catch(() => null);
     const body = await req.json().catch(() => ({}));
     const action = body.action;
+
+    // Rate limiting (abuse mitigation): counts caller's own recent records; see shared/rate-limit.ts
+    if (action === "fileReport") {
+      const rl = await checkRateLimit(base44, user?.id, "Report", [{ limit: 20, windowSec: 3600 }]);
+      if (rl.limited) return rateLimitResponse(rl.retryAfter);
+    }
 
     // ---- fileReport (any authenticated user, not tier-gated) ----
     if (action === "fileReport") {
