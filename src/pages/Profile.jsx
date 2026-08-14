@@ -77,7 +77,7 @@ export default function Profile() {
           <p className="mt-1 text-sm text-muted-foreground">{error || "Your session could not be loaded."}</p>
           <div className="mt-4 flex justify-center gap-2">
             <button onClick={() => checkAppState()} className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground">Retry</button>
-            <button onClick={() => navigate("/login")} className="rounded-xl border border-border px-4 py-2 text-sm font-medium">Sign in</button>
+            <button onClick={() => navigate("/signin")} className="rounded-xl border border-border px-4 py-2 text-sm font-medium">Sign in</button>
           </div>
         </div>
       </div>
