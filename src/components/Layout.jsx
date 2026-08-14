@@ -14,8 +14,8 @@ const mainNav = [
 ];
 
 const moreNav = [
-  { to: "/ai-command-center", label: "AI Command Center", icon: Cpu },
-  { to: "/testing", label: "Testing Centre", icon: FlaskConical },
+  { to: "/ai-command-center", label: "AI Command Center", icon: Cpu, adminOnly: true },
+  { to: "/testing", label: "Testing Centre", icon: FlaskConical, adminOnly: true },
   { to: "/groups", label: "Groups", icon: Users },
   { to: "/garage", label: "Garage", icon: Wrench },
   { to: "/profile", label: "Profile", icon: User },
@@ -34,6 +34,7 @@ export default function Layout() {
   const isMod = user?.role === 'admin' || user?.account_tier === 'moderator';
   const isAdmin = user?.role === 'admin';
   const visibleMoreNav = moreNav.filter((item) => (!item.modOnly || isMod) && (!item.adminOnly || isAdmin));
+  const routeBlocked = moreNav.some((item) => (location.pathname === item.to || location.pathname.startsWith(item.to + "/")) && ((item.adminOnly && !isAdmin) || (item.modOnly && !isMod)));
 
   React.useEffect(() => {
     setMenuOpen(false);
@@ -113,7 +114,16 @@ export default function Layout() {
             exit={{ opacity: 0, x: -20 }}
             transition={{ duration: 0.18, ease: 'easeOut' }}
           >
-            <Outlet />
+            {routeBlocked ? (
+              <div className="mx-auto max-w-md py-20 text-center">
+                <Shield className="mx-auto mb-4 h-10 w-10 text-slate-400" />
+                <h2 className="text-lg font-semibold text-slate-100">Access restricted</h2>
+                <p className="mt-2 text-sm text-slate-400">You do not have permission to view this page.</p>
+                <Link to="/" className="mt-4 inline-block text-sm text-rose-400 hover:underline">Go back home</Link>
+              </div>
+            ) : (
+              <Outlet />
+            )}
           </motion.div>
         </AnimatePresence>
       </main>
