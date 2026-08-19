@@ -17,7 +17,6 @@ const mainNav = [
 const moreNav = [
   { to: "/ai-command-center", label: "AI Command Center", icon: Cpu, adminOnly: true },
   { to: "/testing", label: "Testing Centre", icon: FlaskConical, adminOnly: true },
-  { to: "/groups", label: "Groups", icon: Users },
   { to: "/garage", label: "Garage", icon: Wrench },
   { to: "/profile", label: "Profile", icon: User },
   { to: "/settings", label: "Settings", icon: SettingsIcon },

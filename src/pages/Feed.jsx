@@ -4,6 +4,7 @@ import { Plus, RefreshCw } from "lucide-react";
 import PostCard from "@/components/social/PostCard";
 import CreatePostModal from "@/components/social/CreatePostModal";
 import UserSearchBar from "@/components/social/UserSearchBar";
+import GroupsEntry from "@/components/social/GroupsEntry";
 
 export default function Feed() {
   const [posts, setPosts] = React.useState([]);
@@ -38,6 +39,8 @@ export default function Feed() {
       </div>
 
       <UserSearchBar />
+
+      <GroupsEntry />
 
       {loading ? (
         <div className="flex h-64 items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-secondary border-t-primary" /></div>
