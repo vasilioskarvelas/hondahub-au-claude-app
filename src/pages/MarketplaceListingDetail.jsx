@@ -25,6 +25,10 @@ const CATEGORY_LABELS = {
 };
 
 function priceDisplay(l) {
+  if (l.price_type === "auction") {
+    const current = l.current_bid_cents || l.auction_min_bid_cents || 0;
+    return l.current_bid_cents ? `$${(current / 100).toLocaleString()} current bid` : `$${(current / 100).toLocaleString()} start`;
+  }
   if (l.price_type === "free") return "Free";
   if (l.price_type === "poa" || l.price_cents == null) return "Price on ask";
   const dollars = (l.price_cents / 100).toLocaleString(undefined, { minimumFractionDigits: l.price_cents % 100 ? 2 : 0 });
@@ -98,6 +102,7 @@ export default function MarketplaceListingDetail() {
       <div className="space-y-3 rounded-2xl border border-border bg-card p-5">
         <div className="flex flex-wrap items-center gap-2">
           <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold uppercase ${listing.listing_type === "wanted" ? "bg-blue-500/15 text-blue-400" : "bg-primary/15 text-primary"}`}>{listing.listing_type === "wanted" ? "Wanted" : "For sale"}</span>
+          {listing.price_type === "auction" && <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-bold uppercase text-amber-400"><Gavel className="h-3 w-3" /> Auction</span>}
           <span className={`text-xs font-bold ${sm.c}`}>{sm.l}</span>
           <span className="text-xs text-muted-foreground">{CATEGORY_LABELS[listing.category] || listing.category}</span>
         </div>
@@ -139,6 +144,22 @@ export default function MarketplaceListingDetail() {
       </div>
 
       {data?.quality_score != null && <QualityScore score={data.quality_score} checklist={data.quality_checklist} />}
+
+      {listing.price_type === "auction" && !isOwner && me && ["active", "reserved"].includes(listing.status) && (
+        <AuctionBidding listing={listing} me={me} onBidPlaced={async () => { const fresh = await base44.functions.invoke("marketplace", { action: "getListing", listing_id: id }); setData(fresh.data); }} />
+      )}
+      {listing.price_type === "auction" && isOwner && (
+        <div className="rounded-2xl border border-border bg-card p-4 text-sm">
+          <p className="flex items-center gap-1.5 font-bold"><Gavel className="h-4 w-4 text-amber-400" /> Auction details</p>
+          <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+            <div><span className="text-muted-foreground">Starting bid</span><br /><span className="font-bold">${((listing.auction_min_bid_cents || 0) / 100).toLocaleString()}</span></div>
+            {listing.auction_reserve_cents != null && <div><span className="text-muted-foreground">Reserve</span><br /><span className="font-bold">${(listing.auction_reserve_cents / 100).toLocaleString()}</span></div>}
+            <div><span className="text-muted-foreground">Duration</span><br /><span className="font-bold">{listing.auction_duration_days} days</span></div>
+            {listing.current_bid_cents != null && <div><span className="text-muted-foreground">Current bid</span><br /><span className="font-bold">${(listing.current_bid_cents / 100).toLocaleString()}</span></div>}
+            {listing.auction_ends_at && <div className="col-span-2"><span className="text-muted-foreground">Ends</span><br /><span className="font-bold">{new Date(listing.auction_ends_at).toLocaleString()}</span></div>}
+          </div>
+        </div>
+      )}
 
       {error && <div className="rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>}
 
