@@ -1,0 +1,18 @@
+{
+  "name": "VehicleLike",
+  "type": "object",
+  "properties": {
+    "vehicle_id": {
+      "type": "string",
+      "description": "FK\u2192Vehicle. The build this like is on."
+    },
+    "user_id": {
+      "type": "string",
+      "description": "The liker (FK\u2192User). Unique on (vehicle_id, user_id). Mirrors created_by_id; explicit for the uniqueness key."
+    }
+  },
+  "required": [
+    "vehicle_id",
+    "user_id"
+  ]
+}

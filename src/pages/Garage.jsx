@@ -10,6 +10,8 @@ export default function Garage() {
   const [vehicles, setVehicles] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [showForm, setShowForm] = React.useState(false);
+  const [editingVehicle, setEditingVehicle] = React.useState(null);
+  const [deleteTarget, setDeleteTarget] = React.useState(null);
 
   const load = async () => {
     setLoading(true);
@@ -53,7 +55,7 @@ export default function Garage() {
         <EmptyGarage onAdd={() => setShowForm(true)} />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {vehicles.map((v) => <VehicleCard key={v.id} vehicle={v} />)}
+          {vehicles.map((v) => <VehicleCard key={v.id} vehicle={v} isOwner onEdit={() => setEditingVehicle(v)} onDelete={() => setDeleteTarget(v)} />)}
         </div>
       )}
 
@@ -62,6 +64,41 @@ export default function Garage() {
       {showForm && (
         <VehicleForm onClose={() => setShowForm(false)} onSaved={() => { setShowForm(false); load(); }} />
       )}
+      {editingVehicle && (
+        <VehicleForm vehicle={editingVehicle} onClose={() => setEditingVehicle(null)} onSaved={() => { setEditingVehicle(null); load(); }} />
+      )}
+      {deleteTarget && (
+        <DeleteConfirm vehicle={deleteTarget} onCancel={() => setDeleteTarget(null)} onDeleted={() => { setDeleteTarget(null); load(); }} />
+      )}
+    </div>
+  );
+}
+
+function DeleteConfirm({ vehicle, onCancel, onDeleted }) {
+  const [busy, setBusy] = React.useState(false);
+  const confirm = async () => {
+    setBusy(true);
+    try {
+      await callGarage("vehicle", { action: "deleteVehicle", vehicle_id: vehicle.id });
+      onDeleted();
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onCancel}>
+      <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-5" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-lg font-black">Delete build?</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          This will permanently delete {vehicleLabel(vehicle)} and all its mods, photos and records. This cannot be undone.
+        </p>
+        <div className="mt-4 flex gap-2">
+          <button onClick={onCancel} className="flex-1 rounded-xl border border-border py-2 text-sm font-bold">Cancel</button>
+          <button onClick={confirm} disabled={busy} className="flex-1 rounded-xl bg-destructive py-2 text-sm font-bold text-destructive-foreground disabled:opacity-50">
+            {busy ? "Deleting…" : "Delete"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

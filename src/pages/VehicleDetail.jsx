@@ -8,6 +8,7 @@ import { VerificationBadge, SaleStatusBadge, BuildStatusBadge, OwnershipBadge } 
 import { ModificationItem, TimelineEntryCard, MaintenanceRecordCard, PerformanceRecordCard } from "@/components/garage/RecordCards";
 import VehicleForm from "@/components/garage/VehicleForm";
 import VehiclePhotos from "@/components/garage/VehiclePhotos";
+import VehicleEngagement from "@/components/garage/VehicleEngagement";
 import ModificationForm from "@/components/garage/ModificationForm";
 import MaintenanceForm from "@/components/garage/MaintenanceForm";
 import PerformanceForm from "@/components/garage/PerformanceForm";
@@ -127,6 +128,15 @@ export default function VehicleDetail() {
           )}
         </div>
       </div>
+
+      {/* Engagement — likes & comments */}
+      <VehicleEngagement
+        vehicleId={v.id}
+        initialLiked={data.liked}
+        initialLikeCount={data.like_count}
+        comments={data.comments}
+        currentUserId={data.current_user_id}
+      />
 
       {/* Tabs */}
       <div className="flex gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1 scrollbar-hide">

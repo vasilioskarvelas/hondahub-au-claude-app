@@ -1,10 +1,10 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Pencil, Trash2 } from "lucide-react";
 import { resolveMediaUrl, vehicleLabel } from "@/lib/garage";
 import { VerificationBadge, SaleStatusBadge, BuildStatusBadge, OwnershipBadge } from "./Badges";
 
-export default function VehicleCard({ vehicle }) {
+export default function VehicleCard({ vehicle, isOwner, onEdit, onDelete }) {
   const [cover, setCover] = React.useState(null);
 
   React.useEffect(() => {
@@ -34,7 +34,7 @@ export default function VehicleCard({ vehicle }) {
         </div>
       </div>
       <div className="flex items-center justify-between p-3">
-        <div>
+        <div className="min-w-0">
           <h3 className="text-sm font-black leading-tight">{vehicleLabel(vehicle)}</h3>
           {(vehicle.chassis_code || vehicle.engine_code) && (
             <p className="mt-0.5 text-[11px] text-muted-foreground">
@@ -44,7 +44,14 @@ export default function VehicleCard({ vehicle }) {
             </p>
           )}
         </div>
-        <ChevronRight className="h-4 w-4 text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-primary" />
+        {isOwner ? (
+          <div className="flex shrink-0 gap-1.5" onClick={(e) => e.preventDefault()}>
+            <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onEdit?.(); }} className="rounded-lg border border-border p-1.5 text-muted-foreground transition hover:text-primary"><Pencil className="h-3.5 w-3.5" /></button>
+            <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete?.(); }} className="rounded-lg border border-border p-1.5 text-muted-foreground transition hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+          </div>
+        ) : (
+          <ChevronRight className="h-4 w-4 text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-primary" />
+        )}
       </div>
     </Link>
   );

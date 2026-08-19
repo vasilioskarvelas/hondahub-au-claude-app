@@ -1,0 +1,28 @@
+{
+  "name": "VehicleComment",
+  "type": "object",
+  "properties": {
+    "vehicle_id": {
+      "type": "string",
+      "description": "FK\u2192Vehicle. The build this comment is on."
+    },
+    "text": {
+      "type": "string",
+      "description": "Comment body. Required, length-capped."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "published",
+        "removed_by_author",
+        "removed_by_moderation"
+      ],
+      "default": "published",
+      "description": "published = visible. removed_by_author = the comment's own author removed it. removed_by_moderation = moderator soft-removed it."
+    }
+  },
+  "required": [
+    "vehicle_id",
+    "text"
+  ]
+}

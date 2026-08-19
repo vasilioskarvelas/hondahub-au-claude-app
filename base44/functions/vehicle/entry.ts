@@ -250,14 +250,28 @@ Deno.serve(async (req) => {
       if (vehicle.visibility !== 'public' && !isVehicleOwner(vehicle, user) && !isModOrAdmin(user)) {
         return err('RESOURCE_NOT_FOUND', 404);
       }
-      const [modifications, timeline, maintenance, performance] = await Promise.all([
+      const [modifications, timeline, maintenance, performance, likes, comments] = await Promise.all([
         base44.asServiceRole.entities.Modification.filter({ vehicle_id }, '-updated_date', 200),
         base44.asServiceRole.entities.TimelineEntry.filter({ vehicle_id }, '-entry_date', 200),
         base44.asServiceRole.entities.MaintenanceRecord.filter({ vehicle_id, status: 'active' }, '-service_date', 200),
         base44.asServiceRole.entities.PerformanceRecord.filter({ vehicle_id }, '-result_date', 200),
+        base44.asServiceRole.entities.VehicleLike.filter({ vehicle_id }, '-created_date', 500),
+        base44.asServiceRole.entities.VehicleComment.filter({ vehicle_id, status: 'published' }, '-created_date', 100),
       ]);
       const isOwner = isVehicleOwner(vehicle, user);
-      return Response.json({ ok: true, vehicle, modifications, timeline, maintenance, performance, is_owner: isOwner, can_moderate: isModOrAdmin(user) });
+      const likeCount = likes.length;
+      const liked = likes.some((l: any) => l.user_id === user.id);
+      const authorIds = [...new Set(comments.map((c: any) => c.created_by_id).filter(Boolean))] as string[];
+      const authorUsers = await Promise.all(authorIds.map((id) => base44.asServiceRole.entities.User.get(id).catch(() => null)));
+      const authorMap = new Map(authorUsers.filter(Boolean).map((u: any) => [u.id, u]));
+      const enrichedComments = comments.map((c: any) => {
+        const a = authorMap.get(c.created_by_id);
+        return {
+          id: c.id, text: c.text, created_date: c.created_date, created_by_id: c.created_by_id,
+          author: a ? { id: a.id, display_name: a.display_name, handle: a.handle, avatar_media_id: a.avatar_media_id } : null,
+        };
+      });
+      return Response.json({ ok: true, vehicle, modifications, timeline, maintenance, performance, is_owner: isOwner, can_moderate: isModOrAdmin(user), current_user_id: user.id, like_count: likeCount, liked, comment_count: enrichedComments.length, comments: enrichedComments });
     }
 
     // ---- list (caller's own vehicles) ----
@@ -304,6 +318,67 @@ Deno.serve(async (req) => {
       if (vehicle.cover_media_id === media_id) update.cover_media_id = photos[0] || null;
       const updated = await base44.entities.Vehicle.update(vehicle_id, update);
       return Response.json({ ok: true, vehicle: updated });
+    }
+
+    // ---- deleteVehicle (owner) — delete a vehicle and its related records. ----
+    if (action === 'deleteVehicle') {
+      const { vehicle_id } = body;
+      const vehicle = await getOwnedVehicle(base44, vehicle_id, user);
+      if (!vehicle) return err('PERMISSION_DENIED', 403);
+      await Promise.all([
+        base44.asServiceRole.entities.Modification.deleteMany({ vehicle_id }),
+        base44.asServiceRole.entities.TimelineEntry.deleteMany({ vehicle_id }),
+        base44.asServiceRole.entities.MaintenanceRecord.deleteMany({ vehicle_id }),
+        base44.asServiceRole.entities.PerformanceRecord.deleteMany({ vehicle_id }),
+        base44.asServiceRole.entities.VehicleLike.deleteMany({ vehicle_id }),
+        base44.asServiceRole.entities.VehicleComment.deleteMany({ vehicle_id }),
+      ]);
+      await base44.asServiceRole.entities.Vehicle.delete(vehicle_id);
+      return Response.json({ ok: true });
+    }
+
+    // ---- likeVehicle / unlikeVehicle ----
+    if (action === 'likeVehicle' || action === 'unlikeVehicle') {
+      const { vehicle_id } = body;
+      let v: any;
+      try { v = await base44.asServiceRole.entities.Vehicle.get(vehicle_id); } catch { return err('RESOURCE_NOT_FOUND', 404); }
+      const viewable = v.visibility === 'public' || isVehicleOwner(v, user) || isModOrAdmin(user);
+      if (!viewable) return err('PERMISSION_DENIED', 403);
+      if (action === 'likeVehicle') {
+        const existing = await base44.asServiceRole.entities.VehicleLike.filter({ vehicle_id, user_id: user.id });
+        if (!existing.length) await base44.entities.VehicleLike.create({ vehicle_id, user_id: user.id });
+      } else {
+        await base44.asServiceRole.entities.VehicleLike.deleteMany({ vehicle_id, user_id: user.id });
+      }
+      const all = await base44.asServiceRole.entities.VehicleLike.filter({ vehicle_id });
+      return Response.json({ ok: true, liked: action === 'likeVehicle', like_count: all.length });
+    }
+
+    // ---- addComment ----
+    if (action === 'addComment') {
+      const { vehicle_id, text } = body;
+      if (!text || !String(text).trim()) return err('VALIDATION_FAILED', 422, { text: 'required' });
+      let v: any;
+      try { v = await base44.asServiceRole.entities.Vehicle.get(vehicle_id); } catch { return err('RESOURCE_NOT_FOUND', 404); }
+      const viewable = v.visibility === 'public' || isVehicleOwner(v, user) || isModOrAdmin(user);
+      if (!viewable) return err('PERMISSION_DENIED', 403);
+      const comment = await base44.entities.VehicleComment.create({ vehicle_id, text: String(text).trim(), status: 'published' });
+      let author: any = null;
+      try { author = await base44.asServiceRole.entities.User.get(user.id); } catch {}
+      return Response.json({ ok: true, comment: {
+        id: comment.id, text: comment.text, created_date: comment.created_date, created_by_id: user.id,
+        author: author ? { id: author.id, display_name: author.display_name, handle: author.handle, avatar_media_id: author.avatar_media_id } : null,
+      }});
+    }
+
+    // ---- removeComment (author only) ----
+    if (action === 'removeComment') {
+      const { comment_id } = body;
+      let comment: any;
+      try { comment = await base44.asServiceRole.entities.VehicleComment.get(comment_id); } catch { return err('RESOURCE_NOT_FOUND', 404); }
+      if (comment.created_by_id !== user.id) return err('PERMISSION_DENIED', 403);
+      await base44.asServiceRole.entities.VehicleComment.delete(comment_id);
+      return Response.json({ ok: true });
     }
 
     return err('VALIDATION_FAILED', 422, { action: 'unknown' });
