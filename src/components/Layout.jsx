@@ -11,7 +11,7 @@ const mainNav = [
   { to: "/feed", label: "Socials", icon: Users },
   { to: "/events", label: "Events", icon: CalendarDays },
   { to: "/shop", label: "Shop", icon: ShoppingBag },
-  { to: "/giveaway", label: "Rewards", icon: Gift },
+  { to: "/giveaway", label: "Giveaways", icon: Gift },
 ];
 
 const moreNav = [
