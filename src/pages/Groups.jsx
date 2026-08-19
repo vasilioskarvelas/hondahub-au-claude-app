@@ -9,15 +9,14 @@ export default function Groups() {
   const [groups, setGroups] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [search, setSearch] = React.useState("");
-  const [visibility, setVisibility] = React.useState("");
 
   const load = React.useCallback(async () => {
     setLoading(true);
     try {
-      const res = await base44.functions.invoke("group", { action: "listDirectory", search, visibility });
+      const res = await base44.functions.invoke("group", { action: "listDirectory", search });
       setGroups(res.data?.groups || []);
     } finally { setLoading(false); }
-  }, [search, visibility]);
+  }, [search]);
 
   React.useEffect(() => { const t = setTimeout(load, 200); return () => clearTimeout(t); }, [load]);
 
@@ -38,11 +37,6 @@ export default function Groups() {
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search groups..." className="w-full rounded-xl border border-border bg-card pl-9 pr-4 py-2.5 text-sm outline-none focus:border-primary" />
         </div>
-        <select value={visibility} onChange={(e) => setVisibility(e.target.value)} className="rounded-xl border border-border bg-card px-3 py-2.5 text-sm outline-none focus:border-primary">
-          <option value="">All</option>
-          <option value="public">Public</option>
-          <option value="private">Private</option>
-        </select>
       </div>
 
       {loading ? (
