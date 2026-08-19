@@ -2,7 +2,8 @@ import React from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
-import { ArrowLeft, MapPin, Clock, CalendarDays, Navigation, Users, CheckCircle2, X, Car } from "lucide-react";
+import { ArrowLeft, MapPin, Clock, CalendarDays, Navigation, Users, CheckCircle2, X, Car, Plus } from "lucide-react";
+import AddVehicleInline from "@/components/events/AddVehicleInline";
 
 export default function EventDetail() {
   const { id } = useParams();
@@ -14,6 +15,7 @@ export default function EventDetail() {
   const [error, setError] = React.useState("");
   const [vehicles, setVehicles] = React.useState([]);
   const [vehicleId, setVehicleId] = React.useState("");
+  const [addingVehicle, setAddingVehicle] = React.useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -40,6 +42,12 @@ export default function EventDetail() {
       else setError(res.data?.error || "Failed");
     } finally { setBusy(false); }
   };
+  const onVehicleCreated = (v) => {
+    setVehicles((prev) => [...prev, v]);
+    setVehicleId(v.id);
+    setAddingVehicle(false);
+  };
+
   const withdraw = async () => {
     setBusy(true); setError("");
     try {
@@ -121,6 +129,8 @@ export default function EventDetail() {
                   <option value="">None</option>
                   {vehicles.map((v) => <option key={v.id} value={v.id}>{v.nickname || `${v.year} ${v.make} ${v.model}`}</option>)}
                 </select>
+                <button type="button" onClick={() => setAddingVehicle((s) => !s)} className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-primary"><Plus className="h-3 w-3" /> Add a vehicle not in my garage</button>
+                {addingVehicle && <AddVehicleInline onCreated={onVehicleCreated} onCancel={() => setAddingVehicle(false)} />}
                 <button disabled={busy} onClick={() => attend(my_attendance.status)} className="mt-2 w-full rounded-xl border border-border bg-background py-2.5 text-sm font-bold hover:text-foreground disabled:opacity-50">Update</button>
               </div>
               <button disabled={busy} onClick={withdraw} className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-background py-2.5 text-sm font-bold text-muted-foreground hover:text-foreground disabled:opacity-50"><X className="h-4 w-4" /> Withdraw</button>
@@ -133,6 +143,8 @@ export default function EventDetail() {
                   <option value="">None</option>
                   {vehicles.map((v) => <option key={v.id} value={v.id}>{v.nickname || `${v.year} ${v.make} ${v.model}`}</option>)}
                 </select>
+                <button type="button" onClick={() => setAddingVehicle((s) => !s)} className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-primary"><Plus className="h-3 w-3" /> Add a vehicle not in my garage</button>
+                {addingVehicle && <AddVehicleInline onCreated={onVehicleCreated} onCancel={() => setAddingVehicle(false)} />}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <button disabled={busy} onClick={() => attend("going")} className="flex items-center justify-center gap-2 rounded-xl border py-3 text-sm font-bold border-primary bg-primary/10 text-primary disabled:opacity-50"><CheckCircle2 className="h-4 w-4" /> Going</button>
