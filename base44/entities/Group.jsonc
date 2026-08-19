@@ -41,6 +41,14 @@
     "cover_media_id": {
       "type": "string",
       "description": "FK\u2192Media. Optional cover/logo (source=community)."
+    },
+    "rules": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Group rules set by the owner. Free-text list entries (max 20, each max 200 chars \u2014 service-enforced). Displayed to members on the group chat room."
     }
   },
   "required": [

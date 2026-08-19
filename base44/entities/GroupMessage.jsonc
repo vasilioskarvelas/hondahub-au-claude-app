@@ -1,0 +1,21 @@
+{
+  "name": "GroupMessage",
+  "type": "object",
+  "properties": {
+    "group_id": {
+      "type": "string",
+      "description": "FK\u2192Group. The group chat room this message belongs to."
+    },
+    "body": {
+      "type": "string",
+      "description": "Message text. Optional when a media attachment is present (at least one of body/media_id is required \u2014 service-enforced)."
+    },
+    "media_id": {
+      "type": "string",
+      "description": "FK\u2192Media. Optional photo/video attachment (source=community)."
+    }
+  },
+  "required": [
+    "group_id"
+  ]
+}

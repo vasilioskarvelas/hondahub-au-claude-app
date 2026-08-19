@@ -318,11 +318,71 @@ Deno.serve(async (req) => {
       return json({ ok: true, groups: groups.filter(Boolean) });
     }
 
+    // ---------- listMessages (active members only) ----------
+    if (action === "listMessages") {
+      const group = await base44.entities.Group.get(body.group_id).catch(() => null);
+      if (!group) return err("RESOURCE_NOT_FOUND", 404);
+      const mine = await myMembership(base44, user.id, group.id);
+      if (!mine || mine.status !== MembershipStatus.ACTIVE) return err("PERMISSION_DENIED", 403);
+      const rows = await base44.entities.GroupMessage.filter({ group_id: group.id }, "created_date", 200);
+      const messages = await Promise.all(rows.map(async (m: any) => enrichMessage(base44, m)));
+      return json({ ok: true, messages });
+    }
+
+    // ---------- sendMessage (active members only) ----------
+    if (action === "sendMessage") {
+      const group = await base44.entities.Group.get(body.group_id).catch(() => null);
+      if (!group) return err("RESOURCE_NOT_FOUND", 404);
+      const mine = await myMembership(base44, user.id, group.id);
+      if (!mine || mine.status !== MembershipStatus.ACTIVE) return err("PERMISSION_DENIED", 403);
+      const bodyText = (body.body || "").trim();
+      const mediaId = body.media_id || null;
+      if (!bodyText && !mediaId) return err("VALIDATION_FAILED", 422, { body: "message text or media required" });
+      const msg = await base44.entities.GroupMessage.create({ group_id: group.id, body: bodyText || null, media_id: mediaId });
+      const enriched = await enrichMessage(base44, msg);
+      return json({ ok: true, message: enriched });
+    }
+
+    // ---------- updateRules (owner only) ----------
+    if (action === "updateRules") {
+      const group = await base44.entities.Group.get(body.group_id).catch(() => null);
+      if (!group) return err("RESOURCE_NOT_FOUND", 404);
+      if (group.owner_id !== user.id) return err("PERMISSION_DENIED", 403);
+      let rules: string[] = Array.isArray(body.rules) ? body.rules : [];
+      rules = rules.map((r: any) => String(r || "").trim()).filter(Boolean).slice(0, 20).map((r: string) => r.slice(0, 200));
+      await base44.entities.Group.update(group.id, { rules });
+      return json({ ok: true, rules });
+    }
+
     return err("VALIDATION_FAILED", 422, { action: "unknown" });
   } catch (error) {
     return json({ error: error.message }, 500);
   }
 });
+
+// ---- chat message enrichment ----
+async function enrichMessage(base44: any, m: any) {
+  const u = await base44.asServiceRole.entities.User.get(m.created_by_id).catch(() => null);
+  let media_url: string | null = null;
+  let media_type: string | null = null;
+  if (m.media_id) {
+    const med = await base44.asServiceRole.entities.Media.get(m.media_id).catch(() => null);
+    media_url = med?.file_url || null;
+    media_type = med?.media_type || null;
+  }
+  const avatar_url = await resolveMediaUrl(base44, u?.avatar_media_id);
+  return {
+    id: m.id,
+    body: m.body,
+    media_url,
+    media_type,
+    sender_id: m.created_by_id,
+    sender_name: u?.display_name || u?.handle || "Member",
+    sender_handle: u?.handle || null,
+    avatar_url,
+    created_date: m.created_date,
+  };
+}
 
 // ---- helpers ----
 
