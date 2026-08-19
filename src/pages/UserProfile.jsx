@@ -40,27 +40,25 @@ export default function UserProfile() {
     (async () => {
       try {
         const cleanName = decodedName.replace(/^@/, "");
-        // Try exact handle match first, then case-insensitive across all users.
-        let users = await base44.entities.User.filter({ handle: cleanName });
-        if (users.length === 0) users = await base44.entities.User.filter({ display_name: cleanName });
-        if (users.length === 0) {
-          const all = await base44.entities.User.list(200);
-          const lower = cleanName.toLowerCase();
-          users = all.filter((u) =>
-            (u.handle && u.handle.toLowerCase() === lower) ||
-            (u.display_name && u.display_name.toLowerCase() === lower)
-          );
-        }
-        if (users.length === 0) { setNotFound(true); setProfileUser(null); return; }
-        const u = users[0];
-        setProfileUser(u);
+        // Use the searchUsers backend (service-role) which reliably finds users,
+        // then pick the exact handle/display_name match from results.
+        const res = await base44.functions.invoke("user-profile", { action: "searchUsers", query: cleanName });
+        const all = res.data?.users || [];
+        const lower = cleanName.toLowerCase();
+        let match = all.find((u) => u.handle && u.handle.toLowerCase() === lower)
+          || all.find((u) => u.display_name && u.display_name.toLowerCase() === lower)
+          || all[0];
+        if (!match) { setNotFound(true); setProfileUser(null); return; }
+        // Fetch the full user record (service role already used by search; get full fields).
+        const full = await base44.entities.User.get(match.id);
+        setProfileUser(full);
         try { const m = await base44.auth.me(); setMe(m);
-          if (m.id !== u.id) {
-            const f = await base44.functions.invoke("social", { action: "isFollowing", target_type: "user", target_id: u.id });
+          if (m.id !== full.id) {
+            const f = await base44.functions.invoke("social", { action: "isFollowing", target_type: "user", target_id: full.id });
             setFollowing(!!f.data?.following);
           }
         } catch {}
-        await load(u);
+        await load(full);
       } catch {
         setNotFound(true);
       } finally {
