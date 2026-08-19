@@ -4,8 +4,7 @@ import { Settings, MapPin, Save, LogOut } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
 import TierBadge from "@/components/identity/TierBadge";
-import MediaField from "@/components/identity/MediaField";
-import AvatarReposition from "@/components/identity/AvatarReposition";
+import ProfileAvatarEditor from "@/components/identity/ProfileAvatarEditor";
 import MyListings from "@/components/marketplace/MyListings";
 import { AccountTier } from "@/lib/registries";
 
@@ -102,7 +101,18 @@ export default function Profile() {
       <div className="rounded-2xl border border-border bg-card">
         <div className="px-5 pt-5 pb-5">
           <div className="flex items-end gap-4">
-            <AvatarPreview mediaId={avatarId} name={name} position={avatarPosition} />
+            {editing ? (
+              <ProfileAvatarEditor
+                avatarUrl={avatarUrl}
+                position={avatarPosition}
+                name={name}
+                onUpdated={(id, url) => { setAvatarId(id); setAvatarUrl(url); saveMediaField("avatar_media_id", id); }}
+                onCleared={() => { setAvatarId(null); setAvatarUrl(null); saveMediaField("avatar_media_id", null); }}
+                onPositionChange={(p) => { setAvatarPosition(p); saveMediaField("avatar_position", p); }}
+              />
+            ) : (
+              <AvatarPreview mediaId={avatarId} name={name} position={avatarPosition} />
+            )}
             <div className="flex-1 pb-1">
               <h1 className="text-xl font-black">{name}</h1>
               {user.handle && <p className="text-xs text-muted-foreground">@{user.handle}</p>}
@@ -123,24 +133,6 @@ export default function Profile() {
         <div className="space-y-4 rounded-2xl border border-border bg-card p-5">
           <h2 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">Edit Profile</h2>
           {error && <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}
-          <MediaField
-            label="Avatar"
-            kind="avatar"
-            source="user"
-            mediaId={avatarId}
-            onUpdated={(id, url) => { setAvatarId(id); setAvatarUrl(url); saveMediaField("avatar_media_id", id); }}
-            onCleared={() => { setAvatarId(null); setAvatarUrl(null); saveMediaField("avatar_media_id", null); }}
-          />
-          {avatarId && (
-            <AvatarReposition
-              src={avatarUrl}
-              position={avatarPosition}
-              onPositionChange={(p) => {
-                setAvatarPosition(p);
-                saveMediaField("avatar_position", p);
-              }}
-            />
-          )}
           <Field label="Handle" value={form.handle} onChange={(v) => setForm({ ...form, handle: v })} hint="Public username. 3-20 chars, alphanumeric/underscore. Must be unique." />
           <Field label="Display Name" value={form.display_name} onChange={(v) => setForm({ ...form, display_name: v })} />
           <Field label="Bio" value={form.bio} onChange={(v) => setForm({ ...form, bio: v })} multiline hint="Max 500 characters." />
