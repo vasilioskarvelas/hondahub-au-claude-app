@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/AuthContext";
 import TierBadge from "@/components/identity/TierBadge";
 import MediaField from "@/components/identity/MediaField";
 import AvatarReposition from "@/components/identity/AvatarReposition";
+import MyListings from "@/components/marketplace/MyListings";
 import { AccountTier } from "@/lib/registries";
 
 export default function Profile() {
@@ -153,6 +154,8 @@ export default function Profile() {
           </div>
         </div>
       )}
+
+      <MyListings />
 
       <div className="rounded-2xl border border-border bg-card p-5">
         <h2 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">Account</h2>

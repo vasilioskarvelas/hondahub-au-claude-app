@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { ArrowLeft, MessageSquare, Tag, Clock, RefreshCw, Trash2, CheckCircle2, Flag, Gavel } from "lucide-react";
+import { ArrowLeft, MessageSquare, Tag, Clock, RefreshCw, Trash2, CheckCircle2, Flag, Gavel, Pencil } from "lucide-react";
 import CategoryAttributeDisplay from "@/components/marketplace/CategoryAttributeDisplay";
 import QualityScore from "@/components/marketplace/QualityScore";
 import ReportDialog from "@/components/moderation/ReportDialog";
@@ -176,7 +176,7 @@ export default function MarketplaceListingDetail() {
             {["active", "reserved"].includes(listing.status) && <button disabled={busy === "done"} onClick={() => call("markCompleted", { listing_id: id }, "done")} className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50"><CheckCircle2 className="h-4 w-4" /> {busy === "done" ? "..." : listing.listing_type === "wanted" ? "Mark fulfilled" : "Mark sold"}</button>}
             {listing.status === "expired" && <button disabled={busy === "ren"} onClick={() => call("renewListing", { listing_id: id }, "ren")} className="inline-flex items-center gap-1.5 rounded-xl border border-border px-4 py-2.5 text-sm font-bold disabled:opacity-50"><RefreshCw className="h-4 w-4" /> {busy === "ren" ? "..." : "Renew"}</button>}
             {["active", "reserved", "expired"].includes(listing.status) && <button disabled={busy === "rm"} onClick={() => call("removeListing", { listing_id: id }, "rm")} className="inline-flex items-center gap-1.5 rounded-xl border border-border px-4 py-2.5 text-sm font-bold text-destructive disabled:opacity-50"><Trash2 className="h-4 w-4" /> {busy === "rm" ? "..." : "Remove"}</button>}
-            {listing.status === "draft" && <Link to={`/marketplace/${id}/edit`} className="rounded-xl border border-border px-4 py-2.5 text-sm font-bold">Edit</Link>}
+            {["draft", "pending_review", "active", "reserved", "expired"].includes(listing.status) && <Link to={`/marketplace/${id}/edit`} className="inline-flex items-center gap-1.5 rounded-xl border border-border px-4 py-2.5 text-sm font-bold"><Pencil className="h-4 w-4" /> Edit</Link>}
           </>
         )}
         {isMod && listing.status === "pending_review" && (
