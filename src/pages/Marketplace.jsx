@@ -99,17 +99,12 @@ export default function Marketplace() {
           </select>
           <button onClick={load} className="rounded-xl bg-secondary px-4 py-2 text-sm font-bold">Search</button>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button onClick={() => setFilters({ ...filters, category: "" })} className={`rounded-full border px-3 py-1 text-xs font-bold ${!filters.category ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"}`}>All</button>
-          {CATEGORIES.map((c) => {
-            const Icon = c.i;
-            const sel = filters.category === c.v;
-            return (
-              <button key={c.v} onClick={() => setFilters({ ...filters, category: c.v })} className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-bold ${sel ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"}`}>
-                <Icon className="h-3 w-3" /> {c.l}
-              </button>
-            );
-          })}
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Category:</span>
+          <select value={filters.category} onChange={(e) => setFilters({ ...filters, category: e.target.value })} className="rounded-xl border border-border bg-background px-3 py-1.5 text-sm outline-none focus:border-primary">
+            <option value="">All categories</option>
+            {CATEGORIES.map((c) => <option key={c.v} value={c.v}>{c.l}</option>)}
+          </select>
         </div>
         {(filters.category && filters.category !== "vehicle") && (
           <div className="space-y-2 border-t border-border pt-3">
