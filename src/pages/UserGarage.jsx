@@ -31,9 +31,16 @@ export default function UserGarage() {
           || all[0] || null;
         if (!active) return;
         setUser(match);
-        // Filter garage cars by the user's id (created_by_id); fallback to owner_name.
-        const carFilter = match ? { created_by_id: match.id } : { owner_name: decodedName };
-        const gc = await base44.entities.GarageCar.filter(carFilter, "-created_date", 50);
+        // Filter garage cars by the user's id (created_by_id); fallback to owner_name
+        // (used by seeded/bot garages whose created_by_id is the service role).
+        let gc = [];
+        if (match) {
+          gc = await base44.entities.GarageCar.filter({ created_by_id: match.id }, "-created_date", 50);
+        }
+        if (gc.length === 0) {
+          const ownerName = (match?.handle || match?.display_name || decodedName).replace(/^@/, "");
+          gc = await base44.entities.GarageCar.filter({ owner_name: ownerName }, "-created_date", 50);
+        }
         if (!active) return;
         setCars(gc);
         // Resolve avatar URL.

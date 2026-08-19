@@ -2,12 +2,15 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { Heart, MessageCircle, Car } from "lucide-react";
 import { base44 } from "@/api/base44Client";
+import { useAuth } from "@/lib/AuthContext";
+import FollowButton from "@/components/social/FollowButton";
 import { ReportButton } from "@/components/moderation/ReportDialog";
 
 export default function PostCard({ post, onLiked, compact }) {
   const [liked, setLiked] = React.useState(!!post.liked);
   const [likeCount, setLikeCount] = React.useState(post.like_count || 0);
   const [busy, setBusy] = React.useState(false);
+  const { user } = useAuth();
 
   const author = post.author || {};
   const authorName = author.display_name || author.handle || author.full_name || "Honda Enthusiast";
@@ -45,6 +48,9 @@ export default function PostCard({ post, onLiked, compact }) {
           <Link to={authorHandle ? `/user/${authorHandle}/garage` : "#"} className="block truncate text-sm font-bold hover:text-primary">{authorName}</Link>
           {authorHandle && <p className="truncate text-xs text-muted-foreground">@{authorHandle}</p>}
         </div>
+        {user && author.id && author.id !== user.id && (
+          <FollowButton targetType="user" targetId={author.id} initialFollowing={!!post.following} />
+        )}
         <span className="text-xs text-muted-foreground">{timeAgo(post.created_date)}</span>
       </div>
 

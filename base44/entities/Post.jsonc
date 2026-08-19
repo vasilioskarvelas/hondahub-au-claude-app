@@ -14,6 +14,10 @@
       "type": "string",
       "description": "FK\u2192Vehicle. Must be owned by the post author (ownership enforced via ReferenceResolverService + created_by_id check). Ownership only \u2014 does not support mentioning another user's vehicle (deferred VehicleMention entity)."
     },
+    "author_id": {
+      "type": "string",
+      "description": "Optional FK\u2192User. Denormalized displayed author (used for seeded/bot content whose created_by_id is the service role). When set, this is the displayed author and the follow target; falls back to created_by_id when absent."
+    },
     "status": {
       "type": "string",
       "enum": [

@@ -360,7 +360,7 @@ Deno.serve(async (req) => {
         // business target → backing entity lands in Phase 07; owner resolution deferred.
       }
       const posts = await base44.entities.Post.filter(
-        { created_by_id: { $in: Array.from(authorIds) }, status: "published" },
+        { $or: [{ created_by_id: { $in: Array.from(authorIds) } }, { author_id: { $in: Array.from(authorIds) } }], status: "published" },
         "-created_date",
         limit,
       );
@@ -398,7 +398,7 @@ Deno.serve(async (req) => {
     if (action === "listProfilePosts") {
       const targetUserId = body.user_id || (user && user.id);
       if (!targetUserId) return Response.json({ ok: true, posts: [] });
-      const posts = await base44.asServiceRole.entities.Post.filter({ created_by_id: targetUserId, status: "published" }, "-created_date", body.limit || 50);
+      const posts = await base44.asServiceRole.entities.Post.filter({ $or: [{ created_by_id: targetUserId }, { author_id: targetUserId }], status: "published" }, "-created_date", body.limit || 50);
       return Response.json({ ok: true, posts: await enrichPosts(base44, user, posts) });
     }
 
@@ -440,8 +440,9 @@ function extractHashtags(caption: string): string[] {
   return Array.from(new Set(matches.map((m) => m.toLowerCase())));
 }
 
-async function enrichOne(base44: any, user: any, post: any) {
-  const author = await safeUser(base44, post.created_by_id);
+async function enrichOne(base44: any, user: any, post: any, followingIds?: Set<string>) {
+  const authorId = post.author_id || post.created_by_id;
+  const author = await safeUser(base44, authorId);
   const avatar_url = author ? await resolveMediaUrl(base44, author.avatar_media_id) : null;
   let vehicle = null;
   if (post.primary_vehicle_id) {
@@ -452,11 +453,21 @@ async function enrichOne(base44: any, user: any, post: any) {
     try { media = await base44.asServiceRole.entities.Media.get(post.media_id); } catch {}
   }
   const like = user ? await base44.entities.PostLike.filter({ post_id: post.id, user_id: user.id }) : [];
-  return { ...post, author: author ? { ...author, avatar_url } : null, vehicle, media_url: media?.file_url || null, liked: like.length > 0 };
+  return { ...post, author: author ? { ...author, avatar_url } : null, vehicle, media_url: media?.file_url || null, liked: like.length > 0, following: !!(followingIds && authorId && followingIds.has(authorId)) };
 }
 
 async function enrichPosts(base44: any, user: any, posts: any[]) {
-  return Promise.all(posts.map((p) => enrichOne(base44, user, p)));
+  let followingIds = new Set<string>();
+  if (user && posts.length) {
+    const authorIds = Array.from(new Set(posts.map((p) => p.author_id || p.created_by_id).filter(Boolean)));
+    if (authorIds.length) {
+      try {
+        const follows = await base44.entities.Follow.filter({ follower_id: user.id, target_type: "user", target_id: { $in: authorIds } });
+        for (const f of follows) followingIds.add(f.target_id);
+      } catch {}
+    }
+  }
+  return Promise.all(posts.map((p) => enrichOne(base44, user, p, followingIds)));
 }
 
 async function enrichAuthors(base44: any, comments: any[], user: any) {
