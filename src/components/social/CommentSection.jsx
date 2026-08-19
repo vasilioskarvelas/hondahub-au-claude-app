@@ -1,7 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { Send, EyeOff, Trash2 } from "lucide-react";
+import { Send, EyeOff, Trash2, Heart } from "lucide-react";
 import { ReportButton } from "@/components/moderation/ReportDialog";
 
 export default function CommentSection({ postId, initialComments, isPostAuthor, isModerator, currentUserId }) {
@@ -12,6 +12,16 @@ export default function CommentSection({ postId, initialComments, isPostAuthor, 
   const [busy, setBusy] = React.useState(false);
 
   React.useEffect(() => { setComments(initialComments || []); }, [initialComments]);
+
+  const toggleCommentLike = async (comment) => {
+    const wasLiked = comment.liked;
+    setComments((cs) => cs.map((x) => x.id === comment.id ? { ...x, liked: !wasLiked, like_count: (x.like_count || 0) + (wasLiked ? -1 : 1) } : x));
+    try {
+      await base44.functions.invoke("social", { action: wasLiked ? "unlikeComment" : "likeComment", comment_id: comment.id });
+    } catch {
+      setComments((cs) => cs.map((x) => x.id === comment.id ? { ...x, liked: wasLiked, like_count: (x.like_count || 0) + (wasLiked ? 1 : -1) } : x));
+    }
+  };
 
   const submit = async () => {
     if (!text.trim() || busy) return;
@@ -82,6 +92,7 @@ export default function CommentSection({ postId, initialComments, isPostAuthor, 
               onRemoveOwn={removeOwn}
               onHide={hideComment}
               onReply={() => setReplyTo(replyTo === c.id ? null : c.id)}
+              onLike={() => toggleCommentLike(c)}
             />
             {replyTo === c.id && (
               <div className="pl-12">
@@ -97,6 +108,7 @@ export default function CommentSection({ postId, initialComments, isPostAuthor, 
                   isModerator={isModerator}
                   onRemoveOwn={removeOwn}
                   onHide={hideComment}
+                  onLike={() => toggleCommentLike(r)}
                   isReply
                 />
               </div>
@@ -108,7 +120,7 @@ export default function CommentSection({ postId, initialComments, isPostAuthor, 
   );
 }
 
-function CommentRow({ c, currentUserId, isPostAuthor, isModerator, onRemoveOwn, onHide, onReply, isReply }) {
+function CommentRow({ c, currentUserId, isPostAuthor, isModerator, onRemoveOwn, onHide, onReply, onLike, isReply }) {
   const author = c.author || {};
   const authorName = author.display_name || author.handle || author.full_name || "Member";
   const authorHandle = author.handle;
@@ -136,6 +148,12 @@ function CommentRow({ c, currentUserId, isPostAuthor, isModerator, onRemoveOwn, 
           <p className="mt-0.5 whitespace-pre-wrap text-sm">{c.text}</p>
         )}
         <div className="mt-1 flex items-center gap-3">
+          {!removed && !hidden && (
+            <button onClick={onLike} className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground transition hover:text-primary">
+              <Heart className={`h-3 w-3 ${c.liked ? "fill-primary text-primary" : ""}`} />
+              {(c.like_count || 0) > 0 && <span>{c.like_count}</span>}
+            </button>
+          )}
           {!removed && !hidden && !isReply && (
             <button onClick={onReply} className="text-xs font-semibold text-muted-foreground hover:text-foreground">Reply</button>
           )}

@@ -56,6 +56,12 @@ async function recomputeCommentCount(base44: any, postId: string): Promise<numbe
   return comments.length;
 }
 
+async function recomputeCommentLikeCount(base44: any, commentId: string): Promise<number> {
+  const likes = await base44.asServiceRole.entities.CommentLike.filter({ comment_id: commentId });
+  await base44.asServiceRole.entities.Comment.update(commentId, { like_count: likes.length });
+  return likes.length;
+}
+
 async function validateOwnedVehicle(base44: any, user: any, vehicleId: string): Promise<{ ok: boolean; error?: string }> {
   const ref = await validateReference(base44, { target_type: ReferenceTypes.VEHICLE, target_id: vehicleId, allowedTypes: [ReferenceTypes.VEHICLE] });
   if (!ref.valid) return { ok: false, error: ref.error };
@@ -188,6 +194,29 @@ Deno.serve(async (req) => {
       if (existing.length > 0) {
         await base44.entities.PostLike.delete(existing[0].id);
         await recomputeLikeCount(base44, body.post_id);
+      }
+      return Response.json({ ok: true, liked: false });
+    }
+
+    // ---- likeComment ----
+    if (action === "likeComment") {
+      const comment = await base44.entities.Comment.get(body.comment_id);
+      if (comment.status !== "published") return Response.json({ error: "VALIDATION_FAILED", details: { comment: "not likeable" } }, { status: 422 });
+      const existing = await base44.entities.CommentLike.filter({ comment_id: body.comment_id, user_id: user.id });
+      if (existing.length > 0) {
+        return Response.json({ ok: true, liked: true, already_liked: true, like_count: comment.like_count });
+      }
+      await base44.entities.CommentLike.create({ comment_id: body.comment_id, user_id: user.id });
+      const likeCount = await recomputeCommentLikeCount(base44, body.comment_id);
+      return Response.json({ ok: true, liked: true, like_count: likeCount });
+    }
+
+    // ---- unlikeComment ----
+    if (action === "unlikeComment") {
+      const existing = await base44.entities.CommentLike.filter({ comment_id: body.comment_id, user_id: user.id });
+      if (existing.length > 0) {
+        await base44.entities.CommentLike.delete(existing[0].id);
+        await recomputeCommentLikeCount(base44, body.comment_id);
       }
       return Response.json({ ok: true, liked: false });
     }
@@ -330,7 +359,7 @@ Deno.serve(async (req) => {
       return Response.json({
         ok: true,
         post: await enrichOne(base44, user, post),
-        comments: await enrichAuthors(base44, comments),
+        comments: await enrichAuthors(base44, comments, user),
         liked: existingLike.length > 0,
         can_hide_comments: isPostAuthor,
         is_moderator: isMod,
@@ -396,11 +425,13 @@ async function enrichPosts(base44: any, user: any, posts: any[]) {
   return Promise.all(posts.map((p) => enrichOne(base44, user, p)));
 }
 
-async function enrichAuthors(base44: any, comments: any[]) {
+async function enrichAuthors(base44: any, comments: any[], user: any) {
   const ids = Array.from(new Set(comments.map((c) => c.created_by_id)));
   const users = await Promise.all(ids.map((id) => safeUser(base44, id)));
   const map = new Map(users.filter(Boolean).map((u: any) => [u.id, u]));
-  return comments.map((c) => ({ ...c, author: map.get(c.created_by_id) || null }));
+  const likedRows = user ? await base44.entities.CommentLike.filter({ comment_id: { $in: comments.map((c) => c.id) }, user_id: user.id }) : [];
+  const likedSet = new Set(likedRows.map((l: any) => l.comment_id));
+  return comments.map((c) => ({ ...c, author: map.get(c.created_by_id) || null, liked: likedSet.has(c.id) }));
 }
 
 async function safeUser(base44: any, id: string) {
