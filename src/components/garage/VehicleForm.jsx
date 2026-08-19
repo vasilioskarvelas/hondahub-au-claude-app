@@ -5,6 +5,14 @@ import {
 } from "@/lib/garage";
 import { Modal, Field, TextArea, Select, DateField, SaveButton } from "./FormKit";
 
+const EDITABLE_FIELDS = [
+  "nickname", "make", "model", "generation", "chassis_code", "body_style", "colour",
+  "ownership_relationship", "build_status", "trim", "engine_code", "engine_capacity",
+  "transmission", "drivetrain", "fuel_type", "odometer_km", "power_kw",
+  "registration_state", "purchase_date", "purchase_price", "build_goal",
+  "build_description", "visibility",
+];
+
 export default function VehicleForm({ onClose, onSaved, vehicle }) {
   const editing = !!vehicle;
   const [form, setForm] = React.useState(vehicle || { make: "Honda", model: "", year: "", ownership_relationship: "current", build_status: "stock", sale_status: "not_for_sale", visibility: "public" });
@@ -15,7 +23,13 @@ export default function VehicleForm({ onClose, onSaved, vehicle }) {
   const save = async () => {
     setSaving(true); setError(null);
     try {
-      const payload = { ...form, year: form.year ? Number(form.year) : undefined };
+      // Send only editable spec fields — never verification_status/cover/media
+      // (the update action rejects requests carrying verification_status).
+      const payload = {};
+      for (const k of EDITABLE_FIELDS) {
+        if (form[k] !== undefined && form[k] !== "") payload[k] = form[k];
+      }
+      if (form.year) payload.year = Number(form.year);
       const data = editing
         ? await callGarage("vehicle", { action: "update", vehicle_id: vehicle.id, ...payload })
         : await callGarage("vehicle", { action: "create", ...payload });
