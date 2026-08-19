@@ -17,6 +17,7 @@ import { isValidHandle } from "../../shared/identity.ts";
 const ALLOWED_PROFILE_FIELDS = [
   'handle', 'display_name', 'bio', 'location_general',
   'phone', 'avatar_media_id', 'cover_media_id', 'last_active_at',
+  'avatar_position',
 ];
 const ACCOUNT_STATUS_VALUES = ['active', 'suspended', 'banned', 'deactivated_by_user', 'pending_deletion'];
 

@@ -56,6 +56,10 @@
       "type": "string",
       "description": "Stubbed \u2014 Media entity built in Phase 02. Selector pointer into the user's own Media."
     },
+    "avatar_position": {
+      "type": "string",
+      "description": "CSS object-position value (e.g. '50% 30%') controlling how the avatar image is cropped within its circular frame. Default '50% 50%' (centered)."
+    },
     "cover_media_id": {
       "type": "string",
       "description": "Stubbed \u2014 Media entity built in Phase 02."

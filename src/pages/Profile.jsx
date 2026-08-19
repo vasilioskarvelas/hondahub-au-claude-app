@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
 import TierBadge from "@/components/identity/TierBadge";
 import MediaField from "@/components/identity/MediaField";
+import AvatarReposition from "@/components/identity/AvatarReposition";
 import { AccountTier } from "@/lib/registries";
 
 export default function Profile() {
@@ -14,6 +15,8 @@ export default function Profile() {
   const [editing, setEditing] = React.useState(false);
   const [form, setForm] = React.useState({});
   const [avatarId, setAvatarId] = React.useState(null);
+  const [avatarUrl, setAvatarUrl] = React.useState(null);
+  const [avatarPosition, setAvatarPosition] = React.useState("50% 50%");
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState(null);
   const navigate = useNavigate();
@@ -24,6 +27,7 @@ export default function Profile() {
     if (!authUser) return;
     setUser(authUser);
     setAvatarId(authUser.avatar_media_id || null);
+    setAvatarPosition(authUser.avatar_position || "50% 50%");
     setForm({
       handle: authUser.handle || "",
       display_name: authUser.display_name || authUser.full_name || "",
@@ -31,6 +35,12 @@ export default function Profile() {
       location_general: authUser.location_general || "",
       phone: authUser.phone || "",
     });
+    // Resolve avatar URL for the reposition widget.
+    if (authUser.avatar_media_id) {
+      base44.functions.invoke("media", { action: "get", media_id: authUser.avatar_media_id })
+        .then((r) => setAvatarUrl(r.data?.media?.file_url || null))
+        .catch(() => {});
+    }
     // Lazy-init TrustScore — non-blocking.
     base44.functions.invoke("trust-score", { action: "init" })
       .then((res) => setTrustScore(res.data?.trust_score || null))
@@ -91,7 +101,7 @@ export default function Profile() {
       <div className="rounded-2xl border border-border bg-card">
         <div className="px-5 pt-5 pb-5">
           <div className="flex items-end gap-4">
-            <AvatarPreview mediaId={avatarId} name={name} />
+            <AvatarPreview mediaId={avatarId} name={name} position={avatarPosition} />
             <div className="flex-1 pb-1">
               <h1 className="text-xl font-black">{name}</h1>
               {user.handle && <p className="text-xs text-muted-foreground">@{user.handle}</p>}
@@ -117,9 +127,19 @@ export default function Profile() {
             kind="avatar"
             source="user"
             mediaId={avatarId}
-            onUpdated={(id) => { setAvatarId(id); saveMediaField("avatar_media_id", id); }}
-            onCleared={() => { setAvatarId(null); saveMediaField("avatar_media_id", null); }}
+            onUpdated={(id, url) => { setAvatarId(id); setAvatarUrl(url); saveMediaField("avatar_media_id", id); }}
+            onCleared={() => { setAvatarId(null); setAvatarUrl(null); saveMediaField("avatar_media_id", null); }}
           />
+          {avatarId && (
+            <AvatarReposition
+              src={avatarUrl}
+              position={avatarPosition}
+              onPositionChange={(p) => {
+                setAvatarPosition(p);
+                saveMediaField("avatar_position", p);
+              }}
+            />
+          )}
           <Field label="Handle" value={form.handle} onChange={(v) => setForm({ ...form, handle: v })} hint="Public username. 3-20 chars, alphanumeric/underscore. Must be unique." />
           <Field label="Display Name" value={form.display_name} onChange={(v) => setForm({ ...form, display_name: v })} />
           <Field label="Bio" value={form.bio} onChange={(v) => setForm({ ...form, bio: v })} multiline hint="Max 500 characters." />
@@ -173,7 +193,7 @@ function Row({ label, value }) {
   );
 }
 
-function AvatarPreview({ mediaId, name }) {
+function AvatarPreview({ mediaId, name, position }) {
   const [url, setUrl] = React.useState(null);
   React.useEffect(() => {
     let active = true;
@@ -184,7 +204,7 @@ function AvatarPreview({ mediaId, name }) {
     return () => { active = false; };
   }, [mediaId]);
   if (url) {
-    return <img src={url} alt={name} className="h-20 w-20 rounded-full border-4 border-card object-cover" />;
+    return <img src={url} alt={name} className="h-20 w-20 rounded-full border-4 border-card object-cover" style={{ objectPosition: position || "50% 50%" }} />;
   }
   return (
     <div className="flex h-20 w-20 items-center justify-center rounded-full border-4 border-card bg-primary text-2xl font-black text-primary-foreground">

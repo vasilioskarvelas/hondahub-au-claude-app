@@ -20,10 +20,18 @@ export default function UserProfile() {
   const [followingCount, setFollowingCount] = React.useState(0);
   const [loading, setLoading] = React.useState(true);
   const [notFound, setNotFound] = React.useState(false);
+  const [avatarUrl, setAvatarUrl] = React.useState(null);
 
   const load = async (u) => {
     const ts = await base44.entities.TrustScore.filter({ user_id: u.id });
     setTrustScore(ts[0] || null);
+    if (u.avatar_media_id) {
+      base44.functions.invoke("media", { action: "get", media_id: u.avatar_media_id })
+        .then((r) => setAvatarUrl(r.data?.media?.file_url || null))
+        .catch(() => setAvatarUrl(null));
+    } else {
+      setAvatarUrl(null);
+    }
     const [postsRes, folRes, folgRes] = await Promise.all([
       base44.functions.invoke("social", { action: "listProfilePosts", user_id: u.id }).catch(() => ({ data: { posts: [] } })),
       base44.functions.invoke("social", { action: "listFollowers", user_id: u.id }).catch(() => ({ data: { count: 0 } })),
@@ -94,8 +102,10 @@ export default function UserProfile() {
         <div className="carbon-bg h-24 bg-secondary" />
         <div className="px-5 pb-5">
           <div className="-mt-10 flex items-end gap-4">
-            <div className="flex h-20 w-20 items-center justify-center rounded-full border-4 border-card bg-primary text-2xl font-black text-primary-foreground">
-              {displayName.charAt(0).toUpperCase()}
+            <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border-4 border-card bg-primary text-2xl font-black text-primary-foreground">
+              {avatarUrl
+                ? <img src={avatarUrl} alt={displayName} className="h-full w-full object-cover" style={{ objectPosition: profileUser.avatar_position || "50% 50%" }} />
+                : displayName.charAt(0).toUpperCase()}
             </div>
             <div className="flex-1 pb-1">
               <h1 className="text-xl font-black">{displayName}</h1>

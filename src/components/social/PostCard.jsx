@@ -39,7 +39,7 @@ export default function PostCard({ post, onLiked, compact }) {
     <article className="overflow-hidden rounded-2xl border border-border bg-card">
       <div className="flex items-center gap-3 p-4">
         <Link to={authorHandle ? `/user/${authorHandle}` : "#"} className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-primary text-sm font-black text-primary-foreground">
-          {author.avatar_url ? <img src={author.avatar_url} alt={authorName} className="h-full w-full object-cover" /> : avatarLetter}
+          {author.avatar_url ? <img src={author.avatar_url} alt={authorName} className="h-full w-full object-cover" style={{ objectPosition: author.avatar_position || "50% 50%" }} /> : avatarLetter}
         </Link>
         <div className="flex-1 min-w-0">
           <Link to={authorHandle ? `/user/${authorHandle}` : "#"} className="block truncate text-sm font-bold hover:text-primary">{authorName}</Link>
