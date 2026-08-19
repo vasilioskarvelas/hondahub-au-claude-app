@@ -1,6 +1,7 @@
 import React from "react";
 import { base44 } from "@/api/base44Client";
-import { Bell, Heart, MessageCircle, UserPlus, AtSign, Tag, CalendarDays, Shield, FileWarning, TrendingUp } from "lucide-react";
+import { Bell, Heart, MessageCircle, UserPlus, AtSign, Tag, CalendarDays, Shield, FileWarning, TrendingUp, ShoppingBag, Car } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { NotificationType } from "@/lib/registries";
 
 const ICONS = {
@@ -13,6 +14,9 @@ const ICONS = {
   [NotificationType.MODERATION_OUTCOME]: Shield,
   [NotificationType.REPORT_UPDATE]: FileWarning,
   [NotificationType.TRUST_TIER_CHANGE]: TrendingUp,
+  [NotificationType.NEW_MARKETPLACE_MESSAGE]: MessageCircle,
+  [NotificationType.LISTING_UPDATE]: ShoppingBag,
+  [NotificationType.NEW_VEHICLE_UPDATE]: Car,
 };
 
 const LABELS = {
@@ -25,11 +29,22 @@ const LABELS = {
   [NotificationType.MODERATION_OUTCOME]: "moderation outcome",
   [NotificationType.REPORT_UPDATE]: "report update",
   [NotificationType.TRUST_TIER_CHANGE]: "your trust tier increased",
+  [NotificationType.NEW_MARKETPLACE_MESSAGE]: "sent you a marketplace message",
+  [NotificationType.LISTING_UPDATE]: "new activity on your listing",
+  [NotificationType.NEW_VEHICLE_UPDATE]: "new update on a vehicle you follow",
+};
+
+// Where tapping a notification of this type should navigate.
+const ROUTES = {
+  [NotificationType.NEW_MARKETPLACE_MESSAGE]: "/conversations",
+  [NotificationType.LISTING_UPDATE]: "/marketplace",
+  [NotificationType.NEW_VEHICLE_UPDATE]: "/feed",
 };
 
 export default function Notifications() {
   const [notifications, setNotifications] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
+  const navigate = useNavigate();
 
   const load = async () => {
     try {
@@ -49,6 +64,12 @@ export default function Notifications() {
     const ts = new Date().toISOString();
     await base44.entities.Notification.update(n.id, { read_at: ts });
     setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, read_at: ts } : x)));
+  };
+
+  const handleTap = (n) => {
+    handleMarkRead(n);
+    const route = ROUTES[n.notification_type];
+    if (route) navigate(route);
   };
 
   const handleMarkAllRead = async () => {
@@ -87,7 +108,7 @@ export default function Notifications() {
             return (
               <div
                 key={n.id}
-                onClick={() => handleMarkRead(n)}
+                onClick={() => handleTap(n)}
                 className="flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition active:scale-[0.98]"
                 style={{
                   backgroundColor: unread ? "#1F1F1F" : "#1A1A1A",

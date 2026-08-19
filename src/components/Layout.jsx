@@ -3,6 +3,7 @@ import { Outlet, Link, useLocation } from "react-router-dom";
 import { Home, CalendarDays, User, MessageCircle, Search, Crown, Users, Gift, ShoppingBag, Bell, MoreHorizontal, Settings as SettingsIcon, Wrench, Cpu, FlaskConical, Shield, ScrollText, Gauge, LayoutDashboard } from "lucide-react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/lib/AuthContext';
+import { base44 } from '@/api/base44Client';
 
 const mainNav = [
   { to: "/", label: "Home", icon: Home },
@@ -30,6 +31,7 @@ const moreNav = [
 export default function Layout() {
   const location = useLocation();
   const [menuOpen, setMenuOpen] = React.useState(false);
+  const [unread, setUnread] = React.useState(0);
   const { user } = useAuth();
   const isMod = user?.role === 'admin' || user?.account_tier === 'moderator';
   const isAdmin = user?.role === 'admin';
@@ -39,6 +41,17 @@ export default function Layout() {
   React.useEffect(() => {
     setMenuOpen(false);
   }, [location.pathname]);
+
+  // Fetch unread notification count on mount and on route change so the bell
+  // badge stays current after actions that create notifications.
+  React.useEffect(() => {
+    if (!user) return;
+    let active = true;
+    base44.entities.Notification.filter({ recipient_id: user.id, read_at: null }, "-created_date", 100)
+      .then((ns) => { if (active) setUnread(ns.length); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [user, location.pathname]);
 
   const isMoreActive = visibleMoreNav.some((item) => location.pathname === item.to);
 
@@ -91,6 +104,11 @@ export default function Layout() {
             </div>
             <Link to="/notifications" className="relative rounded-lg p-2 text-muted-foreground hover:bg-secondary hover:text-foreground">
               <Bell className="h-5 w-5" />
+              {unread > 0 && (
+                <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+                  {unread > 99 ? "99+" : unread}
+                </span>
+              )}
             </Link>
             <Link to="/marketplace" className="rounded-lg p-2 text-muted-foreground hover:bg-secondary hover:text-foreground md:hidden">
               <Search className="h-5 w-5" />
