@@ -22,7 +22,7 @@ function detailRows(f) {
   return rows;
 }
 
-export default function ReviewStep({ f, vehicles, quality, busy, onPublish }) {
+export default function ReviewStep({ f, vehicles, quality, busy, onPublish, isLiveEdit }) {
   const vehicle = f.flow === "vehicle" ? vehicles.find((v) => v.id === f.primary_vehicle_id) : null;
   const rows = detailRows(f);
   const conditionLabel = CONDITIONS.find((c) => c.v === f.condition)?.l || f.condition;
@@ -111,7 +111,7 @@ export default function ReviewStep({ f, vehicles, quality, busy, onPublish }) {
         onClick={onPublish}
         className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3.5 text-sm font-bold text-primary-foreground glow-red disabled:opacity-50"
       >
-        {busy === "publish" ? <><Loader2 className="h-4 w-4 animate-spin" /> Publishing…</> : <><CheckCircle2 className="h-4 w-4" /> Publish listing</>}
+        {busy === "publish" ? <><Loader2 className="h-4 w-4 animate-spin" /> {isLiveEdit ? "Saving…" : "Publishing…"}</> : <><CheckCircle2 className="h-4 w-4" /> {isLiveEdit ? "Save changes" : "Publish listing"}</>}
       </button>
     </div>
   );

@@ -45,6 +45,7 @@ export default function CreateMarketplaceListing() {
   const [savedAt, setSavedAt] = useState(null);
   const [error, setError] = useState("");
   const [loaded, setLoaded] = useState(false);
+  const [listingStatus, setListingStatus] = useState(null);
 
   const fRef = useRef(f); useEffect(() => { fRef.current = f; }, [f]);
   const draftIdRef = useRef(draftId); useEffect(() => { draftIdRef.current = draftId; }, [draftId]);
@@ -184,6 +185,7 @@ export default function CreateMarketplaceListing() {
             };
             setF(loaded); fRef.current = loaded;
             setDraftId(l.id); draftIdRef.current = l.id;
+            setListingStatus(l.status);
             const arr = flow === "vehicle" ? VEHICLE_STEPS : PART_STEPS;
             let idx = arr.length - 1;
             for (let i = 0; i < arr.length; i++) { if (!isStepComplete(arr[i], loaded)) { idx = i; break; } }
@@ -242,12 +244,21 @@ export default function CreateMarketplaceListing() {
   const back = () => setStepIndex((i) => Math.max(i - 1, 0));
   const jump = (i) => { if (i <= stepIndex) setStepIndex(i); };
 
+  const isLiveEdit = editing && listingStatus && listingStatus !== "draft";
+
   const publish = async () => {
     setBusy("publish"); setError("");
     try {
       await saveDraft();
       const did = draftIdRef.current;
-      if (!did) { setError("Could not save the draft before publishing."); setBusy(""); return; }
+      if (!did) { setError("Could not save the listing."); setBusy(""); return; }
+      // Editing an already-published listing: just persist changes (updateListing
+      // already ran in saveDraft) and return to the detail page. publishListing
+      // only works on drafts, so we must not call it for live listings.
+      if (isLiveEdit) {
+        navigate(`/marketplace/${did}`);
+        return;
+      }
       const res = await base44.functions.invoke("marketplace", { action: "publishListing", listing_id: did });
       if (res.data?.ok) navigate(`/marketplace/${did}`);
       else setError(res.data?.error?.message || res.data?.error || "Publish failed");
@@ -274,7 +285,7 @@ export default function CreateMarketplaceListing() {
       case "shipping": return <ShippingStep f={f} field={field} />;
       case "location": return <LocationStep f={f} field={field} />;
       case "description": return <DescriptionStep f={f} field={field} flow={f.flow} />;
-      case "review": return <ReviewStep f={f} vehicles={vehicles} quality={quality} busy={busy} onPublish={publish} />;
+      case "review": return <ReviewStep f={f} vehicles={vehicles} quality={quality} busy={busy} onPublish={publish} isLiveEdit={isLiveEdit} />;
       default: return null;
     }
   };
