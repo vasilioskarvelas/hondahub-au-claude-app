@@ -3,15 +3,16 @@ import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { Wrench } from "lucide-react";
 import FollowButton from "@/components/social/FollowButton";
+import { callGarage, resolveMediaUrl } from "@/lib/garage";
 
 /**
  * Discover section for the Garage page — lists every other member's garage
- * (regardless of follow status) with their username, a build preview, and a
- * follow/following button.
+ * (regardless of follow status) with their username, a build preview image,
+ * build count, and a follow/following button.
  */
 export default function DiscoverGarages() {
   const [users, setUsers] = React.useState([]);
-  const [garageMap, setGarageMap] = React.useState({});
+  const [previews, setPreviews] = React.useState({}); // userId -> { count, photo }
   const [followingIds, setFollowingIds] = React.useState(new Set());
   const [loading, setLoading] = React.useState(true);
 
@@ -20,23 +21,51 @@ export default function DiscoverGarages() {
     (async () => {
       try {
         const me = await base44.auth.me();
-        const [usersRes, carsRes, followsRes] = await Promise.all([
+        const [usersRes, followsRes, pubVehiclesRes, carsRes] = await Promise.all([
           base44.functions.invoke("user-profile", { action: "searchUsers", query: "" }),
-          base44.entities.GarageCar.list("-created_date", 100),
           base44.entities.Follow.filter({ follower_id: me.id, target_type: "user" }),
+          callGarage("vehicle", { action: "listPublic" }),
+          base44.entities.GarageCar.list("-created_date", 100),
         ]);
         if (!active) return;
-        setUsers(usersRes.data?.users || []);
-        const map = {};
+        const list = usersRes.data?.users || [];
+        setUsers(list);
+        setFollowingIds(new Set(followsRes.map((f) => f.target_id)));
+
+        // Group public Vehicles (primary) by owner — these carry cover_media_id.
+        const vMap = {};
+        for (const v of (pubVehiclesRes?.vehicles || [])) {
+          const uid = v.created_by_id;
+          if (!uid) continue;
+          if (!vMap[uid]) vMap[uid] = { count: 0, cover_media_id: null };
+          vMap[uid].count += 1;
+          if (!vMap[uid].cover_media_id && v.cover_media_id) vMap[uid].cover_media_id = v.cover_media_id;
+        }
+        // Legacy GarageCar records (fallback photo source).
+        const gMap = {};
         for (const c of carsRes) {
           const uid = c.created_by_id;
           if (!uid) continue;
-          if (!map[uid]) map[uid] = { count: 0, photo: null };
-          map[uid].count += 1;
-          if (!map[uid].photo && c.photos?.length > 0) map[uid].photo = c.photos[0];
+          if (!gMap[uid]) gMap[uid] = { count: 0, photo: null };
+          gMap[uid].count += 1;
+          if (!gMap[uid].photo && c.photos?.length > 0) gMap[uid].photo = c.photos[0];
         }
-        setGarageMap(map);
-        setFollowingIds(new Set(followsRes.map((f) => f.target_id)));
+
+        // Resolve cover media ids → display URLs (parallel, deduped).
+        const coverIds = Array.from(new Set(Object.values(vMap).map((x) => x.cover_media_id).filter(Boolean)));
+        const urlEntries = await Promise.all(coverIds.map((id) => resolveMediaUrl(id).then((u) => [id, u])));
+        const coverUrls = new Map(urlEntries.filter(([, u]) => u));
+
+        const merged = {};
+        for (const u of list) {
+          const v = vMap[u.id] || { count: 0, cover_media_id: null };
+          const g = gMap[u.id] || { count: 0, photo: null };
+          merged[u.id] = {
+            count: v.count + g.count,
+            photo: (v.cover_media_id && coverUrls.get(v.cover_media_id)) || g.photo || null,
+          };
+        }
+        setPreviews(merged);
       } catch {
         /* ignore */
       } finally {
@@ -68,15 +97,15 @@ export default function DiscoverGarages() {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {users.map((u) => {
-            const g = garageMap[u.id] || { count: 0, photo: null };
+            const p = previews[u.id] || { count: 0, photo: null };
             const name = u.handle ? `@${u.handle}` : (u.display_name || u.full_name || "Member");
             const initial = (u.handle || u.display_name || u.full_name || "?").charAt(0).toUpperCase();
             const linkTo = `/user/${u.handle || u.display_name || u.id}/garage`;
             return (
               <Link key={u.id} to={linkTo} className="group block overflow-hidden rounded-2xl border border-border bg-card transition hover:border-primary/50">
                 <div className="relative h-28 overflow-hidden bg-secondary">
-                  {g.photo ? (
-                    <img src={g.photo} alt={name} className="h-full w-full object-cover" />
+                  {p.photo ? (
+                    <img src={p.photo} alt={name} className="h-full w-full object-cover" />
                   ) : (
                     <div className="carbon-bg flex h-full w-full items-center justify-center">
                       <Wrench className="h-7 w-7 text-muted-foreground/40" />
@@ -89,7 +118,7 @@ export default function DiscoverGarages() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <h3 className="truncate text-sm font-bold">{name}</h3>
-                    <p className="text-[11px] text-muted-foreground">{g.count} {g.count === 1 ? "build" : "builds"}</p>
+                    <p className="text-[11px] text-muted-foreground">{p.count} {p.count === 1 ? "build" : "builds"}</p>
                   </div>
                   <span onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
                     <FollowButton targetType="user" targetId={u.id} initialFollowing={followingIds.has(u.id)} onToggle={(next) => onToggle(u.id, next)} />
