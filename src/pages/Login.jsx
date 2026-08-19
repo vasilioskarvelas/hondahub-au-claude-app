@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,7 @@ import PasswordInput from "@/components/PasswordInput";
 import GoogleIcon from "@/components/GoogleIcon";
 
 export default function Login() {
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -23,6 +24,13 @@ export default function Login() {
       await base44.auth.loginViaEmailPassword(email, password);
       window.location.href = "/";
     } catch (err) {
+      const msg = (err.message || "Invalid email or password").toLowerCase();
+      // Unverified email — send them to the standalone verification page so they
+      // can complete OTP without re-registering.
+      if (msg.includes("not verified") || msg.includes("verify") || msg.includes("verification") || msg.includes("unverified")) {
+        navigate(`/verify-email?email=${encodeURIComponent(email)}`);
+        return;
+      }
       setError(err.message || "Invalid email or password");
     } finally {
       setLoading(false);
