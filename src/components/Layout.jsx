@@ -47,7 +47,7 @@ export default function Layout() {
       <header className="glass sticky top-0 z-40 border-b border-border" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
           <Link to="/" className="flex items-center gap-2">
-            <img src="https://media.base44.com/images/public/6a4b2077ed97c621f24f7e1f/3c35782c7_generated_image.png" alt="HondaHub" className="h-8 w-8 rounded-lg object-cover" />
+            <img src="https://media.base44.com/images/public/6a608f773139e5ae1fe2f62b/c05f698de_generated_image.png" alt="HondaHub" className="h-8 w-8 rounded-lg object-cover" />
             <span className="text-xl font-black tracking-tighter">
               Honda<span className="text-primary">Hub</span>
             </span>
