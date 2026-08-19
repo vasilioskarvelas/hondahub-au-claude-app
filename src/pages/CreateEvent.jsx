@@ -3,13 +3,14 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { ArrowLeft } from "lucide-react";
+import EventCoverUploader from "@/components/events/EventCoverUploader";
 
 export default function CreateEvent() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const presetGroup = params.get("group");
   const { user } = useAuth();
-  const [form, setForm] = React.useState({ title: "", description: "", location_name: "", location_general: "", starts_at: "", ends_at: "", group_id: presetGroup || "" });
+  const [form, setForm] = React.useState({ title: "", description: "", location_name: "", location_general: "", starts_at: "", ends_at: "", group_id: presetGroup || "", cover_media_id: null });
   const [groups, setGroups] = React.useState([]);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState("");
@@ -31,6 +32,7 @@ export default function CreateEvent() {
         starts_at: new Date(form.starts_at).toISOString(),
         ends_at: form.ends_at ? new Date(form.ends_at).toISOString() : null,
         group_id: form.group_id || null,
+        cover_media_id: form.cover_media_id || null,
       };
       const res = await base44.functions.invoke("event", { action: "createEvent", ...payload });
       if (res.data?.ok) navigate(`/event/${res.data.event.id}`);
@@ -75,6 +77,10 @@ export default function CreateEvent() {
             <input type="datetime-local" value={form.ends_at} onChange={(e) => set("ends_at", e.target.value)} className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary" />
           </div>
         </div>
+        <EventCoverUploader
+          mediaId={form.cover_media_id}
+          onChange={(id) => set("cover_media_id", id)}
+        />
         {groups.length > 0 && (
           <div>
             <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Connect to a Group (optional)</label>
