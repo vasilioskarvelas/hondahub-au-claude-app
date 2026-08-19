@@ -2,11 +2,12 @@
   "name": "GarageCar",
   "type": "object",
   "properties": {
-    "owner_name": {
-      "type": "string"
-    },
     "model": {
-      "type": "string"
+      "type": "string",
+      "description": "Legacy garage car model name. Superseded by the Vehicle entity for new data."
+    },
+    "year": {
+      "type": "number"
     },
     "chassis_code": {
       "type": "string"
@@ -15,16 +16,7 @@
       "type": "string"
     },
     "engine_family": {
-      "type": "string",
-      "enum": [
-        "K",
-        "B",
-        "D",
-        "H",
-        "F",
-        "Other"
-      ],
-      "default": "Other"
+      "type": "string"
     },
     "induction_type": {
       "type": "string",
@@ -32,36 +24,21 @@
         "na",
         "fi"
       ],
-      "default": "na"
-    },
-    "gearbox": {
-      "type": "string"
+      "description": "na = naturally aspirated, fi = forced induction."
     },
     "power_kw": {
       "type": "number"
     },
-    "year": {
-      "type": "number"
-    },
-    "modifications": {
-      "type": "string"
-    },
-    "photos": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
-    },
     "dyno_kw": {
       "type": "number"
     },
-    "track_name": {
+    "gearbox": {
       "type": "string"
     },
     "track_time": {
       "type": "string"
     },
-    "time_slip_url": {
+    "track_name": {
       "type": "string"
     },
     "time_verified": {
@@ -76,15 +53,31 @@
     "drag_time": {
       "type": "string"
     },
-    "instagram": {
+    "modifications": {
       "type": "string"
     },
     "future_plans": {
       "type": "string"
     },
+    "photos": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
     "is_featured": {
       "type": "boolean",
       "default": false
+    },
+    "time_slip_url": {
+      "type": "string"
+    },
+    "instagram": {
+      "type": "string"
+    },
+    "owner_name": {
+      "type": "string"
     }
   },
   "required": [
