@@ -1,6 +1,6 @@
 import React from "react";
 import { base44 } from "@/api/base44Client";
-import { Plus, RefreshCw } from "lucide-react";
+import { Plus, RefreshCw, Compass, UserCheck, Users } from "lucide-react";
 import PostCard from "@/components/social/PostCard";
 import CreatePostModal from "@/components/social/CreatePostModal";
 import UserSearchBar from "@/components/social/UserSearchBar";
@@ -26,7 +26,7 @@ export default function Feed() {
     }
   };
 
-  React.useEffect(() => { load(tab); }, [tab]);
+  React.useEffect(() => { if (tab !== "groups") load(tab); }, [tab]);
 
   return (
     <div className="mx-auto max-w-xl space-y-4">
@@ -41,15 +41,16 @@ export default function Feed() {
       </div>
 
       <div className="flex gap-1 rounded-xl border border-border bg-card p-1">
-        <button onClick={() => setTab("explore")} className={`flex-1 rounded-lg py-2 text-sm font-bold transition ${tab === "explore" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}>Explore</button>
-        <button onClick={() => setTab("following")} className={`flex-1 rounded-lg py-2 text-sm font-bold transition ${tab === "following" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}>Following</button>
+        <button onClick={() => setTab("explore")} className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-bold transition ${tab === "explore" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}><Compass className="h-4 w-4" /> Explore</button>
+        <button onClick={() => setTab("following")} className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-bold transition ${tab === "following" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}><UserCheck className="h-4 w-4" /> Following</button>
+        <button onClick={() => setTab("groups")} className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-bold transition ${tab === "groups" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}><Users className="h-4 w-4" /> Groups</button>
       </div>
 
-      <UserSearchBar />
+      {tab !== "groups" && <UserSearchBar />}
 
-      <GroupsEntry />
-
-      {loading ? (
+      {tab === "groups" ? (
+        <GroupsEntry />
+      ) : loading ? (
         <div className="flex h-64 items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-secondary border-t-primary" /></div>
       ) : error ? (
         <div className="rounded-2xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">{error}</div>
