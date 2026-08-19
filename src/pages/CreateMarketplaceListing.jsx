@@ -150,7 +150,7 @@ export default function CreateMarketplaceListing() {
   // Load garage vehicles + existing draft (resume at first incomplete step).
   useEffect(() => {
     (async () => {
-      try { const vs = await base44.entities.Vehicle.list(); setVehicles(vs || []); } catch {}
+      try { const res = await base44.functions.invoke("vehicle", { action: "list" }); setVehicles(res.data?.vehicles || []); } catch {}
       if (editing) {
         try {
           const res = await base44.functions.invoke("marketplace", { action: "getListing", listing_id: id });
