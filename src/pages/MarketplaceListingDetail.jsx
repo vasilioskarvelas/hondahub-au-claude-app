@@ -96,7 +96,7 @@ export default function MarketplaceListingDetail() {
 
       <div className="overflow-hidden rounded-2xl border border-border bg-card">
         {listing.photo_urls?.length > 0 ? (
-          <div className="grid grid-cols-2 gap-1 bg-border sm:grid-cols-3">
+          <div data-gallery="listing-photos" className="grid grid-cols-2 gap-1 bg-border sm:grid-cols-3">
             {listing.photo_urls.map((u, i) => (
               <div key={i} className="aspect-square bg-secondary"><img src={u} alt="" className="h-full w-full object-cover" /></div>
             ))}

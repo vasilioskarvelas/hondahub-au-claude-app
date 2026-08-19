@@ -38,6 +38,7 @@ export default function PhotoLightbox({ photos, index, onClose, onIndex }) {
 
   return (
     <div
+      data-no-lightbox
       className="fixed inset-0 z-[100] flex touch-none items-center justify-center bg-black/95"
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}

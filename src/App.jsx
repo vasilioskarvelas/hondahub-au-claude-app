@@ -7,6 +7,7 @@ import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import ScrollToTop from './components/ScrollToTop';
+import ImageLightboxProvider from '@/components/ImageLightboxProvider';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Layout from '@/components/Layout';
 // Add page imports here
@@ -155,7 +156,9 @@ function App() {
       <QueryClientProvider client={queryClientInstance}>
         <Router>
           <ScrollToTop />
-          <AuthenticatedApp />
+          <ImageLightboxProvider>
+            <AuthenticatedApp />
+          </ImageLightboxProvider>
         </Router>
         <Toaster />
       </QueryClientProvider>

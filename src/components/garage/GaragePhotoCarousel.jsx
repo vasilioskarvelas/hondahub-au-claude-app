@@ -10,6 +10,7 @@ export default function GaragePhotoCarousel({ photos = [], alt = "", onPhotoClic
       <img
         src={photos[0]}
         alt={alt}
+        data-no-lightbox
         className="aspect-[16/9] w-full cursor-zoom-in object-cover"
         onClick={() => onPhotoClick?.(0)}
       />
@@ -24,6 +25,7 @@ export default function GaragePhotoCarousel({ photos = [], alt = "", onPhotoClic
       <img
         src={photos[index]}
         alt={`${alt} ${index + 1}`}
+        data-no-lightbox
         className="h-full w-full cursor-zoom-in object-cover"
         onClick={() => onPhotoClick?.(index)}
       />
