@@ -56,6 +56,34 @@ Deno.serve(async (req) => {
       return Response.json({ ok: true, user: updated });
     }
 
+    if (action === 'searchUsers') {
+      const query = (body.query || '').trim().toLowerCase();
+      if (!query) return Response.json({ ok: true, users: [] });
+      const all = await base44.asServiceRole.entities.User.list(200);
+      const matches = all
+        .filter(u => u.id !== user.id)
+        .filter(u => {
+          const status = u.account_status;
+          return status !== 'banned' && status !== 'suspended' &&
+                 status !== 'deactivated_by_user' && status !== 'pending_deletion';
+        })
+        .filter(u => {
+          const handle = (u.handle || '').toLowerCase();
+          const display = (u.display_name || u.full_name || '').toLowerCase();
+          return handle.includes(query) || display.includes(query);
+        })
+        .slice(0, 20)
+        .map(u => ({
+          id: u.id,
+          handle: u.handle || null,
+          display_name: u.display_name || null,
+          full_name: u.full_name || null,
+          account_tier: u.account_tier || null,
+          avatar_media_id: u.avatar_media_id || null,
+        }));
+      return Response.json({ ok: true, users: matches });
+    }
+
     if (action === 'changeStatus') {
       // Mod/Admin only (platform role admin OR account_tier moderator/admin).
       const isModOrAdmin = user.role === 'admin' ||
