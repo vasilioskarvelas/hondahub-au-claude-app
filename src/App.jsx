@@ -15,8 +15,7 @@ import Profile from '@/pages/Profile';
 import Events from '@/pages/Events';
 import Settings from '@/pages/Settings';
 import Pricing from '@/pages/Pricing';
-import Shop from '@/pages/PartnerDiscounts';
-import Giveaway from '@/pages/Giveaway';
+import Shop from '@/pages/Shop';
 import Garage from '@/pages/Garage';
 import GarageCarDetail from '@/pages/GarageCarDetail';
 import UserGarage from '@/pages/UserGarage';
@@ -104,7 +103,7 @@ const AuthenticatedApp = () => {
         <Route path="/pricing" element={<Pricing />} />
         <Route path="/community" element={<Navigate to="/feed" replace />} />
         <Route path="/shop" element={<Shop />} />
-        <Route path="/giveaway" element={<Giveaway />} />
+        <Route path="/giveaway" element={<Navigate to="/shop" replace />} />
         <Route path="/vehicle/:id" element={<VehicleDetail />} />
         <Route path="/user/:name/garage" element={<UserGarage />} />
         <Route path="/groups" element={<Groups />} />

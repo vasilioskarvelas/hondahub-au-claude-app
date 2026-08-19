@@ -1,6 +1,6 @@
 import React from "react";
 import { Outlet, Link, useLocation } from "react-router-dom";
-import { Home, CalendarDays, User, MessageCircle, Search, Crown, Users, Gift, ShoppingBag, Bell, MoreHorizontal, Settings as SettingsIcon, Wrench, Cpu, FlaskConical, Shield, ScrollText, Gauge, LayoutDashboard } from "lucide-react";
+import { Home, CalendarDays, User, MessageCircle, Search, Crown, Users, Gift, ShoppingBag, Store, Bell, MoreHorizontal, Settings as SettingsIcon, Wrench, Cpu, FlaskConical, Shield, ScrollText, Gauge, LayoutDashboard } from "lucide-react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/lib/AuthContext';
 import { base44 } from '@/api/base44Client';
@@ -10,14 +10,13 @@ const mainNav = [
   { to: "/marketplace", label: "Market", icon: ShoppingBag },
   { to: "/feed", label: "Socials", icon: Users },
   { to: "/events", label: "Events", icon: CalendarDays },
-  { to: "/shop", label: "Shop", icon: ShoppingBag },
-  { to: "/giveaway", label: "Giveaways", icon: Gift },
+  { to: "/garage", label: "Garage", icon: Wrench },
+  { to: "/shop", label: "Shop", icon: Store },
 ];
 
 const moreNav = [
   { to: "/ai-command-center", label: "AI Command Center", icon: Cpu, adminOnly: true },
   { to: "/testing", label: "Testing Centre", icon: FlaskConical, adminOnly: true },
-  { to: "/garage", label: "Garage", icon: Wrench },
   { to: "/profile", label: "Profile", icon: User },
   { to: "/settings", label: "Settings", icon: SettingsIcon },
   { to: "/admin", label: "Admin", icon: LayoutDashboard, modOnly: true },
