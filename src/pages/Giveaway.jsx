@@ -30,21 +30,22 @@ export default function Giveaway() {
   const userDisplayName = user?.full_name || user?.email;
   const hasSubscriberEntry = user && entries.some((e) => e.user_name === userDisplayName && e.entry_type === "subscriber_points");
 
-  const handleBuyTicket = async () => {
-    if (window.self !== window.top) {
-      alert("Checkout is only available from the published app. Please open the app in a new tab to purchase raffle tickets.");
-      return;
-    }
+  const handleClaimFreeTicket = async () => {
     setBuying(true);
     try {
-      const res = await base44.functions.invoke("create-checkout-session", {
-        mode: "raffle",
+      await base44.entities.GiveawayEntry.create({
         giveaway_id: giveaway.id,
-        buyer_name: buyerName || "Guest",
+        user_name: buyerName || userDisplayName || "Guest",
+        entry_type: "raffle",
+        tickets: 1,
       });
-      window.location.href = res.data?.url || res.url;
+      const newTotal = (giveaway.total_entries || 0) + 1;
+      await base44.entities.Giveaway.update(giveaway.id, { total_entries: newTotal });
+      setGiveaway({ ...giveaway, total_entries: newTotal });
+      base44.entities.GiveawayEntry.filter({ giveaway_id: giveaway.id }, "-created_date", 50).then(setEntries);
+      setBuyerName("");
     } catch (err) {
-      alert("Could not start checkout. Please try again.");
+      alert("Could not claim your free ticket. Please try again.");
     } finally {
       setBuying(false);
     }
@@ -141,15 +142,15 @@ export default function Giveaway() {
             <Ticket className="h-5 w-5 text-primary" />
             <h2 className="font-bold">Buy Raffle Ticket</h2>
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">${giveaway.raffle_ticket_price || 5} per ticket. Open to everyone.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Free entry during beta — open to everyone.</p>
           <input
             value={buyerName}
             onChange={(e) => setBuyerName(e.target.value)}
             placeholder="Your name"
             className="mt-2 w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm outline-none focus:border-primary"
           />
-          <button onClick={handleBuyTicket} disabled={buying || !buyerName} className="mt-2 w-full rounded-xl bg-primary py-2.5 text-sm font-bold text-primary-foreground disabled:opacity-50">
-            {buying ? "Redirecting..." : `Buy Ticket · $${giveaway.raffle_ticket_price || 5}`}
+          <button onClick={handleClaimFreeTicket} disabled={buying} className="mt-2 w-full rounded-xl bg-primary py-2.5 text-sm font-bold text-primary-foreground disabled:opacity-50">
+            {buying ? "Claiming..." : "Claim Free Ticket"}
           </button>
         </div>
       </div>
