@@ -70,16 +70,20 @@ export default function UserSearchBar() {
                 const displayName = u.display_name || u.handle || u.full_name || "Member";
                 const tier = u.account_tier || AccountTier.NEW_MEMBER;
                 return (
-                  <div key={u.id} className="flex items-center gap-3 rounded-xl p-2 hover:bg-secondary">
-                    <Link to={u.handle ? `/user/${u.handle}` : "#"} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-black text-primary-foreground">
+                  <Link key={u.id} to={u.handle ? `/user/${u.handle}` : "#"} className="flex items-center gap-3 rounded-xl p-2 hover:bg-secondary">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-black text-primary-foreground">
                       {(displayName || "?").charAt(0).toUpperCase()}
-                    </Link>
+                    </div>
                     <div className="flex-1 min-w-0">
-                      <Link to={u.handle ? `/user/${u.handle}` : "#"} className="block truncate text-sm font-bold hover:text-primary">{displayName}</Link>
+                      <span className="block truncate text-sm font-bold group-hover:text-primary">{displayName}</span>
                       {u.handle && <p className="truncate text-xs text-muted-foreground">@{u.handle}</p>}
                     </div>
-                    {me && me.id !== u.id && <FollowButton targetType="user" targetId={u.id} />}
-                  </div>
+                    {me && me.id !== u.id && (
+                      <span onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+                        <FollowButton targetType="user" targetId={u.id} />
+                      </span>
+                    )}
+                  </Link>
                 );
               })}
             </div>

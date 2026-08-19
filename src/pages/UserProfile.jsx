@@ -39,8 +39,18 @@ export default function UserProfile() {
     setNotFound(false);
     (async () => {
       try {
-        let users = await base44.entities.User.filter({ handle: decodedName });
-        if (users.length === 0) users = await base44.entities.User.filter({ display_name: decodedName });
+        const cleanName = decodedName.replace(/^@/, "");
+        // Try exact handle match first, then case-insensitive across all users.
+        let users = await base44.entities.User.filter({ handle: cleanName });
+        if (users.length === 0) users = await base44.entities.User.filter({ display_name: cleanName });
+        if (users.length === 0) {
+          const all = await base44.entities.User.list(200);
+          const lower = cleanName.toLowerCase();
+          users = all.filter((u) =>
+            (u.handle && u.handle.toLowerCase() === lower) ||
+            (u.display_name && u.display_name.toLowerCase() === lower)
+          );
+        }
         if (users.length === 0) { setNotFound(true); setProfileUser(null); return; }
         const u = users[0];
         setProfileUser(u);
@@ -107,9 +117,12 @@ export default function UserProfile() {
             )}
           </div>
           {profileUser.bio && <p className="mt-4 text-sm text-muted-foreground">{profileUser.bio}</p>}
-          <div className="mt-4 flex gap-4 text-sm">
+          <div className="mt-4 flex items-center gap-4 text-sm">
             <Link to={`${connectionsPath}?tab=followers`} className="hover:text-primary"><span className="font-bold">{followersCount}</span> <span className="text-muted-foreground">followers</span></Link>
             <Link to={`${connectionsPath}?tab=following`} className="hover:text-primary"><span className="font-bold">{followingCount}</span> <span className="text-muted-foreground">following</span></Link>
+            <Link to={`/user/${encodeURIComponent(profileUser.handle || displayName)}/garage`} className="ml-auto inline-flex items-center gap-1 rounded-xl border border-border px-3 py-1.5 text-xs font-bold hover:border-primary hover:text-primary">
+              <Users className="h-3.5 w-3.5" /> View Garage
+            </Link>
           </div>
         </div>
       </div>
