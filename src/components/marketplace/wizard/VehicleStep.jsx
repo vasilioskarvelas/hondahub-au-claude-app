@@ -1,49 +1,68 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { Car, Plus, CheckCircle2 } from "lucide-react";
+import AddVehicleInline from "./AddVehicleInline";
 
 // ADR-044 — Vehicle flow. The seller picks a Garage vehicle; its details are
 // reused automatically (no manual re-entry of model/year/chassis/odometer).
-export default function VehicleStep({ vehicles, primary_vehicle_id, onSelect }) {
+// Sellers can also add a vehicle that isn't in their garage yet, inline.
+export default function VehicleStep({ vehicles, primary_vehicle_id, onSelect, onVehicleCreated }) {
+  const [adding, setAdding] = React.useState(false);
   const selected = vehicles.find((v) => v.id === primary_vehicle_id);
+
+  const handleCreated = (v) => {
+    setAdding(false);
+    onVehicleCreated?.(v);
+    onSelect(v.id);
+  };
+
   return (
     <div className="space-y-4">
       <div>
         <h2 className="text-xl font-black tracking-tight">Select your vehicle</h2>
         <p className="text-sm text-muted-foreground">Pick a vehicle from your garage. Its details are used automatically — no need to re-enter them.</p>
       </div>
-      {vehicles.length === 0 ? (
+      {vehicles.length === 0 && !adding ? (
         <div className="rounded-2xl border border-border bg-card p-6 text-center">
           <Car className="mx-auto h-8 w-8 text-muted-foreground" />
           <p className="mt-2 text-sm font-bold">No vehicles in your garage</p>
-          <p className="text-xs text-muted-foreground">Add a vehicle first, then come back to list it.</p>
-          <Link to="/garage" className="mt-3 inline-flex items-center gap-1 rounded-xl bg-primary px-3 py-2 text-sm font-bold text-primary-foreground">
+          <p className="text-xs text-muted-foreground">Add a vehicle to list it for sale.</p>
+          <button type="button" onClick={() => setAdding(true)} className="mt-3 inline-flex items-center gap-1 rounded-xl bg-primary px-3 py-2 text-sm font-bold text-primary-foreground">
             <Plus className="h-4 w-4" /> Add a vehicle
-          </Link>
+          </button>
         </div>
       ) : (
-        <div className="space-y-2">
-          {vehicles.map((v) => {
-            const active = v.id === primary_vehicle_id;
-            return (
-              <button
-                key={v.id}
-                type="button"
-                onClick={() => onSelect(v.id)}
-                className={`flex w-full items-center gap-3 rounded-2xl border-2 p-3 text-left transition ${active ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"}`}
-              >
-                <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-secondary">
-                  <Car className="h-5 w-5 text-muted-foreground" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-bold">{v.year} {v.make} {v.model}{v.nickname ? ` — ${v.nickname}` : ""}</span>
-                  <span className="block truncate text-xs text-muted-foreground">{v.chassis_code ? `${v.chassis_code} · ` : ""}{v.odometer_km != null ? `${v.odometer_km.toLocaleString()} km` : "Unknown km"}</span>
-                </span>
-                {active && <CheckCircle2 className="h-5 w-5 shrink-0 text-primary" />}
-              </button>
-            );
-          })}
-        </div>
+        <>
+          <div className="space-y-2">
+            {vehicles.map((v) => {
+              const active = v.id === primary_vehicle_id;
+              return (
+                <button
+                  key={v.id}
+                  type="button"
+                  onClick={() => onSelect(v.id)}
+                  className={`flex w-full items-center gap-3 rounded-2xl border-2 p-3 text-left transition ${active ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"}`}
+                >
+                  <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-secondary">
+                    <Car className="h-5 w-5 text-muted-foreground" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-bold">{v.year} {v.make} {v.model}{v.nickname ? ` — ${v.nickname}` : ""}</span>
+                    <span className="block truncate text-xs text-muted-foreground">{v.chassis_code ? `${v.chassis_code} · ` : ""}{v.odometer_km != null ? `${v.odometer_km.toLocaleString()} km` : "Unknown km"}</span>
+                  </span>
+                  {active && <CheckCircle2 className="h-5 w-5 shrink-0 text-primary" />}
+                </button>
+              );
+            })}
+          </div>
+          {adding ? (
+            <AddVehicleInline onCreated={handleCreated} onCancel={() => setAdding(false)} />
+          ) : (
+            <button type="button" onClick={() => setAdding(true)} className="inline-flex w-full items-center justify-center gap-1 rounded-xl border border-dashed border-border py-2.5 text-sm font-bold text-primary hover:bg-primary/5">
+              <Plus className="h-4 w-4" /> Add a vehicle not in my garage
+            </button>
+          )}
+        </>
       )}
       {selected && (
         <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4">

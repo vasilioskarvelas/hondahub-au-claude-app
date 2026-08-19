@@ -2,9 +2,9 @@ import React from "react";
 import { base44 } from "@/api/base44Client";
 import { Plus, Loader2, X } from "lucide-react";
 
-// Minimal inline vehicle creator for contexts where the user is picking a
-// vehicle to bring (e.g. event attendance) but doesn't yet have it in their
-// garage. Calls the vehicle backend `create` action and returns the new vehicle.
+// Minimal inline vehicle creator for the marketplace vehicle flow. Lets a
+// seller add a car that isn't in their garage yet, then it's created in the
+// garage and selected for the listing. Calls the vehicle backend `create`.
 export default function AddVehicleInline({ onCreated, onCancel }) {
   const [year, setYear] = React.useState("");
   const [model, setModel] = React.useState("");
@@ -39,7 +39,7 @@ export default function AddVehicleInline({ onCreated, onCancel }) {
   };
 
   return (
-    <form onSubmit={submit} className="mt-2 space-y-2 rounded-xl border border-border bg-background/60 p-3">
+    <form onSubmit={submit} className="space-y-2 rounded-2xl border border-border bg-background/60 p-4">
       <div className="flex items-center justify-between">
         <span className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wide text-primary"><Plus className="h-3 w-3" /> Add a vehicle</span>
         <button type="button" onClick={onCancel} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>

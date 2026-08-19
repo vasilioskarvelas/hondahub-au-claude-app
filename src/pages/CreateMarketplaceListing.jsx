@@ -276,7 +276,7 @@ export default function CreateMarketplaceListing() {
   const renderStep = () => {
     switch (curKey) {
       case "type": return <TypeStep flow={f.flow} onChoose={chooseFlow} />;
-      case "vehicle": return <VehicleStep vehicles={vehicles} primary_vehicle_id={f.primary_vehicle_id} onSelect={selectVehicle} />;
+      case "vehicle": return <VehicleStep vehicles={vehicles} primary_vehicle_id={f.primary_vehicle_id} onSelect={selectVehicle} onVehicleCreated={(v) => setVehicles((prev) => [...prev, v])} />;
       case "category": return <CategoryStep category={f.category} onSelect={chooseCategory} />;
       case "details": return <DetailsStep f={f} field={field} />;
       case "compatibility": return <CompatibilityStep f={f} field={field} />;
