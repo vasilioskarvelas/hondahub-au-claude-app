@@ -74,7 +74,7 @@ export function meetsCreationTier(user: any): boolean {
   if (!user) return false;
   if (isModeratorOrAdmin(user)) return true; // operational exemption
   const t = user.account_tier || "new_member";
-  return (TIER_RANK[t] ?? 0) >= TIER_RANK["trusted_member"];
+  return (TIER_RANK[t] ?? 0) >= TIER_RANK["new_member"];
 }
 
 /** New Member+ to participate (join groups, attend events). */
