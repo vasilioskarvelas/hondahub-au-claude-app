@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { callGarage, vehicleLabel } from "@/lib/garage";
 import VehicleCard from "@/components/garage/VehicleCard";
 import VehicleForm from "@/components/garage/VehicleForm";
+import DiscoverGarages from "@/components/garage/DiscoverGarages";
 
 export default function Garage() {
   const [vehicles, setVehicles] = React.useState([]);
@@ -55,6 +56,8 @@ export default function Garage() {
           {vehicles.map((v) => <VehicleCard key={v.id} vehicle={v} />)}
         </div>
       )}
+
+      <DiscoverGarages />
 
       {showForm && (
         <VehicleForm onClose={() => setShowForm(false)} onSaved={() => { setShowForm(false); load(); }} />
