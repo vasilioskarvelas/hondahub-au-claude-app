@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { ArrowLeft, MessageSquare, Tag, Clock, RefreshCw, Trash2, CheckCircle2, Flag } from "lucide-react";
+import { ArrowLeft, MessageSquare, Tag, Clock, RefreshCw, Trash2, CheckCircle2, Flag, Gavel } from "lucide-react";
 import CategoryAttributeDisplay from "@/components/marketplace/CategoryAttributeDisplay";
 import QualityScore from "@/components/marketplace/QualityScore";
 import ReportDialog from "@/components/moderation/ReportDialog";
+import AuctionBidding from "@/components/AuctionBidding";
 
 const STATUS_META = {
   active: { l: "Active", c: "text-emerald-400" },

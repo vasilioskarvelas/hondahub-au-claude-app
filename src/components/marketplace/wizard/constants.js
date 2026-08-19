@@ -30,6 +30,13 @@ export const PRICE_TYPES = [
   { v: "negotiable", l: "Negotiable" },
   { v: "poa", l: "Price on ask" },
   { v: "free", l: "Free" },
+  { v: "auction", l: "Auction" },
+];
+
+export const AUCTION_DURATIONS = [
+  { v: 3, l: "3 days" },
+  { v: 5, l: "5 days" },
+  { v: 7, l: "7 days" },
 ];
 
 export const VEHICLE_STEPS = ["type", "vehicle", "format", "photos", "video", "pricing", "location", "description", "review"];
@@ -68,6 +75,10 @@ export function isStepComplete(key, ctx) {
       if (ctx.price_type === "fixed" || ctx.price_type === "negotiable") {
         const p = Number(ctx.price);
         return ctx.price !== "" && !Number.isNaN(p) && p >= 0;
+      }
+      if (ctx.price_type === "auction") {
+        const minBid = Number(ctx.auction_min_bid);
+        return ctx.auction_min_bid !== "" && !Number.isNaN(minBid) && minBid > 0 && !!ctx.auction_duration_days;
       }
       return true;
     case "description":

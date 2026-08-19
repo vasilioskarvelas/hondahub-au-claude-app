@@ -47,11 +47,47 @@ import {
   validateAdditionalSpecifications, computeListingQualityScore,
   validateCompatibilityFields, COMPATIBILITY_FIELDS,
   onListingCompleted, onListingExpired, onMarketplaceConversationStarted, onMarketplaceMessageSent,
+  AUCTION_DURATION_DAYS, AUCTION_MIN_BID_INCREMENT_CENTS,
 } from "../../shared/marketplace.ts";
 import { meetsCreationTier, meetsParticipationTier, accountInGoodStanding } from "../../shared/community.ts";
 import { isBlockedEitherDirection, createBlock, removeBlock } from "../../shared/safety.ts";
 import { validateReference, ReferenceTypes } from "../../shared/reference-resolver.ts";
+import { hasEntitlement } from "../../shared/entitlement.ts";
+import { EntitlementKey } from "../../shared/identity.ts";
 import { json, err } from "../../shared/http.ts";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Validates auction fields for create/update. Returns { ok, fields, error }.
+function validateAuctionFields(body: any, price_type: string): { ok: true; fields: any } | { ok: false; error: any } {
+  if (price_type !== PriceType.AUCTION) {
+    return { ok: true, fields: {
+      auction_min_bid_cents: null, auction_reserve_cents: null, auction_duration_days: null,
+    } };
+  }
+  const minBid = Number(body.auction_min_bid_cents);
+  if (!Number.isInteger(minBid) || minBid <= 0) {
+    return { ok: false, error: { code: "VALIDATION_FAILED", field: "auction_min_bid_cents", message: "required, positive integer cents" } };
+  }
+  const duration = Number(body.auction_duration_days);
+  if (!AUCTION_DURATION_DAYS.includes(duration)) {
+    return { ok: false, error: { code: "VALIDATION_FAILED", field: "auction_duration_days", message: "must be 3, 5, or 7" } };
+  }
+  const fields: any = { auction_min_bid_cents: minBid, auction_duration_days: duration };
+  if (body.auction_reserve_cents != null && body.auction_reserve_cents !== "") {
+    const reserve = Number(body.auction_reserve_cents);
+    if (!Number.isInteger(reserve) || reserve < 0) {
+      return { ok: false, error: { code: "VALIDATION_FAILED", field: "auction_reserve_cents", message: "non-negative integer cents" } };
+    }
+    if (reserve < minBid) {
+      return { ok: false, error: { code: "VALIDATION_FAILED", field: "auction_reserve_cents", message: "reserve must be >= starting bid" } };
+    }
+    fields.auction_reserve_cents = reserve;
+  } else {
+    fields.auction_reserve_cents = null;
+  }
+  return { ok: true, fields };
+}
 
 const DEFAULT_LIMIT = 20, MAX_LIMIT = 100;
 const PUBLIC_VISIBLE_STATUSES = [ListingStatus.ACTIVE, ListingStatus.RESERVED, ListingStatus.COMPLETED];
@@ -133,6 +169,16 @@ Deno.serve(async (req) => {
       if ((price_type === PriceType.POA || price_type === PriceType.FREE) && price_cents !== null) {
         return err("VALIDATION_FAILED", 422, { price_cents: "must be null for poa/free price_type" });
       }
+      // Auction price_type: requires premium subscription (create_auction entitlement).
+      let auctionFields: any = null;
+      if (price_type === PriceType.AUCTION) {
+        if (price_cents !== null) return err("VALIDATION_FAILED", 422, { price_cents: "must be null for auction price_type" });
+        const allowed = await hasEntitlement(base44, "user", user.id, EntitlementKey.CREATE_AUCTION);
+        if (!allowed) return err("AUCTION_REQUIRES_PREMIUM", 403, { entitlement: "create_auction" });
+        const auctionRes = validateAuctionFields(body, price_type);
+        if (!auctionRes.ok) return err(auctionRes.error.code, 422, { field: auctionRes.error.field, message: auctionRes.error.message });
+        auctionFields = auctionRes.fields;
+      }
       const condition = LISTING_CONDITION_VALUES.includes(body.condition) ? body.condition : ListingCondition.USED;
       const quantity = Number.isInteger(Number(body.quantity)) && Number(body.quantity) > 0 ? Number(body.quantity) : 1;
       const fields: any = {
@@ -141,6 +187,7 @@ Deno.serve(async (req) => {
         status: ListingStatus.DRAFT, view_count: 0, conversation_count: 0,
         photo_urls: [], video_urls: [], additional_specifications: [],
       };
+      if (auctionFields) Object.assign(fields, auctionFields);
       if (body.description !== undefined) fields.description = (body.description || "").trim().slice(0, DESCRIPTION_MAX) || null;
       if (body.location_general !== undefined) fields.location_general = (body.location_general || "").trim() || null;
       // Compatibility year range — only accepted when category != vehicle.
@@ -217,6 +264,21 @@ Deno.serve(async (req) => {
           if (!Number.isInteger(pc) || pc < 0) return err("VALIDATION_FAILED", 422, { price_cents: "must be a non-negative integer (cents)" });
           upd.price_cents = pc;
         }
+      }
+      // Auction price_type handling on update.
+      const effectivePriceType = upd.price_type || listing.price_type;
+      if (effectivePriceType === PriceType.AUCTION) {
+        const allowed = await hasEntitlement(base44, "user", user.id, EntitlementKey.CREATE_AUCTION);
+        if (!allowed) return err("AUCTION_REQUIRES_PREMIUM", 403, { entitlement: "create_auction" });
+        const auctionRes = validateAuctionFields(body, effectivePriceType);
+        if (!auctionRes.ok) return err(auctionRes.error.code, 422, { field: auctionRes.error.field, message: auctionRes.error.message });
+        Object.assign(upd, auctionRes.fields);
+        if (upd.price_type === PriceType.AUCTION) upd.price_cents = null;
+      } else if (upd.price_type !== undefined) {
+        // Switching away from auction: clear auction fields.
+        upd.auction_min_bid_cents = null;
+        upd.auction_reserve_cents = null;
+        upd.auction_duration_days = null;
       }
       if (body.condition !== undefined) {
         if (!LISTING_CONDITION_VALUES.includes(body.condition)) return err("VALIDATION_FAILED", 422, { condition: "invalid" });
@@ -295,11 +357,17 @@ Deno.serve(async (req) => {
       }
       const now = new Date();
       if (meetsCreationTier(user)) {
-        const updated = await base44.entities.MarketplaceListing.update(body.listing_id, {
+        const upd: any = {
           status: ListingStatus.ACTIVE,
           published_at: listing.published_at || now.toISOString(),
           expires_at: new Date(now.getTime() + LISTING_LIFETIME_MS).toISOString(),
-        });
+        };
+        // Auction: set auction_ends_at = published_at + duration days.
+        if (listing.price_type === PriceType.AUCTION && listing.auction_duration_days) {
+          const pubAt = new Date(listing.published_at || now.toISOString());
+          upd.auction_ends_at = new Date(pubAt.getTime() + listing.auction_duration_days * DAY_MS).toISOString();
+        }
+        const updated = await base44.entities.MarketplaceListing.update(body.listing_id, upd);
         return json({ ok: true, listing_id: body.listing_id, status: ListingStatus.ACTIVE, listing: updated });
       }
       // Below Trusted Member (New Member) routes to pending_review — never rejected outright.
@@ -398,6 +466,63 @@ Deno.serve(async (req) => {
       }
       const updated = await base44.entities.MarketplaceListing.update(body.listing_id, { status: ListingStatus.REMOVED_BY_POSTER });
       return json({ ok: true, listing_id: body.listing_id, status: ListingStatus.REMOVED_BY_POSTER, listing: updated });
+    }
+
+    // ============ placeBid (Auction — place a bid on an active auction listing) ============
+    if (action === "placeBid") {
+      if (!user) return err("AUTH_REQUIRED", 401);
+      if (!accountInGoodStanding(user)) return err(user.account_status === "banned" ? "ACCOUNT_BANNED" : "ACCOUNT_SUSPENDED", 403);
+      const listing = await base44.entities.MarketplaceListing.get(body.listing_id).catch(() => null);
+      if (!listing) return err("RESOURCE_NOT_FOUND", 404);
+      if (listing.price_type !== PriceType.AUCTION) return err("NOT_AN_AUCTION", 400);
+      if (listing.poster_id === user.id) return err("CANNOT_BID_ON_OWN_LISTING", 400);
+      if (![ListingStatus.ACTIVE, ListingStatus.RESERVED].includes(listing.status)) {
+        return err("LISTING_NOT_ACTIVE", 409, { current: listing.status });
+      }
+      // Auction must not have ended.
+      if (listing.auction_ends_at && new Date(listing.auction_ends_at).getTime() <= Date.now()) {
+        return err("AUCTION_ENDED", 409, { auction_ends_at: listing.auction_ends_at });
+      }
+      const bidCents = Number(body.amount_cents);
+      if (!Number.isInteger(bidCents) || bidCents <= 0) {
+        return err("VALIDATION_FAILED", 422, { amount_cents: "must be a positive integer (cents)" });
+      }
+      // Minimum bid = current highest + increment, or the starting bid if no bids yet.
+      const currentHighest = listing.current_bid_cents || 0;
+      const minBid = currentHighest > 0
+        ? currentHighest + AUCTION_MIN_BID_INCREMENT_CENTS
+        : listing.auction_min_bid_cents;
+      if (bidCents < minBid) {
+        return err("BID_TOO_LOW", 422, { minimum_cents: minBid, current_cents: currentHighest });
+      }
+      // Mark the previous winning bid as no longer winning.
+      if (listing.current_bidder_id) {
+        const prevWinning = await base44.asServiceRole.entities.Bid.filter(
+          { listing_id: body.listing_id, is_winning: true }, "-created_date", 5,
+        );
+        for (const b of prevWinning) {
+          await base44.asServiceRole.entities.Bid.update(b.id, { is_winning: false }).catch(() => {});
+        }
+      }
+      const bidderName = user.display_name || user.handle || user.full_name || "Bidder";
+      const bid = await base44.entities.Bid.create({
+        listing_id: body.listing_id, bidder_id: user.id, bidder_name: bidderName,
+        amount_cents: bidCents, is_winning: true,
+      });
+      await base44.entities.MarketplaceListing.update(body.listing_id, {
+        current_bid_cents: bidCents, current_bidder_id: user.id,
+      });
+      return json({ ok: true, bid_id: bid.id, current_bid_cents: bidCents, bid });
+    }
+
+    // ============ listBids (Auction — return bid history for a listing) ============
+    if (action === "listBids") {
+      const listing = await base44.entities.MarketplaceListing.get(body.listing_id).catch(() => null);
+      if (!listing) return err("RESOURCE_NOT_FOUND", 404);
+      const bids = await base44.asServiceRole.entities.Bid.filter(
+        { listing_id: body.listing_id }, "-amount_cents", 50,
+      );
+      return json({ ok: true, bids, current_bid_cents: listing.current_bid_cents || null, auction_ends_at: listing.auction_ends_at || null });
     }
 
     // ============ startConversation (F.9 — New Member+ verified contact; not own listing; not blocked) ============

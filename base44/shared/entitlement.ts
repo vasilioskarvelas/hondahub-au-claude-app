@@ -54,6 +54,7 @@ export const PLAN_ENTITLEMENTS: Record<string, Record<string, boolean | number>>
     [EntitlementKey.ADVANCED_SEARCH]: false,
     [EntitlementKey.PREMIUM_MEDIA_LIMITS]: false,
     [EntitlementKey.VERIFIED_BUSINESS_BADGE]: false,
+    [EntitlementKey.CREATE_AUCTION]: false,
   },
   [PlanCode.PREMIUM_MEMBER]: {
     [EntitlementKey.CREATE_LISTING]: true,
@@ -66,6 +67,7 @@ export const PLAN_ENTITLEMENTS: Record<string, Record<string, boolean | number>>
     [EntitlementKey.ADVANCED_SEARCH]: true,
     [EntitlementKey.PREMIUM_MEDIA_LIMITS]: true,
     [EntitlementKey.VERIFIED_BUSINESS_BADGE]: false,
+    [EntitlementKey.CREATE_AUCTION]: true,
   },
   [PlanCode.FREE_BUSINESS]: {
     [EntitlementKey.CREATE_LISTING]: true,
@@ -78,6 +80,7 @@ export const PLAN_ENTITLEMENTS: Record<string, Record<string, boolean | number>>
     [EntitlementKey.ADVANCED_SEARCH]: false,
     [EntitlementKey.PREMIUM_MEDIA_LIMITS]: false,
     [EntitlementKey.VERIFIED_BUSINESS_BADGE]: false,
+    [EntitlementKey.CREATE_AUCTION]: false,
   },
   [PlanCode.VERIFIED_BUSINESS]: {
     [EntitlementKey.CREATE_LISTING]: true,
@@ -90,6 +93,7 @@ export const PLAN_ENTITLEMENTS: Record<string, Record<string, boolean | number>>
     [EntitlementKey.ADVANCED_SEARCH]: true,
     [EntitlementKey.PREMIUM_MEDIA_LIMITS]: true,
     [EntitlementKey.VERIFIED_BUSINESS_BADGE]: true,
+    [EntitlementKey.CREATE_AUCTION]: true,
   },
   [PlanCode.PREMIUM_BUSINESS]: {
     [EntitlementKey.CREATE_LISTING]: true,
@@ -102,6 +106,7 @@ export const PLAN_ENTITLEMENTS: Record<string, Record<string, boolean | number>>
     [EntitlementKey.ADVANCED_SEARCH]: true,
     [EntitlementKey.PREMIUM_MEDIA_LIMITS]: true,
     [EntitlementKey.VERIFIED_BUSINESS_BADGE]: true,
+    [EntitlementKey.CREATE_AUCTION]: true,
   },
 };
 

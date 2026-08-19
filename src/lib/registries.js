@@ -137,6 +137,7 @@ export const EntitlementKey = Object.freeze({
   ADVANCED_SEARCH: "advanced_search",
   PREMIUM_MEDIA_LIMITS: "premium_media_limits",
   VERIFIED_BUSINESS_BADGE: "verified_business_badge",
+  CREATE_AUCTION: "create_auction",
 });
 
 /**

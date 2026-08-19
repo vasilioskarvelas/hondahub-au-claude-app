@@ -3,21 +3,31 @@
   "type": "object",
   "properties": {
     "listing_id": {
-      "type": "string"
+      "type": "string",
+      "description": "FK\u2192MarketplaceListing. The auction listing this bid is placed on."
     },
-    "listing_title": {
-      "type": "string"
+    "bidder_id": {
+      "type": "string",
+      "description": "FK\u2192User. The user who placed the bid (mirrors created_by_id; explicit for the uniqueness key)."
     },
     "bidder_name": {
-      "type": "string"
+      "type": "string",
+      "description": "Denormalized display name of the bidder for bid-history rendering."
     },
-    "amount": {
-      "type": "number"
+    "amount_cents": {
+      "type": "number",
+      "description": "Integer cents (ADR-018). The bid amount in AUD."
+    },
+    "is_winning": {
+      "type": "boolean",
+      "default": false,
+      "description": "True when this is the current highest bid on the listing. Only one bid per listing is winning at a time; the previous winner is marked false when a higher bid arrives."
     }
   },
   "required": [
     "listing_id",
+    "bidder_id",
     "bidder_name",
-    "amount"
+    "amount_cents"
   ]
 }

@@ -24,6 +24,7 @@ import { VEHICLE_STEPS, PART_STEPS, isStepComplete } from "@/components/marketpl
 const EMPTY = {
   flow: null, listing_type: "for_sale", category: "", title: "", description: "",
   price_type: "fixed", price: "", condition: "used", quantity: "1",
+  auction_min_bid: "", auction_reserve: "", auction_duration_days: 5,
   primary_vehicle_id: "", compatible_models: [], compatible_chassis_codes: [], compatible_engine_families: [],
   compatible_year_from: "", compatible_year_to: "", location_general: "",
   photo_urls: [], video_urls: [], additional_specifications: [],
@@ -93,6 +94,11 @@ export default function CreateMarketplaceListing() {
       additional_specifications: form.additional_specifications,
     };
     p.price_cents = (form.price_type === "fixed" || form.price_type === "negotiable") ? Math.round(Number(form.price) * 100) : null;
+    if (form.price_type === "auction") {
+      p.auction_min_bid_cents = Math.round(Number(form.auction_min_bid) * 100);
+      p.auction_reserve_cents = form.auction_reserve !== "" ? Math.round(Number(form.auction_reserve) * 100) : null;
+      p.auction_duration_days = Number(form.auction_duration_days) || 5;
+    }
     if (form.category !== "vehicle") {
       p.compatible_models = form.compatible_models || [];
       p.compatible_chassis_codes = form.compatible_chassis_codes || [];
@@ -155,6 +161,9 @@ export default function CreateMarketplaceListing() {
               listing_type: l.listing_type || "for_sale", category: l.category || "",
               title: l.title || "", description: l.description || "",
               price_type: l.price_type || "fixed", price: l.price_cents != null ? String(l.price_cents / 100) : "",
+              auction_min_bid: l.auction_min_bid_cents != null ? String(l.auction_min_bid_cents / 100) : "",
+              auction_reserve: l.auction_reserve_cents != null ? String(l.auction_reserve_cents / 100) : "",
+              auction_duration_days: l.auction_duration_days ?? 5,
               condition: l.condition || "used", quantity: String(l.quantity ?? 1),
               primary_vehicle_id: l.primary_vehicle_id || "",
               compatible_models: l.compatible_models || [],

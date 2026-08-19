@@ -82,8 +82,13 @@ export const PriceType = Object.freeze({
   NEGOTIABLE: "negotiable",
   POA: "poa",
   FREE: "free",
+  AUCTION: "auction",
 });
 export const PRICE_TYPE_VALUES = Object.values(PriceType);
+
+// Auction configuration (ADR: auction price_type).
+export const AUCTION_DURATION_DAYS = [3, 5, 7];
+export const AUCTION_MIN_BID_INCREMENT_CENTS = 100; // $1.00 minimum increment
 
 export const MessageStatus = Object.freeze({
   SENT: "sent",

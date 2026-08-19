@@ -26,7 +26,8 @@
         "promoted_listing",
         "advanced_search",
         "premium_media_limits",
-        "verified_business_badge"
+        "verified_business_badge",
+        "create_auction"
       ],
       "description": "Validated against the EntitlementKey registry (Phase 00). Exactly one of bool_value/numeric_value is populated (service-enforced), matching the entitlement's value type."
     },

@@ -48,14 +48,40 @@
         "fixed",
         "negotiable",
         "poa",
-        "free"
+        "free",
+        "auction"
       ],
       "default": "fixed",
-      "description": "fixed/negotiable require price_cents; poa/free require price_cents = null."
+      "description": "fixed/negotiable require price_cents; poa/free require price_cents = null. auction requires auction_min_bid_cents + auction_duration_days; price_cents is null. Auction creation is gated by the create_auction entitlement (premium subscription)."
     },
     "price_cents": {
       "type": "number",
-      "description": "Integer cents (ADR-018, not decimal). Required when price_type is fixed/negotiable; null when poa/free. AUD implicit (ADR-017)."
+      "description": "Integer cents (ADR-018, not decimal). Required when price_type is fixed/negotiable; null when poa/free/auction. AUD implicit (ADR-017)."
+    },
+    "auction_min_bid_cents": {
+      "type": "number",
+      "description": "Integer cents. Required when price_type=auction \u2014 the starting/minimum bid. AUD implicit."
+    },
+    "auction_reserve_cents": {
+      "type": "number",
+      "description": "Integer cents, nullable. Optional reserve price for auction listings \u2014 the seller is not obligated to sell below this. AUD implicit."
+    },
+    "auction_duration_days": {
+      "type": "number",
+      "description": "Integer 3/5/7. Required when price_type=auction \u2014 the auction duration in days. auction_ends_at is computed as published_at + this duration at publish time."
+    },
+    "auction_ends_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Set at publish time for auction listings = published_at + auction_duration_days. The auction is active until this time; after it, no further bids are accepted."
+    },
+    "current_bid_cents": {
+      "type": "number",
+      "description": "Denormalized current highest bid in cents. Null when no bids have been placed. Source of truth = Bid (is_winning=true)."
+    },
+    "current_bidder_id": {
+      "type": "string",
+      "description": "FK\u2192User, denormalized. The current highest bidder. Null when no bids have been placed."
     },
     "condition": {
       "type": "string",
