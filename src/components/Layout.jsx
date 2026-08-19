@@ -105,7 +105,7 @@ export default function Layout() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 pt-4 pb-28 md:pb-12">
+      <main className="mx-auto max-w-6xl px-4 pt-4 pb-40 md:pb-12">
         <AnimatePresence mode="wait">
           <motion.div
             key={location.pathname}
