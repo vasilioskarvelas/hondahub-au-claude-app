@@ -124,7 +124,7 @@ export default function GroupDetail() {
                   <div className="flex items-center gap-2">
                     <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/15 text-xs font-bold text-primary">{(m.display_name || "?").charAt(0).toUpperCase()}</div>
                     <div>
-                      <Link to={`/user/${encodeURIComponent(m.handle || m.display_name)}`} className="text-sm font-medium hover:text-primary">{m.display_name}</Link>
+                      <Link to={`/user/${encodeURIComponent(m.handle || m.display_name)}/garage`} className="text-sm font-medium hover:text-primary">{m.display_name}</Link>
                       <div className="flex items-center gap-1"><span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-bold ${meta.cls}`}><Icon className="h-2.5 w-2.5" /> {meta.label}</span></div>
                     </div>
                   </div>

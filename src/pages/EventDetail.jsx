@@ -100,7 +100,7 @@ export default function EventDetail() {
       {event.description && <div className="rounded-2xl border border-border bg-card p-5"><h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-muted-foreground">About</h2><p className="whitespace-pre-line text-sm leading-relaxed">{event.description}</p></div>}
 
       <div className="flex flex-wrap gap-3">
-        <Link to={organiser.type === "user" ? `/user/${encodeURIComponent(organiser.handle || organiser.name)}` : "#"} className="flex flex-1 items-center gap-3 rounded-2xl border border-border bg-card p-4 active:scale-[0.98]">
+        <Link to={organiser.type === "user" ? `/user/${encodeURIComponent(organiser.handle || organiser.name)}/garage` : "#"} className="flex flex-1 items-center gap-3 rounded-2xl border border-border bg-card p-4 active:scale-[0.98]">
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/15 text-sm font-bold text-primary">{(organiser.name || "?").charAt(0).toUpperCase()}</div>
           <div className="flex-1"><p className="text-xs text-muted-foreground">Organised by</p><p className="text-sm font-bold">{organiser.name}</p></div>
         </Link>

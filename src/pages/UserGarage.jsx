@@ -1,45 +1,96 @@
 import React from "react";
 import { useParams, Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { ArrowLeft, Car, Gauge, Cog, Calendar, Zap, Instagram, Wrench, Timer, Gauge as GaugeIcon } from "lucide-react";
+import { ArrowLeft, Car, Gauge, Cog, Calendar, Zap, Instagram, Wrench, Timer } from "lucide-react";
 import GaragePhotoCarousel from "@/components/garage/GaragePhotoCarousel";
+import FollowButton from "@/components/social/FollowButton";
+import { ReportButton } from "@/components/moderation/ReportDialog";
 
 export default function UserGarage() {
   const { name } = useParams();
   const decodedName = decodeURIComponent(name || "");
   const [cars, setCars] = React.useState([]);
-  const [profile, setProfile] = React.useState(null);
+  const [user, setUser] = React.useState(null);
+  const [me, setMe] = React.useState(null);
+  const [following, setFollowing] = React.useState(false);
+  const [avatarUrl, setAvatarUrl] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
-    Promise.all([
-      base44.entities.GarageCar.filter({ owner_name: decodedName }, "-created_date", 50),
-      base44.entities.Profile.filter({ display_name: decodedName }),
-    ]).then(([gc, pr]) => {
-      setCars(gc);
-      setProfile(pr[0] || null);
-      setLoading(false);
-    });
+    let active = true;
+    (async () => {
+      setLoading(true);
+      try {
+        const cleanName = decodedName.replace(/^@/, "");
+        // Look up the user by handle/display_name via searchUsers (service role).
+        const res = await base44.functions.invoke("user-profile", { action: "searchUsers", query: cleanName });
+        const all = res.data?.users || [];
+        const lower = cleanName.toLowerCase();
+        const match = all.find((u) => u.handle && u.handle.toLowerCase() === lower)
+          || all.find((u) => u.display_name && u.display_name.toLowerCase() === lower)
+          || all[0] || null;
+        if (!active) return;
+        setUser(match);
+        // Filter garage cars by the user's id (created_by_id); fallback to owner_name.
+        const carFilter = match ? { created_by_id: match.id } : { owner_name: decodedName };
+        const gc = await base44.entities.GarageCar.filter(carFilter, "-created_date", 50);
+        if (!active) return;
+        setCars(gc);
+        // Resolve avatar URL.
+        if (match?.avatar_media_id) {
+          base44.functions.invoke("media", { action: "get", media_id: match.avatar_media_id })
+            .then((r) => active && setAvatarUrl(r.data?.media?.file_url || null))
+            .catch(() => {});
+        }
+        // Check following status.
+        try {
+          const m = await base44.auth.me();
+          if (!active) return;
+          setMe(m);
+          if (match && m.id !== match.id) {
+            const f = await base44.functions.invoke("social", { action: "isFollowing", target_type: "user", target_id: match.id });
+            if (active) setFollowing(!!f.data?.following);
+          }
+        } catch {}
+      } catch {
+        // Fallback to old owner_name filter if user lookup fails.
+        try {
+          const gc = await base44.entities.GarageCar.filter({ owner_name: decodedName }, "-created_date", 50);
+          if (active) setCars(gc);
+        } catch {}
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => { active = false; };
   }, [decodedName]);
+
+  const displayName = user?.display_name || user?.handle || decodedName;
 
   return (
     <div className="mx-auto max-w-lg space-y-5">
-      <Link to={`/user/${encodeURIComponent(decodedName)}`} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+      <Link to={user?.handle ? `/user/${user.handle}` : "#"} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
         <ArrowLeft className="h-4 w-4" /> Back to profile
       </Link>
 
       <div className="flex items-center gap-3">
-        {profile?.avatar_url ? (
-          <img src={profile.avatar_url} alt={decodedName} className="h-12 w-12 rounded-full object-cover" />
+        {avatarUrl ? (
+          <img src={avatarUrl} alt={displayName} className="h-12 w-12 rounded-full object-cover" style={{ objectPosition: user?.avatar_position || "50% 50%" }} />
         ) : (
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-primary/30 to-primary/10 font-black text-primary">
-            {(decodedName || "?").charAt(0).toUpperCase()}
+            {(displayName || "?").charAt(0).toUpperCase()}
           </div>
         )}
-        <div>
-          <h1 className="text-xl font-black">@{decodedName}'s Garage</h1>
+        <div className="flex-1">
+          <h1 className="text-xl font-black">{user?.handle ? `@${user.handle}'s Garage` : `${displayName}'s Garage`}</h1>
           <p className="text-sm text-muted-foreground">{cars.length} {cars.length === 1 ? "build" : "builds"}</p>
         </div>
+        {user && me && me.id !== user.id && (
+          <div className="flex items-center gap-2">
+            <FollowButton targetType="user" targetId={user.id} initialFollowing={following} onToggle={setFollowing} />
+            <ReportButton targetType="user" targetId={user.id} />
+          </div>
+        )}
       </div>
 
       {loading ? (

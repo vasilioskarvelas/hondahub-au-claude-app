@@ -135,11 +135,11 @@ function SearchResultRow({ user, me }) {
   const tier = user.account_tier || AccountTier.NEW_MEMBER;
   return (
     <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-3">
-      <Link to={user.handle ? `/user/${user.handle}` : "#"} className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-sm font-black text-primary-foreground">
+      <Link to={user.handle ? `/user/${user.handle}/garage` : "#"} className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-sm font-black text-primary-foreground">
         {(displayName || "?").charAt(0).toUpperCase()}
       </Link>
       <div className="flex-1 min-w-0">
-        <Link to={user.handle ? `/user/${user.handle}` : "#"} className="block truncate text-sm font-bold hover:text-primary">{displayName}</Link>
+        <Link to={user.handle ? `/user/${user.handle}/garage` : "#"} className="block truncate text-sm font-bold hover:text-primary">{displayName}</Link>
         {user.handle && <p className="truncate text-xs text-muted-foreground">@{user.handle}</p>}
         <TierBadge tier={tier} />
       </div>
@@ -160,11 +160,11 @@ function UserRow({ userId, me }) {
   const tier = u.account_tier || AccountTier.NEW_MEMBER;
   return (
     <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-3">
-      <Link to={u.handle ? `/user/${u.handle}` : "#"} className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-sm font-black text-primary-foreground">
+      <Link to={u.handle ? `/user/${u.handle}/garage` : "#"} className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-sm font-black text-primary-foreground">
         {(displayName || "?").charAt(0).toUpperCase()}
       </Link>
       <div className="flex-1 min-w-0">
-        <Link to={u.handle ? `/user/${u.handle}` : "#"} className="block truncate text-sm font-bold hover:text-primary">{displayName}</Link>
+        <Link to={u.handle ? `/user/${u.handle}/garage` : "#"} className="block truncate text-sm font-bold hover:text-primary">{displayName}</Link>
         {u.handle && <p className="truncate text-xs text-muted-foreground">@{u.handle}</p>}
         <TierBadge tier={tier} />
       </div>

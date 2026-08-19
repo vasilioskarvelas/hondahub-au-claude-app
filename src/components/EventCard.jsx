@@ -28,7 +28,7 @@ export default function EventCard({ event }) {
         <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
           {event.organiser_type === "user" && event.organiser_handle ? (
             <Link
-              to={`/user/${encodeURIComponent(event.organiser_handle)}`}
+              to={`/user/${encodeURIComponent(event.organiser_handle)}/garage`}
               onClick={(e) => e.stopPropagation()}
               className="truncate font-medium text-muted-foreground hover:text-primary"
             >

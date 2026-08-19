@@ -70,7 +70,7 @@ export default function UserSearchBar() {
                 const displayName = u.display_name || u.handle || u.full_name || "Member";
                 const tier = u.account_tier || AccountTier.NEW_MEMBER;
                 return (
-                  <Link key={u.id} to={u.handle ? `/user/${u.handle}` : "#"} className="flex items-center gap-3 rounded-xl p-2 hover:bg-secondary">
+                  <Link key={u.id} to={u.handle ? `/user/${u.handle}/garage` : "#"} className="flex items-center gap-3 rounded-xl p-2 hover:bg-secondary">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-black text-primary-foreground">
                       {(displayName || "?").charAt(0).toUpperCase()}
                     </div>
