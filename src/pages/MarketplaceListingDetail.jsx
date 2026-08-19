@@ -73,7 +73,15 @@ export default function MarketplaceListingDetail() {
       const res = await base44.functions.invoke("marketplace", { action: "startConversation", listing_id: id });
       if (res.data?.ok) navigate(`/conversation/${res.data.conversation_id}`);
       else setError(res.data?.error || "Failed");
-    } catch (e) { setError(e.message); } finally { setBusy(""); }
+    } catch (e) {
+      // 409 CONVERSATION_ALREADY_EXISTS — open the existing thread instead of erroring.
+      const existingId = e.response?.data?.details?.conversation_id;
+      if (e.response?.status === 409 && existingId) {
+        navigate(`/conversation/${existingId}`);
+      } else {
+        setError(e.message);
+      }
+    } finally { setBusy(""); }
   };
 
   if (!data) return <div className="py-16 text-center text-sm text-muted-foreground">Loading listing...</div>;
