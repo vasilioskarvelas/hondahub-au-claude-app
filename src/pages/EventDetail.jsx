@@ -26,7 +26,10 @@ export default function EventDetail() {
   React.useEffect(() => { load(); }, [id]);
 
   React.useEffect(() => {
-    if (user) base44.entities.Vehicle.list("-updated_date", 50).then(setVehicles).catch(() => {});
+    if (!user) return;
+    base44.functions.invoke("vehicle", { action: "list" })
+      .then((res) => setVehicles(res.data?.vehicles || []))
+      .catch(() => {});
   }, [user]);
 
   const attend = async (status) => {
