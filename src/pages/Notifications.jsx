@@ -34,12 +34,34 @@ const LABELS = {
   [NotificationType.NEW_VEHICLE_UPDATE]: "new update on a vehicle you follow",
 };
 
-// Where tapping a notification of this type should navigate.
+// Where tapping a notification of this type should navigate (type-based fallback).
 const ROUTES = {
   [NotificationType.NEW_MARKETPLACE_MESSAGE]: "/conversations",
   [NotificationType.LISTING_UPDATE]: "/marketplace",
   [NotificationType.NEW_VEHICLE_UPDATE]: "/feed",
 };
+
+// Resolve a tap destination from the notification's polymorphic target.
+// Prefers a deep link to the exact target record; falls back to the type-based
+// route above, then null (no navigation — just marks read).
+const TARGET_ROUTES = {
+  post: (id) => `/post/${id}`,
+  vehicle: (id) => `/vehicle/${id}`,
+  group: (id) => `/group/${id}`,
+  event: (id) => `/event/${id}`,
+  listing: (id) => `/marketplace/${id}`,
+  marketplace_message: () => "/conversations",
+  moderation_case: (id) => `/moderation/case/${id}`,
+  report: () => "/moderation",
+  comment: () => "/feed",
+};
+
+function routeFor(n) {
+  if (n.target_type && n.target_id && TARGET_ROUTES[n.target_type]) {
+    return TARGET_ROUTES[n.target_type](n.target_id);
+  }
+  return ROUTES[n.notification_type] || null;
+}
 
 export default function Notifications() {
   const [notifications, setNotifications] = React.useState([]);
@@ -68,7 +90,7 @@ export default function Notifications() {
 
   const handleTap = (n) => {
     handleMarkRead(n);
-    const route = ROUTES[n.notification_type];
+    const route = routeFor(n);
     if (route) navigate(route);
   };
 
