@@ -249,13 +249,16 @@ export default function CreateMarketplaceListing() {
   const publish = async () => {
     setBusy("publish"); setError("");
     try {
-      await saveDraft();
+      const saved = await saveDraft();
       const did = draftIdRef.current;
       if (!did) { setError("Could not save the listing."); setBusy(""); return; }
       // Editing an already-published listing: just persist changes (updateListing
       // already ran in saveDraft) and return to the detail page. publishListing
       // only works on drafts, so we must not call it for live listings.
       if (isLiveEdit) {
+        // saveDraft returns null on failure — don't navigate away or the user
+        // loses their changes with no error shown. saveDraft already set error.
+        if (!saved) { setBusy(""); return; }
         navigate(`/marketplace/${did}`);
         return;
       }
