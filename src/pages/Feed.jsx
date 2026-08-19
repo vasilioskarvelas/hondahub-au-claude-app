@@ -3,6 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { Plus, RefreshCw } from "lucide-react";
 import PostCard from "@/components/social/PostCard";
 import CreatePostModal from "@/components/social/CreatePostModal";
+import UserSearchBar from "@/components/social/UserSearchBar";
 
 export default function Feed() {
   const [posts, setPosts] = React.useState([]);
@@ -27,7 +28,7 @@ export default function Feed() {
   return (
     <div className="mx-auto max-w-xl space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-black">Feed</h1>
+        <h1 className="text-2xl font-black">Socials</h1>
         <div className="flex items-center gap-2">
           <button onClick={load} className="rounded-xl border border-border p-2 text-muted-foreground hover:text-foreground"><RefreshCw className="h-4 w-4" /></button>
           <button onClick={() => setCreating(true)} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-sm font-bold text-primary-foreground">
@@ -35,6 +36,8 @@ export default function Feed() {
           </button>
         </div>
       </div>
+
+      <UserSearchBar />
 
       {loading ? (
         <div className="flex h-64 items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-secondary border-t-primary" /></div>

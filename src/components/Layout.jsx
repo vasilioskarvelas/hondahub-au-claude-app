@@ -7,7 +7,7 @@ import { useAuth } from '@/lib/AuthContext';
 const mainNav = [
   { to: "/", label: "Home", icon: Home },
   { to: "/marketplace", label: "Market", icon: ShoppingBag },
-  { to: "/feed", label: "Feed", icon: Users },
+  { to: "/feed", label: "Socials", icon: Users },
   { to: "/events", label: "Events", icon: CalendarDays },
   { to: "/shop", label: "Shop", icon: ShoppingBag },
   { to: "/giveaway", label: "Rewards", icon: Gift },
