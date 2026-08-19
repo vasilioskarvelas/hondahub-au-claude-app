@@ -29,7 +29,7 @@ export default function CommentSection({ postId, initialComments, isPostAuthor, 
     try {
       const res = await base44.functions.invoke("social", { action: "createComment", post_id: postId, text: text.trim() });
       if (res.data?.ok) {
-        setComments((c) => [{ ...res.data.comment, author: null }, ...c]);
+        setComments((c) => [res.data.comment, ...c]);
         setText("");
       }
     } finally { setBusy(false); }
@@ -41,7 +41,7 @@ export default function CommentSection({ postId, initialComments, isPostAuthor, 
     try {
       const res = await base44.functions.invoke("social", { action: "createComment", post_id: postId, text: replyText.trim(), parent_comment_id: parentId });
       if (res.data?.ok) {
-        setComments((c) => [{ ...res.data.comment, author: null, parent_comment_id: parentId }, ...c]);
+        setComments((c) => [{ ...res.data.comment, parent_comment_id: parentId }, ...c]);
         setReplyText(""); setReplyTo(null);
       }
     } finally { setBusy(false); }

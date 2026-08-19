@@ -254,7 +254,11 @@ Deno.serve(async (req) => {
           target_id: comment.id,
         }).catch(() => {});
       }
-      return Response.json({ ok: true, comment });
+      // Enrich with the author so the UI can render the commenter's name/avatar
+      // immediately without a re-fetch (matches listPostDetail's enrichAuthors).
+      const author = await safeUser(base44, user.id);
+      const avatar_url = author ? await resolveMediaUrl(base44, author.avatar_media_id) : null;
+      return Response.json({ ok: true, comment: { ...comment, author: author ? { ...author, avatar_url } : null, liked: false } });
     }
 
     // ---- removeOwnComment ----
