@@ -536,9 +536,11 @@ Deno.serve(async (req) => {
         return err("RESOURCE_NOT_FOUND", 404);
       }
       if (listing.poster_id === user.id) return err("CANNOT_MESSAGE_OWN_LISTING", 400);
-      if (!(await hasVerifiedContact(base44, user.id))) {
-        return err("PERMISSION_DENIED", 403, { contact: "a verified email or phone is required to message a poster" });
-      }
+      // NOTE: the platform's auth flow already enforces email verification (OTP)
+      // before a user can log in, so any authenticated New Member+ in good
+      // standing is permitted to start a conversation. The previous
+      // TrustScoreEvent-based hasVerifiedContact gate had no automatic bridge
+      // from email verification and blocked all regular users.
       const blocked = await isBlockedEitherDirection(base44, user.id, listing.poster_id);
       if (blocked) return err("USER_BLOCKED", 403);
       const existing = await base44.entities.MarketplaceConversation.filter({
