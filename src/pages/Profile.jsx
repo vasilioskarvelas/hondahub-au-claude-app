@@ -14,7 +14,6 @@ export default function Profile() {
   const [editing, setEditing] = React.useState(false);
   const [form, setForm] = React.useState({});
   const [avatarId, setAvatarId] = React.useState(null);
-  const [coverId, setCoverId] = React.useState(null);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState(null);
   const navigate = useNavigate();
@@ -25,7 +24,6 @@ export default function Profile() {
     if (!authUser) return;
     setUser(authUser);
     setAvatarId(authUser.avatar_media_id || null);
-    setCoverId(authUser.cover_media_id || null);
     setForm({
       handle: authUser.handle || "",
       display_name: authUser.display_name || authUser.full_name || "",
@@ -91,11 +89,8 @@ export default function Profile() {
   return (
     <div className="mx-auto max-w-lg space-y-5">
       <div className="rounded-2xl border border-border bg-card">
-        <div className="relative carbon-bg h-24 overflow-hidden bg-secondary">
-          {coverId && <CoverPreview mediaId={coverId} />}
-        </div>
-        <div className="px-5 pb-5">
-          <div className="-mt-10 flex items-end gap-4">
+        <div className="px-5 pt-5 pb-5">
+          <div className="flex items-end gap-4">
             <AvatarPreview mediaId={avatarId} name={name} />
             <div className="flex-1 pb-1">
               <h1 className="text-xl font-black">{name}</h1>
@@ -124,14 +119,6 @@ export default function Profile() {
             mediaId={avatarId}
             onUpdated={(id) => { setAvatarId(id); saveMediaField("avatar_media_id", id); }}
             onCleared={() => { setAvatarId(null); saveMediaField("avatar_media_id", null); }}
-          />
-          <MediaField
-            label="Cover"
-            kind="cover"
-            source="user"
-            mediaId={coverId}
-            onUpdated={(id) => { setCoverId(id); saveMediaField("cover_media_id", id); }}
-            onCleared={() => { setCoverId(null); saveMediaField("cover_media_id", null); }}
           />
           <Field label="Handle" value={form.handle} onChange={(v) => setForm({ ...form, handle: v })} hint="Public username. 3-20 chars, alphanumeric/underscore. Must be unique." />
           <Field label="Display Name" value={form.display_name} onChange={(v) => setForm({ ...form, display_name: v })} />
@@ -204,18 +191,4 @@ function AvatarPreview({ mediaId, name }) {
       {name.charAt(0).toUpperCase()}
     </div>
   );
-}
-
-function CoverPreview({ mediaId }) {
-  const [url, setUrl] = React.useState(null);
-  React.useEffect(() => {
-    let active = true;
-    if (!mediaId) { setUrl(null); return; }
-    base44.functions.invoke("media", { action: "get", media_id: mediaId })
-      .then((r) => active && setUrl(r.data?.media?.file_url || null))
-      .catch(() => active && setUrl(null));
-    return () => { active = false; };
-  }, [mediaId]);
-  if (!url) return null;
-  return <img src={url} alt="Cover" className="absolute inset-0 h-full w-full object-cover opacity-80" />;
 }
