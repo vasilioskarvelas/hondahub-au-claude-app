@@ -130,8 +130,8 @@ function CommentRow({ c, currentUserId, isPostAuthor, isModerator, onRemoveOwn, 
 
   return (
     <div className="flex gap-2.5">
-      <Link to={authorHandle ? `/user/${authorHandle}` : "#"} className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-bold">
-        {(authorName || "?").charAt(0).toUpperCase()}
+      <Link to={authorHandle ? `/user/${authorHandle}` : "#"} className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-secondary text-xs font-bold">
+        {author.avatar_url ? <img src={author.avatar_url} alt={authorName} className="h-full w-full object-cover" /> : (authorName || "?").charAt(0).toUpperCase()}
       </Link>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">

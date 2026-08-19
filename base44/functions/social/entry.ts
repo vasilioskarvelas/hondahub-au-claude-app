@@ -34,6 +34,7 @@ import { createNotification } from "../../shared/notifications.ts";
 import { NotificationType } from "../../shared/identity.ts";
 import { canInteract } from "../../shared/safety.ts";
 import { checkRateLimit, rateLimitResponse } from "../../shared/rate-limit.ts";
+import { resolveMediaUrl } from "../../shared/media.ts";
 
 const FOLLOW_TARGET_TYPES = ["user", "vehicle", "business"];
 const POST_STATUS = ["published", "removed_by_user", "removed_by_moderation"];
@@ -409,6 +410,7 @@ function extractHashtags(caption: string): string[] {
 
 async function enrichOne(base44: any, user: any, post: any) {
   const author = await safeUser(base44, post.created_by_id);
+  const avatar_url = author ? await resolveMediaUrl(base44, author.avatar_media_id) : null;
   let vehicle = null;
   if (post.primary_vehicle_id) {
     try { vehicle = await base44.asServiceRole.entities.Vehicle.get(post.primary_vehicle_id); } catch {}
@@ -418,7 +420,7 @@ async function enrichOne(base44: any, user: any, post: any) {
     try { media = await base44.asServiceRole.entities.Media.get(post.media_id); } catch {}
   }
   const like = await base44.entities.PostLike.filter({ post_id: post.id, user_id: user.id });
-  return { ...post, author, vehicle, media_url: media?.file_url || null, liked: like.length > 0 };
+  return { ...post, author: author ? { ...author, avatar_url } : null, vehicle, media_url: media?.file_url || null, liked: like.length > 0 };
 }
 
 async function enrichPosts(base44: any, user: any, posts: any[]) {
@@ -429,9 +431,17 @@ async function enrichAuthors(base44: any, comments: any[], user: any) {
   const ids = Array.from(new Set(comments.map((c) => c.created_by_id)));
   const users = await Promise.all(ids.map((id) => safeUser(base44, id)));
   const map = new Map(users.filter(Boolean).map((u: any) => [u.id, u]));
+  // Resolve avatar URLs for all comment authors in parallel.
+  const avatarUrls = await Promise.all(
+    Array.from(map.values()).map(async (u: any) => [u.id, await resolveMediaUrl(base44, u.avatar_media_id)])
+  );
+  const avatarMap = new Map(avatarUrls as any);
   const likedRows = user ? await base44.entities.CommentLike.filter({ comment_id: { $in: comments.map((c) => c.id) }, user_id: user.id }) : [];
   const likedSet = new Set(likedRows.map((l: any) => l.comment_id));
-  return comments.map((c) => ({ ...c, author: map.get(c.created_by_id) || null, liked: likedSet.has(c.id) }));
+  return comments.map((c) => {
+    const author = map.get(c.created_by_id) || null;
+    return { ...c, author: author ? { ...author, avatar_url: avatarMap.get(author.id) || null } : null, liked: likedSet.has(c.id) };
+  });
 }
 
 async function safeUser(base44: any, id: string) {
