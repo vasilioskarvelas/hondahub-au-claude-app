@@ -1,20 +1,23 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { Wrench } from "lucide-react";
+import { Wrench, Search, X } from "lucide-react";
 import FollowButton from "@/components/social/FollowButton";
-import { callGarage, resolveMediaUrl } from "@/lib/garage";
+import VehicleCard from "@/components/garage/VehicleCard";
+import { callGarage, resolveMediaUrl, vehicleLabel } from "@/lib/garage";
 
 /**
- * Discover section for the Garage page — lists every other member's garage
- * (regardless of follow status) with their username, a build preview image,
- * build count, and a follow/following button.
+ * Discover section for the Garage page. A live search bar lets members find
+ * builds by car model (matches model/make/nickname/chassis/engine/year).
+ * With no query it lists every other member's garage directory.
  */
 export default function DiscoverGarages() {
   const [users, setUsers] = React.useState([]);
+  const [vehicles, setVehicles] = React.useState([]);
   const [previews, setPreviews] = React.useState({}); // userId -> { count, photo }
   const [followingIds, setFollowingIds] = React.useState(new Set());
   const [loading, setLoading] = React.useState(true);
+  const [query, setQuery] = React.useState("");
 
   React.useEffect(() => {
     let active = true;
@@ -30,9 +33,9 @@ export default function DiscoverGarages() {
         if (!active) return;
         const list = usersRes.data?.users || [];
         setUsers(list);
+        setVehicles(pubVehiclesRes?.vehicles || []);
         setFollowingIds(new Set(followsRes.map((f) => f.target_id)));
 
-        // Group public Vehicles (primary) by owner — these carry cover_media_id.
         const vMap = {};
         for (const v of (pubVehiclesRes?.vehicles || [])) {
           const uid = v.created_by_id;
@@ -41,7 +44,6 @@ export default function DiscoverGarages() {
           vMap[uid].count += 1;
           if (!vMap[uid].cover_media_id && v.cover_media_id) vMap[uid].cover_media_id = v.cover_media_id;
         }
-        // Legacy GarageCar records (fallback photo source).
         const gMap = {};
         for (const c of carsRes) {
           const uid = c.created_by_id;
@@ -51,7 +53,6 @@ export default function DiscoverGarages() {
           if (!gMap[uid].photo && c.photos?.length > 0) gMap[uid].photo = c.photos[0];
         }
 
-        // Resolve cover media ids → display URLs (parallel, deduped).
         const coverIds = Array.from(new Set(Object.values(vMap).map((x) => x.cover_media_id).filter(Boolean)));
         const urlEntries = await Promise.all(coverIds.map((id) => resolveMediaUrl(id).then((u) => [id, u])));
         const coverUrls = new Map(urlEntries.filter(([, u]) => u));
@@ -83,15 +84,49 @@ export default function DiscoverGarages() {
     });
   };
 
+  const q = query.trim().toLowerCase();
+  const matches = q
+    ? vehicles.filter((v) => {
+        const hay = [v.model, v.make, v.nickname, v.chassis_code, v.engine_code, String(v.year || ""), vehicleLabel(v)]
+          .filter(Boolean).join(" ").toLowerCase();
+        return hay.includes(q);
+      })
+    : [];
+
   return (
     <div className="space-y-3 pt-2">
       <div>
         <h2 className="text-lg font-black tracking-tight">Discover Garages</h2>
-        <p className="text-sm text-muted-foreground">Explore builds from other HondaHub members — no follow required.</p>
+        <p className="text-sm text-muted-foreground">Explore builds from other HondaHub members — search by model or browse garages.</p>
+      </div>
+
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search builds by model — e.g. Civic, Integra, S2000…"
+          className="w-full rounded-xl border border-border bg-card py-2.5 pl-9 pr-9 text-sm outline-none transition focus:border-primary"
+        />
+        {query && (
+          <button onClick={() => setQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+            <X className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       {loading ? (
         <div className="flex h-32 items-center justify-center"><div className="h-7 w-7 animate-spin rounded-full border-4 border-secondary border-t-primary" /></div>
+      ) : q ? (
+        matches.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">
+            No builds match “{query.trim()}”.
+          </div>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {matches.map((v) => <VehicleCard key={v.id} vehicle={v} />)}
+          </div>
+        )
       ) : users.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">No other members to show yet.</div>
       ) : (
