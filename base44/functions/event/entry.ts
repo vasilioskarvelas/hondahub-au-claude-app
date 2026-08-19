@@ -78,11 +78,14 @@ Deno.serve(async (req) => {
         if (organiser_id !== user.id && !(user.role === "admin" || user.account_tier === "moderator")) {
           return err("PERMISSION_DENIED", 403, { organiser_id: "you may only organise as yourself" });
         }
-        const ref = await validateReference(base44, { target_type: "user", target_id: organiser_id, allowedTypes: ["user"] });
-        if (!ref.valid) return err("VALIDATION_FAILED", 422, { organiser_id: ref.error });
-        const org = await base44.asServiceRole.entities.User.get(organiser_id).catch(() => null);
-        if (org && (org.account_status === "suspended" || org.account_status === "banned")) {
-          return err("VALIDATION_FAILED", 422, { organiser_id: "organiser not in good standing" });
+        // Skip existence check when the organiser is the current user — they're already authenticated.
+        if (organiser_id !== user.id) {
+          const ref = await validateReference(base44, { target_type: "user", target_id: organiser_id, allowedTypes: ["user"] });
+          if (!ref.valid) return err("VALIDATION_FAILED", 422, { organiser_id: ref.error });
+          const org = await base44.asServiceRole.entities.User.get(organiser_id).catch(() => null);
+          if (org && (org.account_status === "suspended" || org.account_status === "banned")) {
+            return err("VALIDATION_FAILED", 422, { organiser_id: "organiser not in good standing" });
+          }
         }
       } else {
         // business — Phase 07. organiser_id must equal business_id connection.
