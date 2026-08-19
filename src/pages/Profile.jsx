@@ -90,8 +90,8 @@ export default function Profile() {
 
   return (
     <div className="mx-auto max-w-lg space-y-5">
-      <div className="overflow-hidden rounded-2xl border border-border bg-card">
-        <div className="relative carbon-bg h-24 bg-secondary">
+      <div className="rounded-2xl border border-border bg-card">
+        <div className="relative carbon-bg h-24 overflow-hidden bg-secondary">
           {coverId && <CoverPreview mediaId={coverId} />}
         </div>
         <div className="px-5 pb-5">
