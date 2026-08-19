@@ -58,7 +58,6 @@ Deno.serve(async (req) => {
 
     if (action === 'searchUsers') {
       const query = (body.query || '').trim().toLowerCase();
-      if (!query) return Response.json({ ok: true, users: [] });
       const all = await base44.asServiceRole.entities.User.list(200);
       const matches = all
         .filter(u => u.id !== user.id)
@@ -68,9 +67,11 @@ Deno.serve(async (req) => {
                  status !== 'deactivated_by_user' && status !== 'pending_deletion';
         })
         .filter(u => {
+          if (!query) return true;
           const handle = (u.handle || '').toLowerCase();
           const display = (u.display_name || u.full_name || '').toLowerCase();
-          return handle.includes(query) || display.includes(query);
+          const email = (u.email || '').toLowerCase();
+          return handle.includes(query) || display.includes(query) || email.includes(query);
         })
         .slice(0, 20)
         .map(u => ({

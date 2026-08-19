@@ -20,10 +20,6 @@ export default function UserSearchBar() {
 
   React.useEffect(() => {
     clearTimeout(debounce.current);
-    if (!query.trim()) {
-      setResults(null);
-      return;
-    }
     setSearching(true);
     debounce.current = setTimeout(async () => {
       try {
@@ -37,10 +33,10 @@ export default function UserSearchBar() {
       } finally {
         setSearching(false);
       }
-    }, 300);
+    }, query.trim() ? 300 : 0);
   }, [query]);
 
-  const showDropdown = focused && query.trim().length > 0;
+  const showDropdown = focused;
 
   return (
     <div className="relative">
@@ -67,7 +63,7 @@ export default function UserSearchBar() {
           {searching ? (
             <div className="flex h-20 items-center justify-center"><div className="h-6 w-6 animate-spin rounded-full border-2 border-secondary border-t-primary" /></div>
           ) : results?.length === 0 ? (
-            <div className="p-4 text-center text-sm text-muted-foreground">No members found for "{query}".</div>
+            <div className="p-4 text-center text-sm text-muted-foreground">{query.trim() ? `No members found for "${query}".` : "No members to show."}</div>
           ) : (
             <div className="max-h-80 overflow-y-auto p-1.5">
               {results.map((u) => {
