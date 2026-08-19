@@ -55,10 +55,10 @@ export default function Profile() {
         setUser(res.data.user);
         setEditing(false);
       } else {
-        setError(res.data?.error || "Save failed");
+        setError(friendlyError(res.data));
       }
     } catch (e) {
-      setError(e.response?.data?.error || e.message);
+      setError(friendlyError(e.response?.data) || e.message);
     } finally {
       setSaving(false);
     }
@@ -182,6 +182,24 @@ function Field({ label, value, onChange, multiline, hint }) {
       {hint && <span className="mt-1 block text-[11px] text-muted-foreground">{hint}</span>}
     </label>
   );
+}
+
+function friendlyError(data) {
+  if (!data) return "Save failed. Please try again.";
+  const code = data.error;
+  const details = data.details || {};
+  if (code === "VALIDATION_FAILED") {
+    if (details.handle) return "Handle must be 3–20 characters, letters/numbers/underscores only, and not a reserved word.";
+    if (details.bio) return "Bio must be 500 characters or fewer.";
+    return "Please check your details and try again.";
+  }
+  if (code === "CONFLICT") {
+    if (details.handle) return "That handle is already taken — try another.";
+    return "This value is already in use.";
+  }
+  if (code === "PERMISSION_DENIED") return "You don't have permission to do that.";
+  if (code === "AUTH_REQUIRED") return "Please sign in again.";
+  return code || "Save failed. Please try again.";
 }
 
 function Row({ label, value }) {
