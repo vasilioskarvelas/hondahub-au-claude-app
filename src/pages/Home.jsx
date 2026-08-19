@@ -24,7 +24,11 @@ export default function Home() {
       setListings(res.data?.listings || []);
       setLoading(false);
     });
-    base44.entities.Event.filter({ status: "published" }, "starts_at", 10).then((e) => { const upcoming = e.find((x) => new Date(x.starts_at).getTime() >= Date.now()); setNextEvent(upcoming || null); });
+    base44.functions.invoke("event", { action: "listDirectory" }).then((res) => {
+      const events = res.data?.events || [];
+      const upcoming = events.find((x) => new Date(x.starts_at).getTime() >= Date.now());
+      setNextEvent(upcoming || null);
+    }).catch(() => setNextEvent(null));
     base44.entities.Giveaway.filter({ status: "active" }, "-created_date", 1).then((g) => setActiveGiveaway(g[0] || null));
     base44.functions.invoke("social", { action: "listFeed", limit: 1 }).then((res) => setCommunitySpotlight(res.data?.posts?.[0] || null)).catch(() => setCommunitySpotlight(null));
     base44.entities.PartnerDiscount.list("-created_date", 20).then((d) => setPartnerDiscounts(d));
@@ -60,7 +64,11 @@ export default function Home() {
           {nextEvent ? (
             <Link to={`/event/${nextEvent.id}`} className="group relative block overflow-hidden rounded-2xl border border-border bg-card transition hover:border-primary/50">
               <div className="relative h-32 overflow-hidden">
-                <div className="flex h-full items-center justify-center bg-gradient-to-br from-primary/20 to-secondary"><CalendarDays className="h-10 w-10 text-primary/50" /></div>
+                {nextEvent.cover_url ? (
+                  <img src={nextEvent.cover_url} alt={nextEvent.title} className="h-full w-full object-cover transition group-hover:scale-105" />
+                ) : (
+                  <div className="flex h-full items-center justify-center bg-gradient-to-br from-primary/20 to-secondary"><CalendarDays className="h-10 w-10 text-primary/50" /></div>
+                )}
                 <div className="absolute inset-0 bg-gradient-to-t from-card via-card/30 to-transparent" />
               </div>
               <div className="absolute bottom-0 left-0 right-0 p-3">
