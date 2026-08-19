@@ -279,6 +279,33 @@ Deno.serve(async (req) => {
       return Response.json({ ok: true, vehicles });
     }
 
+    // ---- addPhoto (owner) — append a media id to photo_media_ids (max 20); set as cover if none. ----
+    if (action === 'addPhoto') {
+      const { vehicle_id, media_id } = body;
+      if (!media_id) return err('VALIDATION_FAILED', 422, { media_id: 'required' });
+      const vehicle = await getOwnedVehicle(base44, vehicle_id, user);
+      if (!vehicle) return err('PERMISSION_DENIED', 403);
+      const photos = Array.isArray(vehicle.photo_media_ids) ? [...vehicle.photo_media_ids] : [];
+      if (!photos.includes(media_id)) photos.push(media_id);
+      if (photos.length > 20) return err('VALIDATION_FAILED', 422, { photo_media_ids: 'max 20' });
+      const update: any = { photo_media_ids: photos };
+      if (!vehicle.cover_media_id) update.cover_media_id = media_id;
+      const updated = await base44.entities.Vehicle.update(vehicle_id, update);
+      return Response.json({ ok: true, vehicle: updated });
+    }
+
+    // ---- removePhoto (owner) — remove a media id from photo_media_ids; clear cover if it was the cover. ----
+    if (action === 'removePhoto') {
+      const { vehicle_id, media_id } = body;
+      const vehicle = await getOwnedVehicle(base44, vehicle_id, user);
+      if (!vehicle) return err('PERMISSION_DENIED', 403);
+      const photos = (Array.isArray(vehicle.photo_media_ids) ? vehicle.photo_media_ids : []).filter((id: string) => id !== media_id);
+      const update: any = { photo_media_ids: photos };
+      if (vehicle.cover_media_id === media_id) update.cover_media_id = photos[0] || null;
+      const updated = await base44.entities.Vehicle.update(vehicle_id, update);
+      return Response.json({ ok: true, vehicle: updated });
+    }
+
     return err('VALIDATION_FAILED', 422, { action: 'unknown' });
   } catch (error) {
     return Response.json({ ok: false, error: { code: 'INTERNAL_ERROR', message: error.message } }, { status: 500 });

@@ -144,7 +144,15 @@
     },
     "cover_media_id": {
       "type": "string",
-      "description": "FK\u2192Media. Nullable \u2014 a vehicle can be created with zero media."
+      "description": "FK\u2192Media. The poster/primary photo (used for card thumbnails). Nullable \u2014 a vehicle can be created with zero media. Kept in sync with the first entry of photo_media_ids by addPhoto/removePhoto."
+    },
+    "photo_media_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "FK\u2192Media (images). Multiple build photos. Max 20 (service-enforced). cover_media_id mirrors the first/primary entry for card thumbnails; managed via addPhoto/removePhoto."
     },
     "verification_status": {
       "type": "string",

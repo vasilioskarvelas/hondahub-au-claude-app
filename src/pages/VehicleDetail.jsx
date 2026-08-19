@@ -7,6 +7,7 @@ import SpecDisplay from "@/components/garage/SpecDisplay";
 import { VerificationBadge, SaleStatusBadge, BuildStatusBadge, OwnershipBadge } from "@/components/garage/Badges";
 import { ModificationItem, TimelineEntryCard, MaintenanceRecordCard, PerformanceRecordCard } from "@/components/garage/RecordCards";
 import VehicleForm from "@/components/garage/VehicleForm";
+import VehiclePhotos from "@/components/garage/VehiclePhotos";
 import ModificationForm from "@/components/garage/ModificationForm";
 import MaintenanceForm from "@/components/garage/MaintenanceForm";
 import PerformanceForm from "@/components/garage/PerformanceForm";
@@ -22,7 +23,6 @@ export default function VehicleDetail() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState(null);
   const [tab, setTab] = React.useState("specs");
-  const [cover, setCover] = React.useState(null);
   const [dialog, setDialog] = React.useState(null); // {type, record?}
   const [suggestion, setSuggestion] = React.useState(null);
 
@@ -32,7 +32,6 @@ export default function VehicleDetail() {
       const d = await callGarage("vehicle", { action: "get", vehicle_id: id });
       if (d?.ok) {
         setData(d);
-        resolveMediaUrl(d.vehicle?.cover_media_id).then(setCover);
       } else {
         setError(d?.error?.message || "Not found");
       }
@@ -50,18 +49,6 @@ export default function VehicleDetail() {
       setDialog({ type: "timeline" });
     }
     load();
-  };
-
-  const onSetCover = async (file) => {
-    try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
-      const mediaRes = await base44.functions.invoke("media", { action: "create", file_url, media_type: "image", source: "user" });
-      const mediaId = mediaRes.data?.media?.id;
-      await callGarage("vehicle", { action: "setCover", vehicle_id: id, cover_media_id: mediaId });
-      load();
-    } catch (e) {
-      setError(e.message);
-    }
   };
 
   const submitVehicleVerification = async () => {
@@ -90,20 +77,14 @@ export default function VehicleDetail() {
 
       {/* Header / cover */}
       <div className="overflow-hidden rounded-2xl border border-border bg-card">
-        <div className="relative h-40 carbon-bg bg-secondary">
-          {cover && <img src={cover} alt={vehicleLabel(v)} className="h-full w-full object-cover opacity-90" />}
+        <div className="relative bg-secondary">
+          <VehiclePhotos vehicle={v} isOwner={isOwner} onChanged={load} />
           <div className="absolute left-3 top-3 flex flex-wrap gap-1">
             <OwnershipBadge status={v.ownership_relationship} />
             <BuildStatusBadge status={v.build_status} />
             <SaleStatusBadge status={v.sale_status} />
           </div>
           <div className="absolute right-3 top-3"><VerificationBadge status={v.verification_status} /></div>
-          {isOwner && (
-            <label className="absolute bottom-3 right-3 inline-flex cursor-pointer items-center gap-1 rounded-lg border border-border bg-card/80 px-2.5 py-1.5 text-xs font-medium backdrop-blur">
-              <ImagePlus className="h-3.5 w-3.5" /> Set Cover
-              <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onSetCover(f); }} />
-            </label>
-          )}
         </div>
         <div className="p-4">
           <h1 className="text-xl font-black">{vehicleLabel(v)}</h1>
