@@ -154,6 +154,7 @@ Deno.serve(async (req) => {
           upd.ends_at = null;
         }
       }
+      if (body.cover_media_id !== undefined) upd.cover_media_id = body.cover_media_id || null;
       const updated = await base44.entities.Event.update(body.event_id, upd);
       return json({ ok: true, event: updated });
     }

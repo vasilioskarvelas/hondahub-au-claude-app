@@ -123,6 +123,7 @@ const AuthenticatedApp = () => {
           <Route path="/verification-queue" element={<VerificationQueue />} />
           <Route path="/group/create" element={<CreateGroup />} />
           <Route path="/event/create" element={<CreateEvent />} />
+          <Route path="/event/:id/edit" element={<CreateEvent />} />
           <Route path="/connections" element={<Connections />} />
           <Route path="/connections/:name" element={<Connections />} />
           <Route path="/moderation" element={<ModerationQueue />} />
