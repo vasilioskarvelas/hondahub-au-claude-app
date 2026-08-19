@@ -3,15 +3,17 @@ import { base44 } from "@/api/base44Client";
 import { callGarage, resolveMediaUrl } from "@/lib/garage";
 import { ImagePlus, X, Car } from "lucide-react";
 import GaragePhotoCarousel from "@/components/garage/GaragePhotoCarousel";
+import PhotoLightbox from "@/components/garage/PhotoLightbox";
 
 /**
  * Displays a vehicle's photo gallery (multiple photos) and, for the owner,
- * lets them add/remove photos. Falls back to cover_media_id for legacy
- * vehicles that predate photo_media_ids.
+ * lets them add (multiple at once) and remove photos. Tapping a photo opens
+ * a fullscreen lightbox. Falls back to cover_media_id for legacy vehicles.
  */
 export default function VehiclePhotos({ vehicle, isOwner, onChanged }) {
   const [photos, setPhotos] = React.useState([]); // [id, url]
   const [uploading, setUploading] = React.useState(false);
+  const [lightbox, setLightbox] = React.useState(null); // index or null
 
   React.useEffect(() => {
     let active = true;
@@ -25,13 +27,15 @@ export default function VehiclePhotos({ vehicle, isOwner, onChanged }) {
     return () => { active = false; };
   }, [vehicle]);
 
-  const addPhoto = async (file) => {
+  const addPhotos = async (files) => {
     setUploading(true);
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
-      const mediaRes = await base44.functions.invoke("media", { action: "create", file_url, media_type: "image", source: "user" });
-      const mediaId = mediaRes.data?.media?.id;
-      if (mediaId) await callGarage("vehicle", { action: "addPhoto", vehicle_id: vehicle.id, media_id: mediaId });
+      for (const f of files) {
+        const { file_url } = await base44.integrations.Core.UploadFile({ file: f });
+        const mediaRes = await base44.functions.invoke("media", { action: "create", file_url, media_type: "image", source: "user" });
+        const mediaId = mediaRes.data?.media?.id;
+        if (mediaId) await callGarage("vehicle", { action: "addPhoto", vehicle_id: vehicle.id, media_id: mediaId });
+      }
       onChanged?.();
     } catch {
     } finally {
@@ -52,7 +56,7 @@ export default function VehiclePhotos({ vehicle, isOwner, onChanged }) {
     <>
       <div className="relative">
         {urls.length > 0 ? (
-          <GaragePhotoCarousel photos={urls} alt={vehicle?.nickname || "build"} />
+          <GaragePhotoCarousel photos={urls} alt={vehicle?.nickname || "build"} onPhotoClick={(i) => setLightbox(i)} />
         ) : (
           <div className="flex h-40 items-center justify-center carbon-bg">
             <Car className="h-8 w-8 text-muted-foreground/40" />
@@ -60,8 +64,14 @@ export default function VehiclePhotos({ vehicle, isOwner, onChanged }) {
         )}
         {isOwner && (
           <label className="absolute bottom-3 right-3 inline-flex cursor-pointer items-center gap-1 rounded-lg border border-border bg-card/80 px-2.5 py-1.5 text-xs font-medium backdrop-blur">
-            <ImagePlus className="h-3.5 w-3.5" /> {uploading ? "Uploading…" : "Add Photo"}
-            <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) addPhoto(f); }} />
+            <ImagePlus className="h-3.5 w-3.5" /> {uploading ? "Uploading…" : "Add Photos"}
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(e) => { const fs = Array.from(e.target.files || []); if (fs.length) addPhotos(fs); e.target.value = ""; }}
+            />
           </label>
         )}
       </div>
@@ -76,6 +86,14 @@ export default function VehiclePhotos({ vehicle, isOwner, onChanged }) {
             </div>
           ))}
         </div>
+      )}
+      {lightbox !== null && urls.length > 0 && (
+        <PhotoLightbox
+          photos={urls}
+          index={Math.min(lightbox, urls.length - 1)}
+          onClose={() => setLightbox(null)}
+          onIndex={(i) => setLightbox(i)}
+        />
       )}
     </>
   );
