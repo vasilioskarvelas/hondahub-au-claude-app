@@ -78,8 +78,11 @@ async function validateOwnedVehicle(base44: any, user: any, vehicleId: string): 
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
-    if (!user) return Response.json({ error: "AUTH_REQUIRED" }, { status: 401 });
+    const user = await base44.auth.me().catch(() => null);
+    // Write actions require an authenticated user; read/discovery actions are public
+    // so anyone can browse the social feed, posts, and profiles (explore + meet new people).
+    const WRITE_ACTIONS = new Set(["createPost","updatePost","removePost","likePost","unlikePost","likeComment","unlikeComment","createComment","removeOwnComment","hideCommentAsPostAuthor","followTarget","unfollowTarget"]);
+    if (!user && WRITE_ACTIONS.has(action)) return Response.json({ error: "AUTH_REQUIRED" }, { status: 401 });
 
     const body = await req.json().catch(() => ({}));
     const action = body.action;
@@ -321,9 +324,29 @@ Deno.serve(async (req) => {
       return Response.json({ ok: true, following: false });
     }
 
+    // ---- explore (public discovery feed — everyone's public posts) ----
+    if (action === "explore") {
+      const limit = Math.min(body.limit || 50, 100);
+      const posts = await base44.asServiceRole.entities.Post.filter(
+        { status: "published", visibility: "public" },
+        "-created_date",
+        limit,
+      );
+      return Response.json({ ok: true, posts: await enrichPosts(base44, user, posts) });
+    }
+
     // ---- listFeed (pull-based chronological) ----
     if (action === "listFeed") {
       const limit = Math.min(body.limit || 50, 100);
+      // Logged-out visitors see the full public feed (explore).
+      if (!user) {
+        const posts = await base44.asServiceRole.entities.Post.filter(
+          { status: "published", visibility: "public" },
+          "-created_date",
+          limit,
+        );
+        return Response.json({ ok: true, posts: await enrichPosts(base44, null, posts) });
+      }
       const follows = await base44.entities.Follow.filter({ follower_id: user.id });
       const authorIds = new Set<string>([user.id]);
       for (const f of follows) {
@@ -350,17 +373,17 @@ Deno.serve(async (req) => {
       const post = await base44.entities.Post.get(body.post_id);
       if (!post) return Response.json({ error: "NOT_FOUND" }, { status: 404 });
       const allComments = await base44.asServiceRole.entities.Comment.filter({ post_id: body.post_id }, "-created_date");
-      const isPostAuthor = post.created_by_id === user.id;
+      const isPostAuthor = !!user && post.created_by_id === user.id;
       const isMod = isModeratorOrAdmin(user);
       const comments = allComments.filter((c: any) => {
         if (c.status === "published") return true;
         if (isMod) return true;
-        if (c.status === "hidden_by_post_author") return isPostAuthor || c.created_by_id === user.id;
-        if (c.status === "removed_by_author") return c.created_by_id === user.id;
+        if (c.status === "hidden_by_post_author") return isPostAuthor || (!!user && c.created_by_id === user.id);
+        if (c.status === "removed_by_author") return !!user && c.created_by_id === user.id;
         if (c.status === "removed_by_moderation") return false;
         return false;
       });
-      const existingLike = await base44.entities.PostLike.filter({ post_id: body.post_id, user_id: user.id });
+      const existingLike = user ? await base44.entities.PostLike.filter({ post_id: body.post_id, user_id: user.id }) : [];
       return Response.json({
         ok: true,
         post: await enrichOne(base44, user, post),
@@ -373,29 +396,34 @@ Deno.serve(async (req) => {
 
     // ---- listProfilePosts ----
     if (action === "listProfilePosts") {
-      const targetUserId = body.user_id || user.id;
-      const posts = await base44.entities.Post.filter({ created_by_id: targetUserId, status: "published" }, "-created_date", body.limit || 50);
+      const targetUserId = body.user_id || (user && user.id);
+      if (!targetUserId) return Response.json({ ok: true, posts: [] });
+      const posts = await base44.asServiceRole.entities.Post.filter({ created_by_id: targetUserId, status: "published" }, "-created_date", body.limit || 50);
       return Response.json({ ok: true, posts: await enrichPosts(base44, user, posts) });
     }
 
     // ---- listFollowers / listFollowing ----
     if (action === "listFollowers") {
-      const targetUserId = body.user_id || user.id;
+      const targetUserId = body.user_id || (user && user.id);
+      if (!targetUserId) return Response.json({ ok: true, follows: [], count: 0 });
       const follows = await base44.asServiceRole.entities.Follow.filter({ target_type: "user", target_id: targetUserId });
       return Response.json({ ok: true, follows, count: follows.length });
     }
     if (action === "listFollowing") {
-      const targetUserId = body.user_id || user.id;
+      const targetUserId = body.user_id || (user && user.id);
+      if (!targetUserId) return Response.json({ ok: true, follows: [], count: 0 });
       const follows = await base44.asServiceRole.entities.Follow.filter({ follower_id: targetUserId });
       return Response.json({ ok: true, follows, count: follows.length });
     }
 
     // ---- isFollowing / isLiked (UI state helpers) ----
     if (action === "isFollowing") {
+      if (!user) return Response.json({ ok: true, following: false });
       const existing = await base44.entities.Follow.filter({ follower_id: user.id, target_type: body.target_type, target_id: body.target_id });
       return Response.json({ ok: true, following: existing.length > 0 });
     }
     if (action === "isLiked") {
+      if (!user) return Response.json({ ok: true, liked: false });
       const existing = await base44.entities.PostLike.filter({ post_id: body.post_id, user_id: user.id });
       return Response.json({ ok: true, liked: existing.length > 0 });
     }
@@ -423,7 +451,7 @@ async function enrichOne(base44: any, user: any, post: any) {
   if (post.media_id) {
     try { media = await base44.asServiceRole.entities.Media.get(post.media_id); } catch {}
   }
-  const like = await base44.entities.PostLike.filter({ post_id: post.id, user_id: user.id });
+  const like = user ? await base44.entities.PostLike.filter({ post_id: post.id, user_id: user.id }) : [];
   return { ...post, author: author ? { ...author, avatar_url } : null, vehicle, media_url: media?.file_url || null, liked: like.length > 0 };
 }
 
