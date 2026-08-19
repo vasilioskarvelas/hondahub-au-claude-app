@@ -26,7 +26,17 @@ export default function EventCard({ event }) {
           {event.location_general && <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" /> {event.location_general}</span>}
         </div>
         <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-          <span className="truncate">by {event.organiser_name || "Organiser"}</span>
+          {event.organiser_type === "user" && event.organiser_handle ? (
+            <Link
+              to={`/user/${encodeURIComponent(event.organiser_handle)}`}
+              onClick={(e) => e.stopPropagation()}
+              className="truncate font-medium text-muted-foreground hover:text-primary"
+            >
+              by {event.organiser_name || "Organiser"}
+            </Link>
+          ) : (
+            <span className="truncate">by {event.organiser_name || "Organiser"}</span>
+          )}
           <span className="inline-flex items-center gap-1"><Users className="h-3 w-3" /> {event.attendee_count || 0}</span>
         </div>
       </div>

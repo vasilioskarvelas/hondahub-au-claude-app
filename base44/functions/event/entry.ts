@@ -270,7 +270,7 @@ Deno.serve(async (req) => {
       upcoming.sort((a: any, b: any) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime());
       const enriched = await Promise.all(upcoming.map(async (e: any) => {
         const org = await resolveOrganiser(base44, e);
-        return { ...e, cover_url: await resolveMediaUrl(base44, e.cover_media_id), organiser_name: org.name };
+        return { ...e, cover_url: await resolveMediaUrl(base44, e.cover_media_id), organiser_name: org.name, organiser_handle: org.handle || null, organiser_type: org.type, organiser_id: org.id };
       }));
       return json({ ok: true, events: enriched });
     }
