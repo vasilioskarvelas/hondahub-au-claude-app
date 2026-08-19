@@ -137,7 +137,7 @@ export default function EventDetail() {
               </div>
             </>
           )}
-          {is_organiser && <Link to={`/event/${event.id}/edit`} className="w-full rounded-xl border border-border bg-background py-2.5 text-center text-sm font-bold hover:text-primary disabled:opacity-50">Edit Event</Link>}
+          {is_organiser && <Link to={`/event/${event.id}/edit`} className="flex w-full items-center justify-center gap-2 rounded-xl border border-primary/40 bg-primary/10 py-2.5 text-sm font-bold text-primary hover:bg-primary/20">Edit Event</Link>}
           {is_organiser && <button disabled={busy} onClick={cancel} className="w-full rounded-xl border border-destructive/40 py-2.5 text-sm font-bold text-destructive hover:bg-destructive/10 disabled:opacity-50">Cancel Event</button>}
         </div>
       )}
