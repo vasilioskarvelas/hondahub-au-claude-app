@@ -34,16 +34,17 @@ const LABELS = {
   [NotificationType.NEW_VEHICLE_UPDATE]: "new update on a vehicle you follow",
 };
 
-// Where tapping a notification of this type should navigate (type-based fallback).
+// Type-based fallback routes (no target, or target lookup failed).
 const ROUTES = {
   [NotificationType.NEW_MARKETPLACE_MESSAGE]: "/conversations",
   [NotificationType.LISTING_UPDATE]: "/marketplace",
   [NotificationType.NEW_VEHICLE_UPDATE]: "/feed",
+  [NotificationType.NEW_COMMENT]: "/feed",
+  [NotificationType.NEW_LIKE]: "/feed",
+  [NotificationType.NEW_FOLLOWER]: "/feed",
 };
 
-// Resolve a tap destination from the notification's polymorphic target.
-// Prefers a deep link to the exact target record; falls back to the type-based
-// route above, then null (no navigation — just marks read).
+// Direct deep links from a polymorphic target.
 const TARGET_ROUTES = {
   post: (id) => `/post/${id}`,
   vehicle: (id) => `/vehicle/${id}`,
@@ -55,35 +56,10 @@ const TARGET_ROUTES = {
   report: () => "/moderation",
 };
 
-// Some targets need a lookup before we know where to go:
-//  - user → profile page is keyed by handle/display_name, not id (resolve it).
-//  - comment → no standalone page; resolve its post and deep-link there.
-async function resolveRoute(n) {
-  const { target_type, target_id, notification_type } = n;
-  if (target_type === "user" && target_id) {
-    try {
-      const u = await base44.entities.User.get(target_id);
-      const name = u?.handle || u?.display_name || target_id;
-      return `/user/${encodeURIComponent(name)}`;
-    } catch {
-      return ROUTES[notification_type] || null;
-    }
-  }
-  if (target_type === "comment" && target_id) {
-    try {
-      const c = await base44.entities.Comment.get(target_id);
-      if (c?.post_id) return `/post/${c.post_id}?comment=${target_id}`;
-    } catch {}
-    return ROUTES[notification_type] || "/feed";
-  }
-  if (target_type && target_id && TARGET_ROUTES[target_type]) {
-    return TARGET_ROUTES[target_type](target_id);
-  }
-  return ROUTES[notification_type] || null;
-}
-
 export default function Notifications() {
   const [notifications, setNotifications] = React.useState([]);
+  const [actors, setActors] = React.useState({}); // actor_id -> { name, avatar_url }
+  const [routes, setRoutes] = React.useState({}); // notification_id -> route
   const [loading, setLoading] = React.useState(true);
   const navigate = useNavigate();
 
@@ -92,6 +68,78 @@ export default function Notifications() {
       const u = await base44.auth.me();
       const ns = await base44.entities.Notification.filter({ recipient_id: u.id }, "-created_date", 50);
       setNotifications(ns);
+
+      // Fetch every user once (service-role search) so we can show the sender's
+      // name + avatar and resolve user-target deep links by handle.
+      const usersRes = await base44.functions.invoke("user-profile", { action: "searchUsers", query: "" });
+      const userList = usersRes.data?.users || [];
+      const userMap = new Map(userList.map((x) => [x.id, x]));
+
+      // Resolve avatar URLs for every actor + user-target in parallel.
+      const mediaIds = Array.from(
+        new Set(
+          [...ns.map((n) => n.actor_id), ...ns.map((n) => (n.target_type === "user" ? n.target_id : null))]
+            .filter(Boolean)
+            .map((id) => userMap.get(id)?.avatar_media_id)
+            .filter(Boolean)
+        )
+      );
+      const avatarEntries = await Promise.all(
+        mediaIds.map(async (mid) => {
+          try {
+            const r = await base44.functions.invoke("media", { action: "get", media_id: mid });
+            return [mid, r.data?.media?.file_url || null];
+          } catch {
+            return [mid, null];
+          }
+        })
+      );
+      const avatarUrls = new Map(avatarEntries);
+
+      const actorMap = {};
+      for (const n of ns) {
+        const id = n.actor_id;
+        if (!id || actorMap[id]) continue;
+        const u2 = userMap.get(id);
+        if (!u2) { actorMap[id] = null; continue; }
+        actorMap[id] = {
+          name: u2.handle ? `@${u2.handle}` : u2.display_name || u2.full_name || "Member",
+          avatar_url: u2.avatar_media_id ? avatarUrls.get(u2.avatar_media_id) || null : null,
+        };
+      }
+      setActors(actorMap);
+
+      // Precompute a tap destination for every notification.
+      const commentIds = ns.filter((n) => n.target_type === "comment" && n.target_id).map((n) => n.target_id);
+      const commentPost = {};
+      await Promise.all(
+        Array.from(new Set(commentIds)).map(async (cid) => {
+          try {
+            const c = await base44.entities.Comment.get(cid);
+            if (c?.post_id) commentPost[cid] = c.post_id;
+          } catch {}
+        })
+      );
+
+      const routeMap = {};
+      for (const n of ns) {
+        const { target_type, target_id, notification_type } = n;
+        let route = null;
+        if (target_type === "user" && target_id) {
+          const tu = userMap.get(target_id);
+          const name = tu?.handle || tu?.display_name || tu?.full_name || target_id;
+          route = `/user/${encodeURIComponent(name)}`;
+        } else if (target_type === "comment" && target_id) {
+          const pid = commentPost[target_id];
+          route = pid ? `/post/${pid}?comment=${target_id}` : ROUTES[notification_type] || null;
+        } else if (target_type && target_id && TARGET_ROUTES[target_type]) {
+          route = TARGET_ROUTES[target_type](target_id);
+        } else {
+          route = ROUTES[notification_type] || null;
+        }
+        routeMap[n.id] = route;
+      }
+      setRoutes(routeMap);
     } catch (e) {
       // not logged in
     } finally {
@@ -103,20 +151,20 @@ export default function Notifications() {
   const handleMarkRead = async (n) => {
     if (n.read_at) return;
     const ts = new Date().toISOString();
-    await base44.entities.Notification.update(n.id, { read_at: ts });
+    await base44.entities.Notification.update(n.id, { read_at: ts }).catch(() => {});
     setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, read_at: ts } : x)));
   };
 
-  const handleTap = async (n) => {
+  const handleTap = (n) => {
     handleMarkRead(n);
-    const route = await resolveRoute(n);
+    const route = routes[n.id];
     if (route) navigate(route);
   };
 
   const handleMarkAllRead = async () => {
     const unread = notifications.filter((n) => !n.read_at);
     const ts = new Date().toISOString();
-    await Promise.all(unread.map((n) => base44.entities.Notification.update(n.id, { read_at: ts })));
+    await Promise.all(unread.map((n) => base44.entities.Notification.update(n.id, { read_at: ts }).catch(() => {})));
     setNotifications((prev) => prev.map((x) => ({ ...x, read_at: x.read_at || ts })));
   };
 
@@ -146,6 +194,8 @@ export default function Notifications() {
           {notifications.map((n) => {
             const Icon = ICONS[n.notification_type] || Bell;
             const unread = !n.read_at;
+            const actor = n.actor_id ? actors[n.actor_id] : null;
+            const label = LABELS[n.notification_type] || n.notification_type;
             return (
               <div
                 key={n.id}
@@ -156,12 +206,26 @@ export default function Notifications() {
                   borderColor: unread ? "rgba(230, 0, 18, 0.3)" : undefined,
                 }}
               >
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/15">
-                  <Icon className="h-5 w-5 text-primary" />
-                </div>
+                {actor?.avatar_url ? (
+                  <img
+                    src={actor.avatar_url}
+                    alt={actor.name}
+                    className="h-10 w-10 shrink-0 rounded-full object-cover"
+                  />
+                ) : actor ? (
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-black text-primary-foreground">
+                    {actor.name.replace(/^@/, "").charAt(0).toUpperCase()}
+                  </div>
+                ) : (
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/15">
+                    <Icon className="h-5 w-5 text-primary" />
+                  </div>
+                )}
                 <div className="min-w-0 flex-1">
                   <p className="text-sm" style={{ fontWeight: unread ? 700 : 400 }}>
-                    {LABELS[n.notification_type] || n.notification_type}
+                    {actor ? <span className="font-bold">{actor.name}</span> : null}
+                    {actor ? " " : ""}
+                    {label}
                   </p>
                   <p className="text-xs text-muted-foreground">{new Date(n.created_date).toLocaleString()}</p>
                 </div>
