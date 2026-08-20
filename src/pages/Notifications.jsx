@@ -53,14 +53,33 @@ const TARGET_ROUTES = {
   marketplace_message: () => "/conversations",
   moderation_case: (id) => `/moderation/case/${id}`,
   report: () => "/moderation",
-  comment: () => "/feed",
 };
 
-function routeFor(n) {
-  if (n.target_type && n.target_id && TARGET_ROUTES[n.target_type]) {
-    return TARGET_ROUTES[n.target_type](n.target_id);
+// Some targets need a lookup before we know where to go:
+//  - user → profile page is keyed by handle/display_name, not id (resolve it).
+//  - comment → no standalone page; resolve its post and deep-link there.
+async function resolveRoute(n) {
+  const { target_type, target_id, notification_type } = n;
+  if (target_type === "user" && target_id) {
+    try {
+      const u = await base44.entities.User.get(target_id);
+      const name = u?.handle || u?.display_name || target_id;
+      return `/user/${encodeURIComponent(name)}`;
+    } catch {
+      return ROUTES[notification_type] || null;
+    }
   }
-  return ROUTES[n.notification_type] || null;
+  if (target_type === "comment" && target_id) {
+    try {
+      const c = await base44.entities.Comment.get(target_id);
+      if (c?.post_id) return `/post/${c.post_id}?comment=${target_id}`;
+    } catch {}
+    return ROUTES[notification_type] || "/feed";
+  }
+  if (target_type && target_id && TARGET_ROUTES[target_type]) {
+    return TARGET_ROUTES[target_type](target_id);
+  }
+  return ROUTES[notification_type] || null;
 }
 
 export default function Notifications() {
@@ -88,9 +107,9 @@ export default function Notifications() {
     setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, read_at: ts } : x)));
   };
 
-  const handleTap = (n) => {
+  const handleTap = async (n) => {
     handleMarkRead(n);
-    const route = routeFor(n);
+    const route = await resolveRoute(n);
     if (route) navigate(route);
   };
 
