@@ -6,6 +6,7 @@ import { CalendarDays, Gift, ArrowRight, MapPin, Ticket, Star, Eye, Mail, Shield
 import MarketplaceListingCard from "@/components/MarketplaceListingCard";
 import Hero from "@/components/home/Hero";
 import PartnerWall from "@/components/home/PartnerWall";
+import FeaturedPartner from "@/components/home/FeaturedPartner";
 import Benefits from "@/components/home/Benefits";
 import TrackLeaderboard from "@/components/home/TrackLeaderboard";
 
@@ -53,6 +54,7 @@ export default function Home() {
       <Hero stats={stats} />
       <Benefits />
       <PartnerWall partners={partnerDiscounts} />
+      <FeaturedPartner partner={partnerDiscounts.find((p) => p.company_name === "A2R Batteries & Performance")} />
 
       <div className="grid gap-4 sm:grid-cols-2">
         <section>
