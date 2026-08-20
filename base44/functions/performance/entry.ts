@@ -71,7 +71,9 @@ Deno.serve(async (req) => {
       if (body.fuel_type_at_test !== undefined && body.fuel_type_at_test !== null && !inList(body.fuel_type_at_test, FUEL_TYPES)) {
         return err('VALIDATION_FAILED', 422, { fuel_type_at_test: 'invalid' });
       }
-      const data: any = { vehicle_id, performance_type, result_date, verification_status: 'unverified' };
+      // Lap times are active immediately — no approval needed. Other result
+      // types keep the optional submit→approve verification flow.
+      const data: any = { vehicle_id, performance_type, result_date, verification_status: performance_type === 'lap_time' ? 'verified' : 'unverified' };
       for (const f of RECORD_FIELDS) {
         if (body[f] !== undefined && f !== 'performance_type' && f !== 'result_date') data[f] = body[f];
       }
