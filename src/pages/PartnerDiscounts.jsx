@@ -8,7 +8,6 @@ export default function PartnerDiscounts() {
   const [discounts, setDiscounts] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [user, setUser] = React.useState(null);
-  const [revealed, setRevealed] = React.useState({});
   const [copied, setCopied] = React.useState({});
 
   React.useEffect(() => {
@@ -59,7 +58,6 @@ export default function PartnerDiscounts() {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           {discounts.map((d) => {
-            const isRevealed = revealed[d.id];
             const isCopied = copied[d.id];
             return (
               <div key={d.id} className="rounded-2xl border border-border bg-card p-4">
@@ -82,17 +80,10 @@ export default function PartnerDiscounts() {
                 {d.description && <p className="mt-2 text-sm text-muted-foreground">{d.description}</p>}
 
                 <div className="mt-3">
-                  {!isRevealed ? (
-                    <button
-                      onClick={() => setRevealed((r) => ({ ...r, [d.id]: true }))}
-                      className="flex w-full items-center justify-center gap-2 rounded-lg border border-primary bg-primary/10 py-2.5 text-sm font-bold text-primary active:scale-[0.98]"
-                    >
-                      <Lock className="h-4 w-4" /> Unlock Code
-                    </button>
-                  ) : (
+                  {isSubscribed ? (
                     <div className="space-y-2">
                       <div className="rounded-lg border border-border bg-secondary p-3">
-                        <div className="text-xs font-medium text-muted-foreground">Your discount code</div>
+                        <div className="text-xs font-medium text-muted-foreground">Your member discount code</div>
                         <code className="mt-1 block font-mono text-lg font-bold text-primary">{d.discount_code}</code>
                       </div>
                       <div className="flex gap-2">
@@ -109,10 +100,25 @@ export default function PartnerDiscounts() {
                             rel="noreferrer"
                             className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-border py-2 text-xs font-bold text-muted-foreground hover:text-primary"
                           >
-                            <ExternalLink className="h-3.5 w-3.5" /> Visit Website
+                            <ExternalLink className="h-3.5 w-3.5" /> Visit
                           </a>
                         )}
                       </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="relative overflow-hidden rounded-lg border border-border bg-secondary p-3">
+                        <div className="text-xs font-medium text-muted-foreground">Member-exclusive code</div>
+                        <code className="mt-1 block select-none font-mono text-lg font-bold text-primary blur-sm">{d.discount_code}</code>
+                        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                          <div className="flex items-center gap-1.5 rounded-full bg-background/80 px-3 py-1 text-xs font-bold text-muted-foreground backdrop-blur">
+                            <Lock className="h-3.5 w-3.5" /> Members only
+                          </div>
+                        </div>
+                      </div>
+                      <Link to="/pricing" className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-sm font-bold text-primary-foreground active:scale-[0.98]">
+                        <Crown className="h-4 w-4" /> Upgrade to reveal
+                      </Link>
                     </div>
                   )}
                 </div>
