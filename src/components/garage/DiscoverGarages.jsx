@@ -123,14 +123,14 @@ export default function DiscoverGarages() {
             No builds match “{query.trim()}”.
           </div>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
             {matches.map((v) => <VehicleCard key={v.id} vehicle={v} />)}
           </div>
         )
       ) : users.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">No other members to show yet.</div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
           {users.map((u) => {
             const p = previews[u.id] || { count: 0, photo: null };
             const name = u.handle ? `@${u.handle}` : (u.display_name || u.full_name || "Member");
