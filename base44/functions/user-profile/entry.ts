@@ -86,6 +86,44 @@ Deno.serve(async (req) => {
       return Response.json({ ok: true, users: matches });
     }
 
+    if (action === 'getUser') {
+      // Service-role fetch of a single user's PUBLIC profile fields by id or
+      // handle. The plain client cannot read other users' User records (built-in
+      // security), so profile/garage pages resolve through this action. Returns
+      // only public fields — never email/phone/role.
+      const targetId = (body.user_id || '').trim();
+      const handle = (body.handle || '').trim().replace(/^@/, '');
+      if (!targetId && !handle) {
+        return Response.json({ error: 'VALIDATION_FAILED', details: { user_id_or_handle: 'required' } }, { status: 422 });
+      }
+      const all = await base44.asServiceRole.entities.User.list(500);
+      const lc = handle.toLowerCase();
+      const u = targetId
+        ? all.find((x) => x.id === targetId)
+        : all.find((x) => (x.handle || '').toLowerCase() === lc)
+          || all.find((x) => (x.display_name || '').toLowerCase() === lc);
+      if (!u) return Response.json({ ok: true, user: null });
+      if (u.account_status === 'banned' || u.account_status === 'suspended' ||
+          u.account_status === 'deactivated_by_user' || u.account_status === 'pending_deletion') {
+        // Still return the record so owners/self can view, but flag status.
+      }
+      return Response.json({
+        ok: true,
+        user: {
+          id: u.id,
+          handle: u.handle || null,
+          display_name: u.display_name || null,
+          full_name: u.full_name || null,
+          bio: u.bio || null,
+          location_general: u.location_general || null,
+          account_tier: u.account_tier || null,
+          account_status: u.account_status || null,
+          avatar_media_id: u.avatar_media_id || null,
+          avatar_position: u.avatar_position || null,
+        },
+      });
+    }
+
     if (action === 'changeStatus') {
       // Mod/Admin only (platform role admin OR account_tier moderator/admin).
       const isModOrAdmin = user.role === 'admin' ||

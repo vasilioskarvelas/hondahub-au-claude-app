@@ -797,7 +797,7 @@ Deno.serve(async (req) => {
         conversation: updated,
         listing: listing ? { id: listing.id, title: listing.title, listing_type: listing.listing_type, category: listing.category, price_cents: listing.price_cents, price_type: listing.price_type, status: listing.status, photo_urls: listing.photo_urls } : null,
         my_role: myRole,
-        other_party: { user_id: otherId, display_name: other?.display_name || other?.handle || "User", handle: other?.handle || null },
+        other_party: { user_id: otherId, display_name: other?.display_name || other?.handle || "User", handle: other?.handle || null, avatar_media_id: other?.avatar_media_id || null },
       });
     }
 
@@ -835,7 +835,7 @@ Deno.serve(async (req) => {
           listing_type: listing?.listing_type || null,
           listing_price_cents: listing?.price_cents ?? null,
           listing_price_type: listing?.price_type || null,
-          other_party: { user_id: otherId, display_name: other?.display_name || other?.handle || "User", handle: other?.handle || null },
+          other_party: { user_id: otherId, display_name: other?.display_name || other?.handle || "User", handle: other?.handle || null, avatar_media_id: other?.avatar_media_id || null },
           unread: myReadAt ? (c.last_message_at || "") > (myReadAt || "") : !!c.last_message_at,
         };
       }));

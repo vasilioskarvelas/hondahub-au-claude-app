@@ -48,25 +48,19 @@ export default function UserProfile() {
     (async () => {
       try {
         const cleanName = decodedName.replace(/^@/, "");
-        // Use the searchUsers backend (service-role) which reliably finds users,
-        // then pick the exact handle/display_name match from results.
-        const res = await base44.functions.invoke("user-profile", { action: "searchUsers", query: cleanName });
-        const all = res.data?.users || [];
-        const lower = cleanName.toLowerCase();
-        let match = all.find((u) => u.handle && u.handle.toLowerCase() === lower)
-          || all.find((u) => u.display_name && u.display_name.toLowerCase() === lower)
-          || all[0];
-        if (!match) { setNotFound(true); setProfileUser(null); return; }
-        // Fetch the full user record (service role already used by search; get full fields).
-        const full = await base44.entities.User.get(match.id);
-        setProfileUser(full);
+        // Resolve by handle via the service-role getUser action. The plain client
+        // cannot read other users' User records, so we must go through the backend.
+        const res = await base44.functions.invoke("user-profile", { action: "getUser", handle: cleanName });
+        const u = res.data?.user || null;
+        if (!u) { setNotFound(true); setProfileUser(null); return; }
+        setProfileUser(u);
         try { const m = await base44.auth.me(); setMe(m);
-          if (m.id !== full.id) {
-            const f = await base44.functions.invoke("social", { action: "isFollowing", target_type: "user", target_id: full.id });
+          if (m.id !== u.id) {
+            const f = await base44.functions.invoke("social", { action: "isFollowing", target_type: "user", target_id: u.id });
             setFollowing(!!f.data?.following);
           }
         } catch {}
-        await load(full);
+        await load(u);
       } catch {
         setNotFound(true);
       } finally {

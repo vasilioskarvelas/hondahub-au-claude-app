@@ -23,13 +23,10 @@ export default function UserGarage() {
       setLoading(true);
       try {
         const cleanName = decodedName.replace(/^@/, "");
-        // Look up the user by handle/display_name via searchUsers (service role).
-        const res = await base44.functions.invoke("user-profile", { action: "searchUsers", query: cleanName });
-        const all = res.data?.users || [];
-        const lower = cleanName.toLowerCase();
-        const match = all.find((u) => u.handle && u.handle.toLowerCase() === lower)
-          || all.find((u) => u.display_name && u.display_name.toLowerCase() === lower)
-          || all[0] || null;
+        // Resolve the user via the service-role getUser action (plain client can't
+        // read other users' records). Matches handle or display_name.
+        const res = await base44.functions.invoke("user-profile", { action: "getUser", handle: cleanName });
+        const match = res.data?.user || null;
         if (!active) return;
         setUser(match);
         // Load this user's public vehicles (builds with specs/mods/etc).

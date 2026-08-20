@@ -13,6 +13,7 @@ export default function ConversationThread() {
   const [error, setError] = useState("");
   const [riskWarning, setRiskWarning] = useState(null);
   const [me, setMe] = useState(null);
+  const [otherAvatar, setOtherAvatar] = useState(null);
   const bottomRef = useRef(null);
 
   const load = async () => {
@@ -23,6 +24,15 @@ export default function ConversationThread() {
     setData(convRes.data);
     setMessages(msgRes.data?.messages || []);
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    // Resolve the other party's avatar.
+    const mid = convRes.data?.other_party?.avatar_media_id;
+    if (mid) {
+      base44.functions.invoke("media", { action: "get", media_id: mid })
+        .then((r) => setOtherAvatar(r.data?.media?.file_url || null))
+        .catch(() => setOtherAvatar(null));
+    } else {
+      setOtherAvatar(null);
+    }
   };
 
   useEffect(() => {
@@ -77,6 +87,13 @@ export default function ConversationThread() {
     <div className="mx-auto flex h-[calc(100vh-9rem)] max-w-2xl flex-col">
       <div className="flex items-center gap-2 border-b border-border pb-3">
         <Link to="/conversations" className="text-muted-foreground hover:text-foreground"><ArrowLeft className="h-5 w-5" /></Link>
+        {otherAvatar ? (
+          <img src={otherAvatar} alt={data.other_party.display_name} className="h-9 w-9 shrink-0 rounded-full object-cover" />
+        ) : (
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary text-sm font-black text-muted-foreground">
+            {(data.other_party.display_name || "?").charAt(0).toUpperCase()}
+          </div>
+        )}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="truncate text-sm font-bold">{data.other_party.display_name}</span>
