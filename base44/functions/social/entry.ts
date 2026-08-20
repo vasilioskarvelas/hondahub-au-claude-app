@@ -403,17 +403,19 @@ Deno.serve(async (req) => {
     }
 
     // ---- listFollowers / listFollowing ----
+    // Each follow row is enriched with the backing user's public profile so the
+    // UI never has to call User.get (blocked by built-in security for other users).
     if (action === "listFollowers") {
       const targetUserId = body.user_id || (user && user.id);
       if (!targetUserId) return Response.json({ ok: true, follows: [], count: 0 });
       const follows = await base44.asServiceRole.entities.Follow.filter({ target_type: "user", target_id: targetUserId });
-      return Response.json({ ok: true, follows, count: follows.length });
+      return Response.json({ ok: true, follows: await enrichFollowUsers(base44, follows, "follower_id"), count: follows.length });
     }
     if (action === "listFollowing") {
       const targetUserId = body.user_id || (user && user.id);
       if (!targetUserId) return Response.json({ ok: true, follows: [], count: 0 });
       const follows = await base44.asServiceRole.entities.Follow.filter({ follower_id: targetUserId });
-      return Response.json({ ok: true, follows, count: follows.length });
+      return Response.json({ ok: true, follows: await enrichFollowUsers(base44, follows, "target_id"), count: follows.length });
     }
 
     // ---- isFollowing / isLiked (UI state helpers) ----
@@ -484,6 +486,32 @@ async function enrichAuthors(base44: any, comments: any[], user: any) {
   return comments.map((c) => {
     const author = map.get(c.created_by_id) || null;
     return { ...c, author: author ? { ...author, avatar_url: avatarMap.get(author.id) || null } : null, liked: likedSet.has(c.id) };
+  });
+}
+
+async function enrichFollowUsers(base44: any, follows: any[], idField: string) {
+  const ids = Array.from(new Set(follows.map((f) => f[idField]).filter(Boolean)));
+  if (!ids.length) return follows;
+  const all = await base44.asServiceRole.entities.User.list(500);
+  const map = new Map(all.filter((u) => ids.includes(u.id)).map((u) => [u.id, u]));
+  const avatarUrls = await Promise.all(
+    Array.from(map.values()).map(async (u) => [u.id, u.avatar_media_id ? await resolveMediaUrl(base44, u.avatar_media_id) : null]),
+  );
+  const avatarMap = new Map(avatarUrls as any);
+  return follows.map((f) => {
+    const u = map.get(f[idField]);
+    return {
+      ...f,
+      user: u ? {
+        id: u.id,
+        handle: u.handle || null,
+        display_name: u.display_name || null,
+        full_name: u.full_name || null,
+        account_tier: u.account_tier || null,
+        avatar_url: avatarMap.get(u.id) || null,
+        avatar_position: u.avatar_position || null,
+      } : null,
+    };
   });
 }
 

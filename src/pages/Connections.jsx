@@ -24,21 +24,33 @@ export default function Connections() {
     (async () => {
       setLoading(true);
       try {
-        let u;
+        let m = null;
+        try { m = await base44.auth.me(); } catch {}
+        setMe(m);
+        let u = null;
         if (decoded) {
-          let users = await base44.entities.User.filter({ handle: decoded });
-          if (users.length === 0) users = await base44.entities.User.filter({ display_name: decoded });
-          u = users[0];
+          // The plain client cannot read other users' User records (built-in
+          // security), so resolve via the service-role getUser action.
+          try {
+            const res = await base44.functions.invoke("user-profile", {
+              action: "getUser",
+              handle: decoded.replace(/^@/, ""),
+            });
+            u = res.data?.user || null;
+          } catch {}
+        } else {
+          u = m;
         }
-        const targetId = u?.id;
         setProfileUser(u || null);
-        try { const m = await base44.auth.me(); setMe(m); } catch {}
+        const targetId = u?.id;
         if (targetId) {
           const res = await base44.functions.invoke("social", {
             action: tab === "following" ? "listFollowing" : "listFollowers",
             user_id: targetId,
           });
           setRows(res.data?.follows || []);
+        } else {
+          setRows([]);
         }
       } finally {
         setLoading(false);
@@ -118,10 +130,9 @@ export default function Connections() {
             </div>
           ) : (
             <div className="space-y-2">
-              {rows.map((r) => {
-                const userId = tab === "following" ? r.target_id : r.follower_id;
-                return <UserRow key={r.id} userId={userId} me={me} />;
-              })}
+              {rows.map((r) => (
+                <UserRow key={r.id} user={r.user} me={me} />
+              ))}
             </div>
           )}
         </>
@@ -135,11 +146,11 @@ function SearchResultRow({ user, me }) {
   const tier = user.account_tier || AccountTier.NEW_MEMBER;
   return (
     <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-3">
-      <Link to={user.handle ? `/user/${user.handle}/garage` : "#"} className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-sm font-black text-primary-foreground">
+      <Link to={user.handle ? `/user/${encodeURIComponent(user.handle)}` : "#"} className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-sm font-black text-primary-foreground">
         {(displayName || "?").charAt(0).toUpperCase()}
       </Link>
       <div className="flex-1 min-w-0">
-        <Link to={user.handle ? `/user/${user.handle}/garage` : "#"} className="block truncate text-sm font-bold hover:text-primary">{displayName}</Link>
+        <Link to={user.handle ? `/user/${encodeURIComponent(user.handle)}` : "#"} className="block truncate text-sm font-bold hover:text-primary">{displayName}</Link>
         {user.handle && <p className="truncate text-xs text-muted-foreground">@{user.handle}</p>}
         <TierBadge tier={tier} />
       </div>
@@ -150,26 +161,25 @@ function SearchResultRow({ user, me }) {
   );
 }
 
-function UserRow({ userId, me }) {
-  const [u, setU] = React.useState(null);
-  React.useEffect(() => {
-    base44.entities.User.get(userId).then(setU).catch(() => setU(null));
-  }, [userId]);
-  if (!u) return <div className="h-16 animate-pulse rounded-xl bg-secondary/40" />;
-  const displayName = u.display_name || u.handle || u.full_name || "Member";
-  const tier = u.account_tier || AccountTier.NEW_MEMBER;
+function UserRow({ user, me }) {
+  if (!user) return null;
+  const displayName = user.display_name || user.handle || user.full_name || "Member";
+  const tier = user.account_tier || AccountTier.NEW_MEMBER;
+  const profilePath = user.handle ? `/user/${encodeURIComponent(user.handle)}` : "#";
   return (
     <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-3">
-      <Link to={u.handle ? `/user/${u.handle}/garage` : "#"} className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-sm font-black text-primary-foreground">
-        {(displayName || "?").charAt(0).toUpperCase()}
+      <Link to={profilePath} className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-primary text-sm font-black text-primary-foreground">
+        {user.avatar_url
+          ? <img src={user.avatar_url} alt={displayName} className="h-full w-full object-cover" style={{ objectPosition: user.avatar_position || "50% 50%" }} />
+          : (displayName || "?").charAt(0).toUpperCase()}
       </Link>
       <div className="flex-1 min-w-0">
-        <Link to={u.handle ? `/user/${u.handle}/garage` : "#"} className="block truncate text-sm font-bold hover:text-primary">{displayName}</Link>
-        {u.handle && <p className="truncate text-xs text-muted-foreground">@{u.handle}</p>}
+        <Link to={profilePath} className="block truncate text-sm font-bold hover:text-primary">{displayName}</Link>
+        {user.handle && <p className="truncate text-xs text-muted-foreground">@{user.handle}</p>}
         <TierBadge tier={tier} />
       </div>
-      {me && me.id !== u.id && (
-        <FollowButton targetType="user" targetId={u.id} />
+      {me && me.id !== user.id && (
+        <FollowButton targetType="user" targetId={user.id} />
       )}
     </div>
   );
