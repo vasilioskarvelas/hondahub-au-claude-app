@@ -30,6 +30,7 @@ export default function Layout() {
   const location = useLocation();
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [unread, setUnread] = React.useState(0);
+  const [unreadConvos, setUnreadConvos] = React.useState(0);
   const { user } = useAuth();
   const isMod = user?.role === 'admin' || user?.account_tier === 'moderator';
   const isAdmin = user?.role === 'admin';
@@ -47,6 +48,9 @@ export default function Layout() {
     let active = true;
     base44.entities.Notification.filter({ recipient_id: user.id, read_at: null }, "-created_date", 100)
       .then((ns) => { if (active) setUnread(ns.length); })
+      .catch(() => {});
+    base44.functions.invoke("marketplace", { action: "listConversations" })
+      .then((res) => { if (active) setUnreadConvos((res.data?.conversations || []).filter((c) => c.unread).length); })
       .catch(() => {});
     return () => { active = false; };
   }, [user, location.pathname]);
@@ -116,6 +120,11 @@ export default function Layout() {
             </Link>
             <Link to="/conversations" className="relative rounded-lg p-2 text-muted-foreground hover:bg-secondary hover:text-foreground">
               <MessageCircle className="h-5 w-5" />
+              {unreadConvos > 0 && (
+                <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+                  {unreadConvos > 99 ? "99+" : unreadConvos}
+                </span>
+              )}
             </Link>
           </div>
         </div>
