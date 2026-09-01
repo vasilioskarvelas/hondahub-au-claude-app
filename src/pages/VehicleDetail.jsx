@@ -1,10 +1,10 @@
 import React from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { ArrowLeft, Pencil, Send, ShieldCheck, ShieldX, Plus, ImagePlus, Tag } from "lucide-react";
+import { ArrowLeft, Pencil, Plus, ImagePlus, Tag } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { callGarage, resolveMediaUrl, vehicleLabel, pretty, SALE_STATUS } from "@/lib/garage";
 import SpecDisplay from "@/components/garage/SpecDisplay";
-import { VerificationBadge, SaleStatusBadge, BuildStatusBadge, OwnershipBadge } from "@/components/garage/Badges";
+import { SaleStatusBadge, BuildStatusBadge, OwnershipBadge } from "@/components/garage/Badges";
 import { ModificationItem, TimelineEntryCard, MaintenanceRecordCard, PerformanceRecordCard } from "@/components/garage/RecordCards";
 import VehicleForm from "@/components/garage/VehicleForm";
 import VehiclePhotos from "@/components/garage/VehiclePhotos";
@@ -52,12 +52,6 @@ export default function VehicleDetail() {
     load();
   };
 
-  const submitVehicleVerification = async () => {
-    await callGarage("vehicle", { action: "submitVerification", vehicle_id: id });
-    load();
-  };
-  const approveVehicle = async () => { await callGarage("vehicle", { action: "approveVerification", vehicle_id: id }); load(); };
-  const rejectVehicle = async () => { await callGarage("vehicle", { action: "rejectVerification", vehicle_id: id }); load(); };
   const changeSale = async (sale_status) => { await callGarage("vehicle", { action: "changeSaleStatus", vehicle_id: id, sale_status }); load(); };
 
   if (loading) return <div className="flex h-64 items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-secondary border-t-primary" /></div>;
@@ -70,7 +64,6 @@ export default function VehicleDetail() {
 
   const v = data.vehicle;
   const isOwner = data.is_owner;
-  const canModerate = data.can_moderate;
 
   return (
     <div className="space-y-5">
@@ -85,7 +78,6 @@ export default function VehicleDetail() {
             <BuildStatusBadge status={v.build_status} />
             <SaleStatusBadge status={v.sale_status} />
           </div>
-          <div className="absolute right-3 top-3"><VerificationBadge status={v.verification_status} /></div>
         </div>
         <div className="p-4">
           <h1 className="text-xl font-black">{vehicleLabel(v)}</h1>
@@ -105,15 +97,6 @@ export default function VehicleDetail() {
           {isOwner && (
             <div className="mt-3 flex flex-wrap gap-2">
               <button onClick={() => setDialog({ type: "vehicle" })} className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-xs font-medium"><Pencil className="h-3.5 w-3.5" /> Edit</button>
-              {v.verification_status === "unverified" && (
-                <button onClick={submitVehicleVerification} className="inline-flex items-center gap-1 rounded-lg border border-primary/40 px-3 py-1.5 text-xs font-medium text-primary"><Send className="h-3.5 w-3.5" /> Submit for verification</button>
-              )}
-            </div>
-          )}
-          {canModerate && v.verification_status === "pending" && (
-            <div className="mt-2 flex gap-2">
-              <button onClick={approveVehicle} className="inline-flex items-center gap-1 rounded-lg border border-primary/40 px-3 py-1.5 text-xs font-medium text-primary"><ShieldCheck className="h-3.5 w-3.5" /> Approve verification</button>
-              <button onClick={rejectVehicle} className="inline-flex items-center gap-1 rounded-lg border border-destructive/40 px-3 py-1.5 text-xs font-medium text-destructive"><ShieldX className="h-3.5 w-3.5" /> Reject verification</button>
             </div>
           )}
           {isOwner && (
@@ -146,7 +129,7 @@ export default function VehicleDetail() {
       </div>
 
       {/* Tab content */}
-      <TabContent tab={tab} data={data} isOwner={isOwner} canModerate={canModerate} setDialog={setDialog} onChanged={onChanged} />
+      <TabContent tab={tab} data={data} isOwner={isOwner} setDialog={setDialog} onChanged={onChanged} />
 
       {/* Dialogs */}
       {dialog?.type === "vehicle" && <VehicleForm vehicle={v} onClose={() => setDialog(null)} onSaved={() => { setDialog(null); load(); }} />}
@@ -162,7 +145,7 @@ function BackBtn({ onClick }) {
   return <button onClick={onClick} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" /> Garage</button>;
 }
 
-function TabContent({ tab, data, isOwner, canModerate, setDialog, onChanged }) {
+function TabContent({ tab, data, isOwner, setDialog, onChanged }) {
   const addBtn = (label, onClick) => isOwner ? <button onClick={onClick} className="inline-flex items-center gap-1 rounded-xl bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground"><Plus className="h-3.5 w-3.5" /> {label}</button> : null;
 
   if (tab === "specs") return <SpecDisplay vehicle={data.vehicle} />;
@@ -210,7 +193,7 @@ function TabContent({ tab, data, isOwner, canModerate, setDialog, onChanged }) {
         {addBtn("Log Result", () => setDialog({ type: "performance" }))}
       </div>
       {data.performance?.length ? data.performance.map((r) => (
-        <PerformanceRecordCard key={r.id} record={r} isOwner={isOwner} canModerate={canModerate} onEdit={(rec) => setDialog({ type: "performance", record: rec })} onChanged={onChanged} />
+        <PerformanceRecordCard key={r.id} record={r} isOwner={isOwner} onEdit={(rec) => setDialog({ type: "performance", record: rec })} onChanged={onChanged} />
       )) : <Empty text="No performance records yet." />}
     </div>
   );

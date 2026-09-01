@@ -81,17 +81,6 @@
     "tyre_description": {
       "type": "string",
       "description": "Free text at MVP."
-    },
-    "verification_status": {
-      "type": "string",
-      "enum": [
-        "unverified",
-        "pending",
-        "verified",
-        "rejected"
-      ],
-      "default": "unverified",
-      "description": "Moderator/Admin-only changes via submit/approve/reject. AI never sets this."
     }
   },
   "required": [

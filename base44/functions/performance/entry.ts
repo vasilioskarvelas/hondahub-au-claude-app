@@ -1,30 +1,22 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import {
-  PERFORMANCE_TYPES, VERIFICATION_STATUS, FUEL_TYPES,
-  err, isModOrAdmin, getOwnedVehicle, inList, nonNegative,
+  PERFORMANCE_TYPES, FUEL_TYPES,
+  err, getOwnedVehicle, inList, nonNegative,
   buildTimelineSuggestion, performanceToEntryType,
 } from "../../shared/garage.ts";
-import { createNotification } from "../../shared/notifications.ts";
-import { NotificationType } from "../../shared/identity.ts";
 import { validateReference, ReferenceTypes } from "../../shared/reference-resolver.ts";
 
 /**
  * PerformanceService (Phase 03) — owns PerformanceRecord (measured results).
- * Actions: createRecord, updateRecord, removeRecord, submitVerification,
- *          approveVerification, rejectVerification, listByVehicle,
- *          listPendingVerification, applyModerationActionToRecord (internal).
+ * Actions: createRecord, updateRecord, removeRecord, listByVehicle.
  *
  * Hard rules:
  *  - vehicle-owner-only for create/update/remove.
- *  - Mod/Admin-only for verification_status changes. AI never sets it.
  *  - power_kw is the only stored power field (power_hp computed for display).
  *  - venue_name is the single location field (no track_name).
  *  - Numeric plausibility: no negative times/speeds.
  *  - createRecord fires PerformanceRecordCreated → returns a user-confirmable
- *    timeline suggestion. approveVerification fires PerformanceRecordVerified.
- *    (Trust signal award for PerformanceRecordVerified is deferred — the locked
- *    SignalType enum has no performance_verified value; a registry addition is
- *    required first. The owner is still notified of the outcome.)
+ *    timeline suggestion.
  */
 
 const RECORD_FIELDS = [
@@ -71,9 +63,7 @@ Deno.serve(async (req) => {
       if (body.fuel_type_at_test !== undefined && body.fuel_type_at_test !== null && !inList(body.fuel_type_at_test, FUEL_TYPES)) {
         return err('VALIDATION_FAILED', 422, { fuel_type_at_test: 'invalid' });
       }
-      // Lap times are active immediately — no approval needed. Other result
-      // types keep the optional submit→approve verification flow.
-      const data: any = { vehicle_id, performance_type, result_date, verification_status: performance_type === 'lap_time' ? 'verified' : 'unverified' };
+      const data: any = { vehicle_id, performance_type, result_date };
       for (const f of RECORD_FIELDS) {
         if (body[f] !== undefined && f !== 'performance_type' && f !== 'result_date') data[f] = body[f];
       }
@@ -98,9 +88,6 @@ Deno.serve(async (req) => {
       try { record = await base44.asServiceRole.entities.PerformanceRecord.get(record_id); } catch { return err('RESOURCE_NOT_FOUND', 404); }
       const vehicle = await getOwnedVehicle(base44, record.vehicle_id, user);
       if (!vehicle) return err('PERMISSION_DENIED', 403);
-      if (body.verification_status !== undefined) {
-        return err('PERMISSION_DENIED', 403, { verification_status: 'use submitVerification/approveVerification/rejectVerification' });
-      }
       const data: any = {};
       for (const f of RECORD_FIELDS) {
         if (body[f] !== undefined) data[f] = body[f];
@@ -124,81 +111,11 @@ Deno.serve(async (req) => {
       return Response.json({ ok: true });
     }
 
-    // ---- submitVerification (owner) ----
-    if (action === 'submitVerification') {
-      const { record_id } = body;
-      let record: any;
-      try { record = await base44.asServiceRole.entities.PerformanceRecord.get(record_id); } catch { return err('RESOURCE_NOT_FOUND', 404); }
-      const vehicle = await getOwnedVehicle(base44, record.vehicle_id, user);
-      if (!vehicle) return err('PERMISSION_DENIED', 403);
-      if (record.verification_status === 'verified') return err('INVALID_STATE_TRANSITION', 409, { verification_status: 'already verified' });
-      const updated = await base44.entities.PerformanceRecord.update(record_id, { verification_status: 'pending' });
-      return Response.json({ ok: true, record: updated });
-    }
-
-    // ---- approveVerification (Mod/Admin) ----
-    if (action === 'approveVerification') {
-      if (!isModOrAdmin(user)) return err('PERMISSION_DENIED', 403);
-      const { record_id } = body;
-      let record: any;
-      try { record = await base44.asServiceRole.entities.PerformanceRecord.get(record_id); } catch { return err('RESOURCE_NOT_FOUND', 404); }
-      if (record.verification_status === 'verified') {
-        return Response.json({ ok: true, record, already_verified: true });
-      }
-      const updated = await base44.asServiceRole.entities.PerformanceRecord.update(record_id, { verification_status: 'verified' });
-      // Event: PerformanceRecordVerified. Trust signal deferred (no performance_verified SignalType).
-      try {
-        await createNotification(base44, {
-          recipient_id: record.created_by_id,
-          notification_type: NotificationType.MODERATION_OUTCOME,
-          actor_id: user.id,
-          target_type: 'vehicle',
-          target_id: record.vehicle_id,
-        });
-      } catch (e) { /* non-blocking */ }
-      return Response.json({ ok: true, record: updated });
-    }
-
-    // ---- rejectVerification (Mod/Admin) ----
-    if (action === 'rejectVerification') {
-      if (!isModOrAdmin(user)) return err('PERMISSION_DENIED', 403);
-      const { record_id } = body;
-      let record: any;
-      try { record = await base44.asServiceRole.entities.PerformanceRecord.get(record_id); } catch { return err('RESOURCE_NOT_FOUND', 404); }
-      const updated = await base44.asServiceRole.entities.PerformanceRecord.update(record_id, { verification_status: 'rejected' });
-      try {
-        await createNotification(base44, {
-          recipient_id: record.created_by_id,
-          notification_type: NotificationType.MODERATION_OUTCOME,
-          actor_id: user.id,
-          target_type: 'vehicle',
-          target_id: record.vehicle_id,
-        });
-      } catch (e) { /* non-blocking */ }
-      return Response.json({ ok: true, record: updated });
-    }
-
     // ---- listByVehicle ----
     if (action === 'listByVehicle') {
       const { vehicle_id } = body;
       const records = await base44.asServiceRole.entities.PerformanceRecord.filter({ vehicle_id }, '-result_date', 200);
       return Response.json({ ok: true, records });
-    }
-
-    // ---- listPendingVerification (Mod/Admin) ----
-    if (action === 'listPendingVerification') {
-      if (!isModOrAdmin(user)) return err('PERMISSION_DENIED', 403);
-      const records = await base44.asServiceRole.entities.PerformanceRecord.filter({ verification_status: 'pending' }, '-updated_date', 100);
-      return Response.json({ ok: true, records });
-    }
-
-    // ---- applyModerationActionToRecord (internal, Mod/Admin) ----
-    if (action === 'applyModerationActionToRecord') {
-      if (!isModOrAdmin(user)) return err('PERMISSION_DENIED', 403);
-      const { record_id, verification_status } = body;
-      if (!inList(verification_status, VERIFICATION_STATUS)) return err('VALIDATION_FAILED', 422, { verification_status: 'invalid' });
-      const updated = await base44.asServiceRole.entities.PerformanceRecord.update(record_id, { verification_status });
-      return Response.json({ ok: true, record: updated });
     }
 
     return err('VALIDATION_FAILED', 422, { action: 'unknown' });

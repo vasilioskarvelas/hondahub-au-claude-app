@@ -2,7 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { ChevronRight, Pencil, Trash2 } from "lucide-react";
 import { resolveMediaUrl, vehicleLabel } from "@/lib/garage";
-import { VerificationBadge, SaleStatusBadge, BuildStatusBadge, OwnershipBadge } from "./Badges";
+import { SaleStatusBadge, BuildStatusBadge, OwnershipBadge } from "./Badges";
 
 export default function VehicleCard({ vehicle, isOwner, onEdit, onDelete }) {
   const [cover, setCover] = React.useState(null);
@@ -28,9 +28,6 @@ export default function VehicleCard({ vehicle, isOwner, onEdit, onDelete }) {
           <OwnershipBadge status={vehicle.ownership_relationship} />
           <BuildStatusBadge status={vehicle.build_status} />
           <SaleStatusBadge status={vehicle.sale_status} />
-        </div>
-        <div className="absolute right-2 top-2">
-          <VerificationBadge status={vehicle.verification_status} />
         </div>
       </div>
       <div className="flex items-center justify-between p-3">

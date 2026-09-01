@@ -1,23 +1,5 @@
 import React from "react";
-import { BadgeCheck, Clock, XCircle, CircleDashed } from "lucide-react";
 import { pretty } from "@/lib/garage";
-
-const VERIFICATION_META = {
-  unverified: { label: "Unverified", icon: CircleDashed, cls: "text-muted-foreground" },
-  pending: { label: "Pending", icon: Clock, cls: "text-amber-400" },
-  verified: { label: "Verified", icon: BadgeCheck, cls: "text-emerald-400" },
-  rejected: { label: "Rejected", icon: XCircle, cls: "text-destructive" },
-};
-
-export function VerificationBadge({ status }) {
-  const m = VERIFICATION_META[status] || VERIFICATION_META.unverified;
-  const Icon = m.icon;
-  return (
-    <span className={`inline-flex items-center gap-1 rounded-full border border-border bg-card px-2 py-0.5 text-[11px] font-semibold ${m.cls}`}>
-      <Icon className="h-3 w-3" /> {m.label}
-    </span>
-  );
-}
 
 const SALE_META = {
   not_for_sale: "text-muted-foreground",

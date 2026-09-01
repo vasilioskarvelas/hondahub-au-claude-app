@@ -21,7 +21,6 @@ export const ModerationActionType = Object.freeze({
 });
 
 export const AuditActionType = Object.freeze({
-  VEHICLE_VERIFICATION_APPROVED: "vehicle_verification_approved",
   BUSINESS_STATUS_CHANGED: "business_status_changed",
   LISTING_REMOVED_BY_MODERATION: "listing_removed_by_moderation",
   TRUST_TIER_OVERRIDDEN: "trust_tier_overridden",

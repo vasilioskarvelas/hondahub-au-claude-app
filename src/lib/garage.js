@@ -9,7 +9,6 @@ export const OWNERSHIP_RELATIONSHIP = ["current", "previous", "wishlist"];
 export const BUILD_STATUS = ["stock", "project", "completed", "retired"];
 export const SALE_STATUS = ["not_for_sale", "considering_offers", "for_sale", "sold"];
 export const VEHICLE_VISIBILITY = ["public", "followers", "approved_connections", "private"];
-export const VERIFICATION_STATUS = ["unverified", "pending", "verified", "rejected"];
 export const REGISTRATION_STATES = ["NSW", "VIC", "QLD", "WA", "SA", "TAS", "ACT", "NT"];
 export const BODY_STYLES = ["sedan", "hatchback", "coupe", "wagon", "suv", "ute", "convertible", "van", "other"];
 export const DRIVETRAINS = ["fwd", "rwd", "awd", "4wd"];

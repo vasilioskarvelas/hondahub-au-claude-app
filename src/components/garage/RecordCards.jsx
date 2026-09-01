@@ -1,7 +1,7 @@
 import React from "react";
-import { Pencil, Trash2, Wrench, CheckCircle, BadgeCheck, Send, ShieldCheck, ShieldX } from "lucide-react";
+import { Pencil, Trash2, Wrench, CheckCircle, BadgeCheck } from "lucide-react";
 import { callGarage, pretty } from "@/lib/garage";
-import { ModCategoryBadge, InstallationTypeBadge, VerificationBadge, SaleStatusBadge } from "./Badges";
+import { ModCategoryBadge, InstallationTypeBadge, SaleStatusBadge } from "./Badges";
 
 function CardActions({ children }) {
   return <div className="mt-2 flex flex-wrap gap-2">{children}</div>;
@@ -100,19 +100,13 @@ export function MaintenanceRecordCard({ record, isOwner, onEdit, onChanged }) {
   );
 }
 
-export function PerformanceRecordCard({ record, isOwner, canModerate, onEdit, onChanged }) {
-  const [busy, setBusy] = React.useState(false);
-  const run = async (fn) => { setBusy(true); try { await fn(); } finally { setBusy(false); } };
-  const submit = () => run(async () => { await callGarage("performance", { action: "submitVerification", record_id: record.id }); onChanged(); });
-  const approve = () => run(async () => { await callGarage("performance", { action: "approveVerification", record_id: record.id }); onChanged(); });
-  const reject = () => run(async () => { await callGarage("performance", { action: "rejectVerification", record_id: record.id }); onChanged(); });
+export function PerformanceRecordCard({ record, isOwner, onEdit, onChanged }) {
   const hp = record.power_kw ? Math.round(record.power_kw * 1.341) : null;
 
   return (
     <div className="rounded-xl border border-border bg-card p-3">
       <div className="flex items-center justify-between gap-2">
         <span className="rounded-md bg-secondary px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">{pretty(record.performance_type)}</span>
-        <VerificationBadge status={record.verification_status} />
       </div>
       <h4 className="mt-1.5 text-sm font-bold">{record.title || pretty(record.performance_type)}</h4>
       <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
@@ -123,13 +117,6 @@ export function PerformanceRecordCard({ record, isOwner, canModerate, onEdit, on
       {isOwner && (
         <CardActions>
           <ActBtn onClick={() => onEdit(record)} tone="primary"><Pencil className="h-3 w-3" /> Edit</ActBtn>
-          {record.verification_status === "unverified" && <ActBtn onClick={submit}><Send className="h-3 w-3" /> Submit for verification</ActBtn>}
-        </CardActions>
-      )}
-      {canModerate && record.verification_status === "pending" && (
-        <CardActions>
-          <ActBtn onClick={approve} tone="primary"><ShieldCheck className="h-3 w-3" /> Approve</ActBtn>
-          <ActBtn onClick={reject} tone="danger"><ShieldX className="h-3 w-3" /> Reject</ActBtn>
         </CardActions>
       )}
     </div>

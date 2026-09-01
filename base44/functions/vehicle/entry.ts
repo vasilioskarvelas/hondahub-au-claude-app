@@ -1,26 +1,18 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import {
   OWNERSHIP_RELATIONSHIP, BUILD_STATUS, SALE_STATUS, VEHICLE_VISIBILITY,
-  VERIFICATION_STATUS, REGISTRATION_STATES, BODY_STYLES, DRIVETRAINS, FUEL_TYPES,
+  REGISTRATION_STATES, BODY_STYLES, DRIVETRAINS, FUEL_TYPES,
   err, isModOrAdmin, isVehicleOwner, getOwnedVehicle, inList,
 } from "../../shared/garage.ts";
-import { awardSignalToUser } from "../../shared/trust-score.ts";
-import { SignalType } from "../../shared/identity.ts";
-import { createNotification } from "../../shared/notifications.ts";
-import { NotificationType } from "../../shared/identity.ts";
-import { writeAuditLog } from "../../shared/audit-log.ts";
-import { AuditActionType } from "../../shared/moderation.ts";
 
 /**
  * VehicleService (Phase 03) — owns the Garage's central domain object.
  * Actions: create, update, setCover, changeVisibility, changeSaleStatus,
- *          submitVerification, approveVerification, rejectVerification,
- *          get, list, listPublic, listPendingVerification.
+ *          get, list, listPublic.
  *
  * Hard rules:
  *  - No vin / registration_number field exists; reject both even if submitted.
- *  - owner-only edits; verification_status only via submit/approve/reject.
- *  - approveVerification fires VehicleVerified → awardSignalToUser(vehicle_verified).
+ *  - owner-only edits.
  */
 
 const VEHICLE_SPEC_FIELDS = [
@@ -69,9 +61,6 @@ function validateSpec(spec: any): any {
   if (d.visibility !== undefined && !inList(d.visibility, VEHICLE_VISIBILITY)) {
     return { error: { visibility: 'invalid' } };
   }
-  if (d.verification_status !== undefined && !inList(d.verification_status, VERIFICATION_STATUS)) {
-    return { error: { verification_status: 'invalid' } };
-  }
   if (d.body_style !== undefined && d.body_style !== null && !inList(d.body_style, BODY_STYLES)) {
     return { error: { body_style: 'invalid' } };
   }
@@ -105,9 +94,7 @@ Deno.serve(async (req) => {
       }
       const v = validateSpec(body);
       if (v.error) return err('VALIDATION_FAILED', 422, v.error);
-      const data = { ...v.d, make: v.d.make || 'Honda', verification_status: 'unverified' };
-      // verification_status is never client-settable on create.
-      delete (data as any).verification_status;
+      const data = { ...v.d, make: v.d.make || 'Honda' };
       const vehicle = await base44.entities.Vehicle.create(data);
       // Event: VehicleCreated (TrustScoreService garage_completed progress — deferred).
       return Response.json({ ok: true, vehicle });
@@ -120,10 +107,6 @@ Deno.serve(async (req) => {
       const { vehicle_id } = body;
       const vehicle = await getOwnedVehicle(base44, vehicle_id, user);
       if (!vehicle) return err('PERMISSION_DENIED', 403);
-      // verification_status is not settable via update.
-      if (body.verification_status !== undefined) {
-        return err('PERMISSION_DENIED', 403, { verification_status: 'use submitVerification/approveVerification/rejectVerification' });
-      }
       const v = validateSpec(body);
       if (v.error) return err('VALIDATION_FAILED', 422, v.error);
       // sale_status changes go through changeSaleStatus (transition rules); block here.
@@ -163,81 +146,6 @@ Deno.serve(async (req) => {
         return err('INVALID_STATE_TRANSITION', 409, { sale_status: `cannot move from ${current} to sold` });
       }
       const updated = await base44.entities.Vehicle.update(vehicle_id, { sale_status });
-      return Response.json({ ok: true, vehicle: updated });
-    }
-
-    // ---- submitVerification ----
-    if (action === 'submitVerification') {
-      const { vehicle_id } = body;
-      const vehicle = await getOwnedVehicle(base44, vehicle_id, user);
-      if (!vehicle) return err('PERMISSION_DENIED', 403);
-      if (vehicle.verification_status === 'verified') {
-        return err('INVALID_STATE_TRANSITION', 409, { verification_status: 'already verified' });
-      }
-      const updated = await base44.entities.Vehicle.update(vehicle_id, { verification_status: 'pending' });
-      return Response.json({ ok: true, vehicle: updated });
-    }
-
-    // ---- approveVerification (Mod/Admin) ----
-    if (action === 'approveVerification') {
-      if (!isModOrAdmin(user)) return err('PERMISSION_DENIED', 403);
-      const { vehicle_id } = body;
-      let vehicle: any;
-      try { vehicle = await base44.asServiceRole.entities.Vehicle.get(vehicle_id); } catch { return err('RESOURCE_NOT_FOUND', 404); }
-      if (vehicle.verification_status === 'verified') {
-        // Idempotent — re-approving an already-verified vehicle does not double-award trust.
-        return Response.json({ ok: true, vehicle, already_verified: true });
-      }
-      const updated = await base44.asServiceRole.entities.Vehicle.update(vehicle_id, { verification_status: 'verified' });
-      // Event: VehicleVerified → award vehicle_verified signal to the owner (idempotent).
-      try {
-        await awardSignalToUser(base44, {
-          target_user_id: vehicle.created_by_id,
-          signal_type: SignalType.VEHICLE_VERIFIED,
-          reason: 'Vehicle verified by moderator',
-          actor: `moderator:${user.id}`,
-        });
-      } catch (e) { /* logged, non-blocking */ }
-      // Notify owner of the verification outcome.
-      try {
-        await createNotification(base44, {
-          recipient_id: vehicle.created_by_id,
-          notification_type: NotificationType.MODERATION_OUTCOME,
-          actor_id: user.id,
-          target_type: 'vehicle',
-          target_id: vehicle_id,
-        });
-      } catch (e) { /* non-blocking */ }
-      // Phase 05 wiring: VehicleVerified approval → AuditLog entry (completes the approval workflow).
-      try {
-        await writeAuditLog(base44, {
-          action: AuditActionType.VEHICLE_VERIFICATION_APPROVED,
-          actor_type: user.role === 'admin' ? 'admin' : 'moderator',
-          actor_id: user.id,
-          target_type: 'vehicle',
-          target_id: vehicle_id,
-          context: `Vehicle "${vehicle.nickname || `${vehicle.make} ${vehicle.model}`}" verified by ${user.role === 'admin' ? 'admin' : 'moderator'}`,
-        });
-      } catch (e) { /* non-blocking */ }
-      return Response.json({ ok: true, vehicle: updated });
-    }
-
-    // ---- rejectVerification (Mod/Admin) ----
-    if (action === 'rejectVerification') {
-      if (!isModOrAdmin(user)) return err('PERMISSION_DENIED', 403);
-      const { vehicle_id } = body;
-      let vehicle: any;
-      try { vehicle = await base44.asServiceRole.entities.Vehicle.get(vehicle_id); } catch { return err('RESOURCE_NOT_FOUND', 404); }
-      const updated = await base44.asServiceRole.entities.Vehicle.update(vehicle_id, { verification_status: 'rejected' });
-      try {
-        await createNotification(base44, {
-          recipient_id: vehicle.created_by_id,
-          notification_type: NotificationType.MODERATION_OUTCOME,
-          actor_id: user.id,
-          target_type: 'vehicle',
-          target_id: vehicle_id,
-        });
-      } catch (e) { /* non-blocking */ }
       return Response.json({ ok: true, vehicle: updated });
     }
 
@@ -283,13 +191,6 @@ Deno.serve(async (req) => {
     // ---- listPublic (browse) ----
     if (action === 'listPublic') {
       const vehicles = await base44.asServiceRole.entities.Vehicle.filter({ visibility: 'public' }, '-updated_date', 100);
-      return Response.json({ ok: true, vehicles });
-    }
-
-    // ---- listPendingVerification (Mod/Admin) ----
-    if (action === 'listPendingVerification') {
-      if (!isModOrAdmin(user)) return err('PERMISSION_DENIED', 403);
-      const vehicles = await base44.asServiceRole.entities.Vehicle.filter({ verification_status: 'pending' }, '-updated_date', 100);
       return Response.json({ ok: true, vehicles });
     }
 

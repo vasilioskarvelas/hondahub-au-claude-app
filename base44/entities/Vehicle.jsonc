@@ -154,17 +154,6 @@
       "default": [],
       "description": "FK\u2192Media (images). Multiple build photos. Max 20 (service-enforced). cover_media_id mirrors the first/primary entry for card thumbnails; managed via addPhoto/removePhoto."
     },
-    "verification_status": {
-      "type": "string",
-      "enum": [
-        "unverified",
-        "pending",
-        "verified",
-        "rejected"
-      ],
-      "default": "unverified",
-      "description": "Moderator/Admin-only changes via submit/approve/reject workflow."
-    },
     "visibility": {
       "type": "string",
       "enum": [
