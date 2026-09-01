@@ -1,0 +1,271 @@
+{
+  "name": "StoreImportItem",
+  "type": "object",
+  "properties": {
+    "connection_id": {
+      "type": "string",
+      "description": "FK\u2192BusinessStoreConnection. The connection this item was imported from."
+    },
+    "business_id": {
+      "type": "string",
+      "description": "FK\u2192Business. Denormalized for queries (mirrors the connection's business_id)."
+    },
+    "external_id": {
+      "type": "string",
+      "description": "The store's product ID. First key in the duplicate-detection waterfall (ADR-046 \u00a78)."
+    },
+    "external_url": {
+      "type": "string",
+      "description": "Nullable. Canonical product URL on the source store. Fourth key in the duplicate-detection waterfall."
+    },
+    "sku": {
+      "type": "string",
+      "description": "Nullable. Stock keeping unit. Second key in the duplicate-detection waterfall."
+    },
+    "manufacturer_part_number": {
+      "type": "string",
+      "description": "Nullable. Manufacturer part number. Third key in the duplicate-detection waterfall."
+    },
+    "title": {
+      "type": "string",
+      "description": "Product title. Required."
+    },
+    "description": {
+      "type": "string",
+      "description": "Nullable. Product description."
+    },
+    "price_cents": {
+      "type": "number",
+      "description": "Nullable. Integer cents (AUD implicit, ADR-018)."
+    },
+    "currency": {
+      "type": "string",
+      "default": "AUD",
+      "description": "ISO currency code. Defaults AUD."
+    },
+    "condition": {
+      "type": "string",
+      "enum": [
+        "new",
+        "used",
+        "for_parts_or_repair"
+      ],
+      "description": "Nullable. Maps to MarketplaceListing.condition."
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "engine",
+        "transmission",
+        "forced_induction",
+        "wheels_tyres",
+        "suspension",
+        "brakes",
+        "electronics",
+        "interior",
+        "exterior",
+        "performance_part",
+        "tools_equipment",
+        "other"
+      ],
+      "description": "Nullable. AI-mapped MarketplaceListing category. Never 'vehicle' for imported parts (service-enforced)."
+    },
+    "brand": {
+      "type": "string",
+      "description": "Nullable. ADR-042 brand."
+    },
+    "oem_or_aftermarket": {
+      "type": "string",
+      "enum": [
+        "oem",
+        "aftermarket",
+        "not_applicable"
+      ],
+      "description": "Nullable. ADR-042."
+    },
+    "photo_urls": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Source product image URLs (capped at 10, service-enforced)."
+    },
+    "source_raw": {
+      "type": "string",
+      "description": "Nullable. Compact JSON of the key scraped source fields, capped (service-enforced). Used by View Source. Full HTML is never stored (field-size limit)."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "extracting",
+        "ready_for_approval",
+        "needs_attention",
+        "possible_duplicate",
+        "approved",
+        "rejected",
+        "failed"
+      ],
+      "default": "pending",
+      "description": "Staging/review lifecycle. pending \u2192 extracting \u2192 ready_for_approval/needs_attention/possible_duplicate/failed \u2192 approved/rejected. 'approved' and 'rejected' are terminal."
+    },
+    "sync_error": {
+      "type": "string",
+      "description": "Nullable. Per-item failure reason when status=failed (per-item failure isolation \u2014 the sync continues)."
+    },
+    "field_provenance": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "Per-field provenance map: field name \u2192 source_confirmed|ai_inferred|business_confirmed|business_edited (ADR-046 \u00a76). Populated on every extracted item."
+    },
+    "compatible_models": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "civic",
+          "integra",
+          "accord",
+          "crv",
+          "s2000",
+          "nsx",
+          "other"
+        ]
+      },
+      "default": [],
+      "description": "ADR-043 compatibility (AI-extracted). Maps directly to MarketplaceListing.compatible_models on approval."
+    },
+    "compatible_chassis_codes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "eg",
+          "ek",
+          "dc2",
+          "dc5",
+          "ep3",
+          "fn2",
+          "cl7",
+          "cl9",
+          "fd2",
+          "fk8",
+          "fl5",
+          "other"
+        ]
+      },
+      "default": [],
+      "description": "ADR-043 compatibility (AI-extracted)."
+    },
+    "compatible_engine_families": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "d_series",
+          "b_series",
+          "k_series",
+          "j_series",
+          "f_series",
+          "h_series",
+          "other"
+        ]
+      },
+      "default": [],
+      "description": "ADR-043 compatibility (AI-extracted)."
+    },
+    "compatible_year_from": {
+      "type": "number",
+      "description": "Nullable. ADR-043 year range start."
+    },
+    "compatible_year_to": {
+      "type": "number",
+      "description": "Nullable. ADR-043 year range end."
+    },
+    "compatibility_confidence_score": {
+      "type": "number",
+      "description": "Nullable. 0\u2013100. >= COMPATIBILITY_CONFIDENCE_THRESHOLD \u2192 compatible; below \u2192 needs attention (ADR-046 \u00a77)."
+    },
+    "honda_compatibility_status": {
+      "type": "string",
+      "enum": [
+        "compatible",
+        "likely_compatible",
+        "unknown",
+        "incompatible"
+      ],
+      "description": "Nullable. Derived from the confidence score (ADR-046 \u00a77)."
+    },
+    "duplicate_of_item_id": {
+      "type": "string",
+      "description": "Nullable. FK\u2192StoreImportItem. The existing item this is a possible duplicate of."
+    },
+    "duplicate_match_method": {
+      "type": "string",
+      "enum": [
+        "external_id",
+        "sku",
+        "manufacturer_part_number",
+        "canonical_url",
+        "ai_similarity"
+      ],
+      "description": "Nullable. Which waterfall step matched the duplicate (ADR-046 \u00a78). AI similarity is the final fallback only."
+    },
+    "approved_listing_id": {
+      "type": "string",
+      "description": "Nullable. FK\u2192MarketplaceListing. Set when the item is approved and a listing is created via the internal MarketplaceService import path."
+    },
+    "approved_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Nullable. Set on approval."
+    },
+    "rejected_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Nullable. Set on rejection."
+    },
+    "rejected_reason": {
+      "type": "string",
+      "description": "Nullable. Rejection reason."
+    },
+    "last_scanned_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Nullable. When the source product was last rescanned."
+    }
+  },
+  "required": [
+    "connection_id",
+    "business_id",
+    "external_id",
+    "title",
+    "status"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

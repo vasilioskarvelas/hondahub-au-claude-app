@@ -52,6 +52,7 @@ import EntitlementOverrides from '@/pages/EntitlementOverrides';
 import JobStatusDashboard from '@/pages/JobStatusDashboard';
 import AdminDashboard from '@/pages/AdminDashboard';
 import BusinessVerificationQueue from '@/pages/BusinessVerificationQueue';
+import StoreImport from '@/pages/StoreImport';
 import ProfileLoadError from '@/pages/ProfileLoadError';
 
 const AuthenticatedApp = () => {
@@ -142,6 +143,7 @@ const AuthenticatedApp = () => {
           <Route path="/admin/jobs" element={<JobStatusDashboard />} />
           <Route path="/admin/business-verification" element={<BusinessVerificationQueue />} />
           <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/admin/store-import" element={<StoreImport />} />
         </Route>
       </Route>
       <Route path="*" element={<PageNotFound />} />

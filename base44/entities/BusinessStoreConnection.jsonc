@@ -1,0 +1,163 @@
+{
+  "name": "BusinessStoreConnection",
+  "type": "object",
+  "properties": {
+    "business_id": {
+      "type": "string",
+      "description": "FK\u2192Business. The business this store connection belongs to. The import poster is derived from this \u2192 active owner BusinessMembership (Decision 1)."
+    },
+    "platform": {
+      "type": "string",
+      "enum": [
+        "shopify",
+        "woocommerce"
+      ],
+      "description": "The e-commerce platform. Shopify uses OAuth ownership verification; WooCommerce uses REST API key validation."
+    },
+    "store_domain": {
+      "type": "string",
+      "description": "Store domain/identifier. Shopify: normalized *.myshopify.com domain (lowercase, no scheme). WooCommerce: the shop base URL (Section 3)."
+    },
+    "store_name": {
+      "type": "string",
+      "description": "Nullable display name fetched from the store (Shopify shop name, set on OAuth completion)."
+    },
+    "connection_status": {
+      "type": "string",
+      "enum": [
+        "unverified",
+        "verified",
+        "disconnected"
+      ],
+      "default": "unverified",
+      "description": "Ownership verification state. unverified \u2192 verified (OAuth/API-key validated) or disconnected (revoked). Only verified connections may sync."
+    },
+    "ownership_verified_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Nullable. Set when ownership is first verified."
+    },
+    "ownership_verification_method": {
+      "type": "string",
+      "enum": [
+        "shopify_oauth",
+        "woocommerce_api_key"
+      ],
+      "description": "How ownership was verified."
+    },
+    "oauth_state": {
+      "type": "string",
+      "description": "Nullable. CSRF state token for the in-progress Shopify OAuth flow. Set by connectStore; verified and cleared on callback completion. A pending unverified connection with a set oauth_state is mid-flow."
+    },
+    "shopify_shop_id": {
+      "type": "string",
+      "description": "Nullable. Shopify permanent shop ID, fetched on OAuth completion."
+    },
+    "shopify_access_token": {
+      "type": "string",
+      "description": "Nullable. Shopify access token (sensitive). Stored per-connection \u2014 app-level secrets are not per-connection. Admin-only RLS protects reads. Cleared on disconnect."
+    },
+    "woocommerce_consumer_key": {
+      "type": "string",
+      "description": "Nullable. WooCommerce REST API consumer key (sensitive). Admin-only RLS protects reads. Set in Section 3."
+    },
+    "woocommerce_consumer_secret": {
+      "type": "string",
+      "description": "Nullable. WooCommerce REST API consumer secret (sensitive). Admin-only RLS protects reads. Set in Section 3."
+    },
+    "sync_frequency": {
+      "type": "string",
+      "enum": [
+        "manual",
+        "hourly",
+        "daily"
+      ],
+      "default": "manual",
+      "description": "Field exists for future scheduling. Phase 1 has NO automatic scheduler \u2014 sync is manual only. A non-manual value is stored but never triggered."
+    },
+    "sync_status": {
+      "type": "string",
+      "enum": [
+        "idle",
+        "syncing",
+        "paused",
+        "cancelled",
+        "completed",
+        "failed"
+      ],
+      "default": "idle",
+      "description": "Live sync state (Decision 2). idle \u2192 syncing \u2192 completed/failed/cancelled. paused marks an interrupted, resumable run. This is the live state; JobStatus is the append-only terminal log."
+    },
+    "sync_cursor": {
+      "type": "string",
+      "description": "Nullable. Resume offset/page token for resumable syncs. Persisted so an interrupted run resumes without re-processing."
+    },
+    "sync_total": {
+      "type": "number",
+      "default": 0,
+      "description": "Total products discovered in the current/last sync."
+    },
+    "sync_processed": {
+      "type": "number",
+      "default": 0,
+      "description": "Products processed (fetched + staged) in the current/last sync."
+    },
+    "sync_failed": {
+      "type": "number",
+      "default": 0,
+      "description": "Products that failed processing in the current/last sync (per-item failure isolation)."
+    },
+    "sync_cancel_requested_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Nullable. Set when cancellation is requested; the worker checks this before processing the next item and stops cleanly."
+    },
+    "current_sync_run_id": {
+      "type": "string",
+      "description": "Nullable. Concurrency guard (Decision 2). Only one active sync per connection. A second trigger while one is active returns a deterministic conflict. Resume/cancel validate this. Stale workers cannot overwrite a newer run's state \u2014 every state write checks current_sync_run_id matches the writer's run."
+    },
+    "last_sync_started_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Nullable. When the last sync started."
+    },
+    "last_sync_finished_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Nullable. When the last sync finished (completed/failed/cancelled)."
+    },
+    "last_error": {
+      "type": "string",
+      "description": "Nullable. Last sync error message (set when sync_status=failed)."
+    }
+  },
+  "required": [
+    "business_id",
+    "platform",
+    "store_domain",
+    "connection_status",
+    "sync_status"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

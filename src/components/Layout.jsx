@@ -24,6 +24,7 @@ const moreNav = [
   { to: "/admin/audit", label: "Audit Log", icon: ScrollText, modOnly: true },
   { to: "/admin/entitlements", label: "Entitlements", icon: Crown, adminOnly: true },
   { to: "/admin/jobs", label: "Job Status", icon: Gauge, adminOnly: true },
+  { to: "/admin/store-import", label: "Store Import", icon: Store, adminOnly: true },
 ];
 
 export default function Layout() {
