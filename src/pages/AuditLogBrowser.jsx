@@ -4,7 +4,6 @@ import { ScrollText, Loader2, Shield } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 
 const ACTIONS = [
-  "vehicle_verification_approved",
   "business_status_changed",
   "listing_removed_by_moderation",
   "trust_tier_overridden",

@@ -23,8 +23,7 @@ export default function VehicleForm({ onClose, onSaved, vehicle }) {
   const save = async () => {
     setSaving(true); setError(null);
     try {
-      // Send only editable spec fields — never verification_status/cover/media
-      // (the update action rejects requests carrying verification_status).
+      // Send only editable spec fields — never cover/media.
       const payload = {};
       for (const k of EDITABLE_FIELDS) {
         if (form[k] !== undefined && form[k] !== "") payload[k] = form[k];

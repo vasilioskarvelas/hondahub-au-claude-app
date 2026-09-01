@@ -37,8 +37,8 @@ Deno.serve(async (req) => {
     if (action === 'award') {
       // ADR-034: award creates a TrustScoreEvent and raises account_tier. Restricted to
       // Moderator/Admin so no authenticated user (or AI integration) can self-escalate
-      // past the Vehicle/Business verification gates. The actor is derived from the
-      // principal, never the request body. Verification flows (vehicle/business/
+      // past the Business verification gate. The actor is derived from the
+      // principal, never the request body. Verification flows (business/
       // marketplace) call awardSignalToUser directly via the shared module, not here.
       const isModOrAdmin = user.role === 'admin' || user.account_tier === 'moderator';
       if (!isModOrAdmin) {

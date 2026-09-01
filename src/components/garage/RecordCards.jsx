@@ -1,5 +1,5 @@
 import React from "react";
-import { Pencil, Trash2, Wrench, CheckCircle, BadgeCheck } from "lucide-react";
+import { Pencil, Trash2, Wrench, CheckCircle } from "lucide-react";
 import { callGarage, pretty } from "@/lib/garage";
 import { ModCategoryBadge, InstallationTypeBadge, SaleStatusBadge } from "./Badges";
 
