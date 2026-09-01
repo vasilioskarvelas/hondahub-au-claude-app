@@ -32,8 +32,12 @@ import {
  * fully exercisable for credential-independent regression.
  */
 
-const SHOPIFY_SCOPES = "read_products,read_product_listings";
+const SHOPIFY_SCOPES = "read_products"; // Read-only: product catalog access for Phase 1 import. No write scopes.
 const SHOPIFY_API_VERSION = "2024-01";
+// OAuth state must be short-lived (ADR-046 §2). 10 minutes from issuance
+// (connection created_date == state issuance, since connectStore creates both
+// atomically). Expired state is rejected in the callback before any secret use.
+const STATE_TTL_MS = 10 * 60 * 1000;
 
 function normalizeDomain(d: string): string {
   return String(d || "").toLowerCase().trim().replace(/^https?:\/\//, "").replace(/\/+$/, "");
@@ -53,6 +57,37 @@ function htmlPage(title: string, message: string, isError: boolean): string {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>HondaHub Store Import</title></head><body style="font-family:system-ui,-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#0b0b0d;color:#fafafa"><div style="max-width:440px;text-align:center;padding:24px"><div style="font-size:44px;margin-bottom:12px">${icon}</div><h1 style="font-size:20px;margin:0 0 8px;color:${color}">${title}</h1><p style="color:#a1a1aa;line-height:1.5">${message}</p><p style="margin-top:18px"><a href="/admin/store-import" style="color:#e11d48;font-weight:600">Back to Store Import</a></p></div></body></html>`;
 }
 
+// Shopify HMAC verification (official mechanism): the OAuth callback is
+// unauthenticated, so the HMAC signature — computed by Shopify over the
+// callback query params with the app secret — is what proves the params were
+// not tampered with. Verified with the secret BEFORE the authorization code is
+// exchanged. Timing-safe comparison. Returns false if hmac is missing/invalid.
+async function verifyShopifyHmac(url: URL, apiSecret: string): Promise<boolean> {
+  const params = new URLSearchParams(url.search);
+  const hmac = params.get("hmac");
+  if (!hmac) return false;
+  params.delete("hmac");
+  const queryString = [...params.keys()].sort().map((k) => `${k}=${params.get(k)}`).join("&");
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey("raw", enc.encode(apiSecret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(queryString));
+  const digest = [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  if (digest.length !== hmac.length) return false;
+  const a = enc.encode(digest), b = enc.encode(hmac);
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
+  return diff === 0;
+}
+
+// Strip sensitive credentials from any connection object returned to the
+// frontend. Access tokens / API keys live only in backend storage (admin-only
+// RLS) and are used server-side for sync — never exposed to the client or logs.
+function sanitizeConnection(c: any): any {
+  if (!c) return c;
+  const { shopify_access_token, woocommerce_consumer_key, woocommerce_consumer_secret, ...rest } = c;
+  return rest;
+}
+
 Deno.serve(async (req) => {
   try {
     const url = new URL(req.url);
@@ -63,8 +98,11 @@ Deno.serve(async (req) => {
       const code = url.searchParams.get("code");
       const state = url.searchParams.get("state");
       const shop = url.searchParams.get("shop");
-      if (!code || !state) {
-        return new Response(htmlPage("Connection failed", "Missing OAuth parameters (code/state).", true), { status: 400, headers: { "Content-Type": "text/html; charset=utf-8" } });
+      // Required params — shop is mandatory (bound to the connection, never
+      // trusted from the query alone). No business_id/owner/connection id is
+      // accepted from the query; identity comes only from the stored state record.
+      if (!code || !state || !shop) {
+        return new Response(htmlPage("Connection failed", "Missing OAuth parameters (code/state/shop).", true), { status: 400, headers: { "Content-Type": "text/html; charset=utf-8" } });
       }
       const base44 = createClientFromRequest(req);
       const conns = await base44.asServiceRole.entities.BusinessStoreConnection.filter({ oauth_state: state });
@@ -72,14 +110,36 @@ Deno.serve(async (req) => {
         return new Response(htmlPage("Connection failed", "Invalid or expired OAuth state. No matching pending connection.", true), { status: 400, headers: { "Content-Type": "text/html; charset=utf-8" } });
       }
       const conn = conns[0];
-      const normalizedShop = normalizeDomain(shop || "");
-      if (normalizedShop && normalizedShop !== conn.store_domain) {
+      // Single-use: a null oauth_state means the flow was already completed or
+      // invalidated — reject any replay. (The filter above already excludes
+      // null states, so this is a belt-and-braces guard.)
+      if (!conn.oauth_state) {
+        return new Response(htmlPage("Connection failed", "This OAuth state has already been used.", true), { status: 400, headers: { "Content-Type": "text/html; charset=utf-8" } });
+      }
+      // Short-lived: reject state older than STATE_TTL_MS (issued at connection
+      // creation). Prevents stale/replayed state from ever reaching a secret.
+      const issuedAt = new Date(conn.created_date).getTime();
+      if (Date.now() - issuedAt > STATE_TTL_MS) {
+        return new Response(htmlPage("Connection failed", "OAuth state expired. Please restart the connection.", true), { status: 400, headers: { "Content-Type": "text/html; charset=utf-8" } });
+      }
+      // Bind the callback to the exact shop that initiated the flow — the
+      // query shop must match the connection's stored domain. The token
+      // exchange always targets conn.store_domain (never the query shop).
+      const normalizedShop = normalizeDomain(shop);
+      if (normalizedShop !== conn.store_domain) {
         return new Response(htmlPage("Connection failed", "Shop mismatch — the redirecting shop does not match this connection.", true), { status: 400, headers: { "Content-Type": "text/html; charset=utf-8" } });
       }
       const clientId = secrets.get("SHOPIFY_CLIENT_ID");
       const clientSecret = secrets.get("SHOPIFY_CLIENT_SECRET");
       if (!clientId || !clientSecret) {
         return new Response(htmlPage("Not configured", "Shopify credentials are not configured. Set SHOPIFY_CLIENT_ID and SHOPIFY_CLIENT_SECRET, then retry the connection.", true), { status: 503, headers: { "Content-Type": "text/html; charset=utf-8" } });
+      }
+      // Verify Shopify's HMAC signature over the callback params (official
+      // mechanism) BEFORE exchanging the code. Tampered/unsigned requests are
+      // rejected. Requires the secret (checked above).
+      const hmacOk = await verifyShopifyHmac(url, clientSecret);
+      if (!hmacOk) {
+        return new Response(htmlPage("Connection failed", "Invalid callback signature (HMAC verification failed).", true), { status: 400, headers: { "Content-Type": "text/html; charset=utf-8" } });
       }
       // Exchange the authorization code for a permanent access token.
       const tokenRes = await fetch(`https://${conn.store_domain}/admin/oauth/access_token`, {
@@ -167,7 +227,7 @@ Deno.serve(async (req) => {
           authorize_url = `https://${domain}/admin/oauth/authorize?client_id=${encodeURIComponent(clientId)}&scope=${encodeURIComponent(SHOPIFY_SCOPES)}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(oauthState)}`;
         }
       }
-      return json({ ok: true, connection_id: conn.id, connection: conn, authorize_url, credentials_configured });
+      return json({ ok: true, connection_id: conn.id, connection: sanitizeConnection(conn), authorize_url, credentials_configured });
     }
 
     // ---- listConnections ----
@@ -176,7 +236,7 @@ Deno.serve(async (req) => {
       if (body.business_id) filter.business_id = body.business_id;
       if (body.platform && STORE_PLATFORM_VALUES.includes(body.platform)) filter.platform = body.platform;
       const conns = await base44.entities.BusinessStoreConnection.filter(filter, "-created_date", 200);
-      return json({ ok: true, connections: conns });
+      return json({ ok: true, connections: conns.map(sanitizeConnection) });
     }
 
     // ---- getConnection ----
@@ -185,7 +245,7 @@ Deno.serve(async (req) => {
       if (!connection_id) return err("VALIDATION_FAILED", 422, { connection_id: "required" });
       const conn = await base44.entities.BusinessStoreConnection.get(connection_id).catch(() => null);
       if (!conn) return err("RESOURCE_NOT_FOUND", 404);
-      return json({ ok: true, connection: conn });
+      return json({ ok: true, connection: sanitizeConnection(conn) });
     }
 
     // ---- disconnectStore ----
@@ -202,7 +262,7 @@ Deno.serve(async (req) => {
         woocommerce_consumer_secret: null,
         oauth_state: null,
       });
-      return json({ ok: true, connection: updated });
+      return json({ ok: true, connection: sanitizeConnection(updated) });
     }
 
     return err("VALIDATION_FAILED", 422, { action: "unknown" });
