@@ -3,16 +3,23 @@ import { Link } from "react-router-dom";
 import { ShieldAlert, Store } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import ConnectShopifyCard from "@/components/store-import/ConnectShopifyCard";
+import StoreConnectionsCard from "@/components/store-import/StoreConnectionsCard";
+import ImportQueue from "@/components/store-import/ImportQueue";
 
 /**
  * StoreImport — Phase 1 admin surface for Business Store Import (ADR-046).
  * The feature flag is admin-only: this page renders an access-restricted state
  * for non-admins (the frontend gate is supplemental; the backend + RLS are the
- * real boundary). The full catalogue dashboard replaces this placeholder in
- * Section 7.
+ * real boundary).
+ *
+ * Flow: connect a store (OAuth ownership verification) → sync its catalogue into
+ * staging → review each product and set Honda compatibility → approve, which
+ * creates a DRAFT listing. Publication remains a separate, explicit act.
  */
 export default function StoreImport() {
   const { user } = useAuth();
+  const [selected, setSelected] = React.useState(null);
+  const [queueKey, setQueueKey] = React.useState(0);
 
   if (user?.role !== "admin") {
     return (
@@ -38,17 +45,18 @@ export default function StoreImport() {
         <div>
           <h1 className="text-2xl font-black tracking-tight">Business Store Import</h1>
           <p className="text-sm text-muted-foreground">
-            ADR-046 Phase 1 — admin test build. Scaffolding is in place.
+            ADR-046 Phase 1 — admin test build. Shopify only.
           </p>
         </div>
       </header>
 
-      <div className="rounded-2xl border border-border bg-card p-6 text-sm text-muted-foreground">
-        Phase 1 scaffolding (entities, feature flag, additive listing field) is
-        live. Shopify/WooCommerce connectors (Sections 2–3), sync jobs (Section 4),
-        AI extraction (Section 5), duplicate detection (Section 6), and the full
-        catalogue dashboard (Section 7) are built in subsequent sections.
-      </div>
+      <StoreConnectionsCard
+        selectedId={selected?.id}
+        onSelect={setSelected}
+        onSyncFinished={() => setQueueKey((k) => k + 1)}
+      />
+
+      <ImportQueue key={`${selected?.id || "none"}-${queueKey}`} connection={selected} />
 
       <ConnectShopifyCard />
     </div>
