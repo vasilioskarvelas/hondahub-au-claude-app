@@ -80,7 +80,12 @@ export const DUPLICATE_MATCH_METHOD_VALUES = Object.values(DuplicateMatchMethod)
 export const COMPATIBILITY_CONFIDENCE_THRESHOLD = 85;
 
 // ADR-046 §11: per-sync safety caps (enforced at the fetch layer, Section 4).
-export const SYNC_MAX_PRODUCTS = 500;
+//
+// No total-product cap: a sync runs until the store has no more pages. This is
+// safe because each INVOCATION still handles one page, so no single request can
+// run long enough to time out — a big catalogue just means more invocations.
+// A store with 4,637 products should import all 4,637.
+export const SYNC_MAX_PRODUCTS = Infinity;
 export const SYNC_FETCH_TIMEOUT_MS = 15000;
 export const SYNC_MAX_REDIRECTS = 3;
 export const SYNC_BATCH_SIZE = 25;
@@ -398,4 +403,66 @@ export async function requireBusinessStoreAccess(
 /** True when this user may act on the given business. */
 export function canAccessBusiness(allowed: string[] | "all", businessId: string): boolean {
   return allowed === "all" || allowed.includes(businessId);
+}
+
+// ============================================================================
+// Honda-only filtering
+//
+// Partner stores sell across marques — the first page imported from one was
+// full of BMW E30/E36 hubs. Honda Hub is a Honda marketplace, so a product that
+// clearly belongs to another make is rejected at staging with a reason, rather
+// than sitting in the queue for a human to wade through.
+//
+// Rejected, not discarded: the item is still stored and visible under the
+// Rejected filter, so a wrong call is auditable and reversible. Silently
+// dropping products would leave a business unable to explain a missing item.
+// ============================================================================
+
+/** Marques and their model/chassis shorthand that are unambiguously not Honda. */
+const OTHER_MARQUE = [
+  "bmw", "e30", "e36", "e46", "e90", "m3", "m5",
+  "mercedes", "benz", "audi", "volkswagen", "golf gti", "porsche", "ferrari", "lamborghini",
+  "nissan", "skyline", "silvia", "180sx", "240sx", "s13", "s14", "s15", "r32", "r33", "r34", "r35", "gtr", "gt-r", "350z", "370z",
+  "toyota", "supra", "ae86", "celica", "mr2", "hilux", "landcruiser", "2jz", "1jz", "4age",
+  "subaru", "wrx", "sti", "impreza", "forester", "liberty", "brz",
+  "mitsubishi", "evo", "lancer", "4g63", "pajero",
+  "mazda", "rx7", "rx-7", "rx8", "rx-8", "mx5", "mx-5", "13b", "miata",
+  "ford", "falcon", "mustang", "ranger", "focus rs",
+  "holden", "commodore", "ls1", "ls2", "ls3", "chevrolet", "corvette",
+  "hyundai", "kia", "lexus", "volvo", "peugeot", "renault",
+];
+
+/** Signals that a product IS Honda — including Acura, Honda's export brand. */
+const HONDA_SIGNAL = [
+  "honda", "acura", "civic", "integra", "accord", "crv", "cr-v", "s2000", "nsx",
+  "prelude", "jazz", "odyssey", "type r", "typer", "vtec", "rsx", "tsx", "euro r",
+  "b16", "b18", "b20", "d15", "d16", "d17", "k20", "k24", "j30", "j32", "j35",
+  "f20", "f22", "h22", "h23", "b-series", "d-series", "k-series", "j-series",
+  "eg6", "ek9", "ek4", "dc2", "dc5", "ep3", "fn2", "fd2", "fk8", "fl5", "cl7", "cl9",
+];
+
+function hasToken(hay: string, needles: string[]): string | null {
+  for (const n of needles) {
+    // Word-boundary match so "e30" does not fire inside "code30", and "m3"
+    // does not fire inside "m30".
+    const re = new RegExp(`(^|[^a-z0-9])${n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-z0-9]|$)`, "i");
+    if (re.test(hay)) return n;
+  }
+  return null;
+}
+
+/**
+ * Decide whether a staged product belongs to another marque.
+ *
+ * Requires a competing-marque token AND the absence of any Honda signal. That
+ * asymmetry is deliberate: a part listed as "fits Civic EK and BMW E36" is a
+ * Honda part worth keeping, whereas "Short Hub BMW E36" is not. Being wrong in
+ * the direction of keeping a product is cheap — a reviewer skips it — while
+ * wrongly rejecting a Honda part loses the business a sale.
+ */
+export function detectOtherMarque(item: { title?: string; description?: string | null; brand?: string | null }): string | null {
+  const hay = `${item?.title || ""} ${item?.brand || ""} ${item?.description || ""}`.toLowerCase();
+  if (!hay.trim()) return null;
+  if (hasToken(hay, HONDA_SIGNAL)) return null;
+  return hasToken(hay, OTHER_MARQUE);
 }

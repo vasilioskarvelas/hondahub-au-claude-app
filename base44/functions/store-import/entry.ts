@@ -6,7 +6,7 @@ import {
   ConnectionStatus, SyncStatus, ImportItemStatus,
   FieldProvenance,
   StorePlatform, SYNC_MAX_PRODUCTS, SYNC_FETCH_TIMEOUT_MS,
-  mapShopifyProduct, detectDuplicate, stageStatus,
+  mapShopifyProduct, detectDuplicate, stageStatus, detectOtherMarque,
 } from "../../shared/store-import.ts";
 import { normaliseWebsite, fingerprintPlatform, recommendImportMethod } from "../../shared/platform-detect.ts";
 import { parseCsv, detectColumns, mapCsvRow, previewCsv, CSV_MAX_BYTES, CSV_MAX_ROWS } from "../../shared/csv-import.ts";
@@ -354,10 +354,17 @@ Deno.serve(async (req) => {
           // rather than creating a second one or silently overwriting reviewer edits.
           const already = seen.find((e: any) => String(e.external_id) === mapped.external_id);
           if (already) { skipped++; processed++; continue; }
-          const dup = detectDuplicate(mapped, seen);
+          // Honda Hub is a Honda marketplace. A product that clearly belongs to
+          // another make is stored REJECTED with a reason rather than dropped,
+          // so the call is visible and reversible under the Rejected filter.
+          const otherMarque = detectOtherMarque(mapped);
+          const dup = otherMarque ? null : detectDuplicate(mapped, seen);
           const created = await S.StoreImportItem.create({
             ...mapped,
-            status: stageStatus(mapped, dup),
+            status: otherMarque ? ImportItemStatus.REJECTED : stageStatus(mapped, dup),
+            ...(otherMarque
+              ? { rejected_at: nowIso(), rejected_reason: `Not a Honda part (matched "")` }
+              : {}),
             ...(dup ? { duplicate_of_item_id: dup.duplicate_of_item_id, duplicate_match_method: dup.duplicate_match_method } : {}),
             last_scanned_at: nowIso(),
           });
@@ -390,7 +397,6 @@ Deno.serve(async (req) => {
       return json({
         ok: true, run_id: runId, has_more: !done, staged, skipped, failed,
         processed, page_size: products.length,
-        capped: processed + failed >= SYNC_MAX_PRODUCTS,
       });
     }
 

@@ -14,7 +14,10 @@ import { Loader2, RefreshCw, Unlink, AlertCircle, CheckCircle2, Store, Ban } fro
  * Selecting a connection drives the import queue below it.
  */
 
-const MAX_PAGES = 60;
+// High enough to finish a large catalogue in one run (a 5,000-product store is
+// ~50 pages). This is a runaway guard against a backend that keeps returning
+// has_more, not a product limit — and hitting it is reported, never silent.
+const MAX_PAGES = 500;
 
 const STATUS_STYLES = {
   verified: "text-emerald-500 border-emerald-500/30",
@@ -90,9 +93,6 @@ export default function StoreConnectionsCard({ selectedId, onSelect, onSyncFinis
       }
       if (data.has_more && page >= MAX_PAGES) {
         setError(`Stopped after ${MAX_PAGES} pages — the store has more products than one run will import. Run sync again to continue.`);
-      }
-      if (data.capped) {
-        setError("Reached the per-sync product cap. Run sync again to continue where it left off.");
       }
       await load();
       onSyncFinished?.();

@@ -12,6 +12,7 @@ import {
   stripHtml, priceToCents, inferCategory, mapShopifyProduct,
   detectDuplicate, stageStatus, ImportItemStatus, DuplicateMatchMethod,
   HondaCompatibilityStatus, FieldProvenance, COMPATIBILITY_CONFIDENCE_THRESHOLD,
+  detectOtherMarque,
 } from "./store-import.ts";
 
 function eq(actual: unknown, expected: unknown, msg?: string) {
@@ -221,4 +222,51 @@ Deno.test("stripHtml leaves unknown entities alone rather than mangling them", (
 Deno.test("stripHtml still strips tags and normalises whitespace", () => {
   eq(stripHtml("<p>Front <strong>brake</strong></p>"), "Front brake");
   eq(stripHtml(null), "");
+});
+
+// --- Honda-only filtering -------------------------------------------------------
+
+Deno.test("rejects products that clearly belong to another marque", () => {
+  // Real titles from a partner's live catalogue — the first page was full of these.
+  eq(detectOtherMarque({ title: "NRG Innovations – Short Hub BMW E36" }), "bmw");
+  eq(detectOtherMarque({ title: "Nissan Skyline R34 Coilovers" }), "nissan");
+  eq(detectOtherMarque({ title: "2JZ-GTE Head Gasket" }), "2jz");
+  eq(detectOtherMarque({ title: "Subaru WRX STI Intercooler" }), "subaru");
+});
+
+Deno.test("keeps Honda products, including Acura and model shorthand", () => {
+  for (const title of [
+    "NRG Innovations – Short Hub NSX",
+    "Skunk2 Intake Manifold B-Series",
+    "Acura RSX Type S Clutch",
+    "EK9 Civic Type R Front Lip",
+    "K20A Throttle Body",
+  ]) {
+    eq(detectOtherMarque({ title }), null, `must keep: ${title}`);
+  }
+});
+
+Deno.test("a part fitting a Honda AND another make is kept", () => {
+  // Being wrong towards keeping is cheap — a reviewer skips it. Wrongly
+  // rejecting a Honda part costs the business a sale.
+  eq(
+    detectOtherMarque({ title: "Universal Short Hub", description: "Fits Civic EK and BMW E36" }),
+    null,
+  );
+});
+
+Deno.test("marque tokens must be whole words, not substrings", () => {
+  eq(detectOtherMarque({ title: "Product code30 bracket" }), null, "'e30' must not fire inside 'code30'");
+  eq(detectOtherMarque({ title: "Item m30 spacer" }), null, "'m3' must not fire inside 'm30'");
+  eq(detectOtherMarque({ title: "Fordable ramp" }), null, "'ford' must not fire inside 'Fordable'");
+});
+
+Deno.test("a product with no marque signal at all is kept", () => {
+  eq(detectOtherMarque({ title: "Generic Oil Filter" }), null);
+  eq(detectOtherMarque({ title: "" }), null);
+  eq(detectOtherMarque({}), null);
+});
+
+Deno.test("the brand field is searched too", () => {
+  eq(detectOtherMarque({ title: "Short Hub", brand: "Toyota" }), "toyota");
 });
