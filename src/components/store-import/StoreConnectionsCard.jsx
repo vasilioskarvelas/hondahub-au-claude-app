@@ -1,5 +1,6 @@
 import React from "react";
 import { base44 } from "@/api/base44Client";
+import { invokeFn } from "@/lib/invokeFn";
 import { Loader2, RefreshCw, Unlink, AlertCircle, CheckCircle2, Store, Ban } from "lucide-react";
 
 /**
@@ -49,22 +50,20 @@ export default function StoreConnectionsCard({ selectedId, onSelect, onSyncFinis
   const [progress, setProgress] = React.useState(null);
   const [error, setError] = React.useState(null);
 
+  // Throws with the backend's own explanation rather than "Request failed with
+  // status code 502", which is all the raw SDK surfaces on a non-2xx.
   const call = React.useCallback(async (payload) => {
-    const res = await base44.functions.invoke("store-import", payload);
-    return res?.data || res;
+    const r = await invokeFn("store-import", payload);
+    if (!r.ok) throw new Error(r.error || "Something went wrong.");
+    return r.data;
   }, []);
 
   const load = React.useCallback(async () => {
     setLoading(true);
-    try {
-      const res = await base44.functions.invoke("store-connector", { action: "listConnections" });
-      const data = res?.data || res;
-      setConnections(Array.isArray(data?.connections) ? data.connections : []);
-    } catch (e) {
-      setError(String(e?.message || e));
-    } finally {
-      setLoading(false);
-    }
+    const r = await invokeFn("store-connector", { action: "listConnections" });
+    if (r.ok) setConnections(Array.isArray(r.data?.connections) ? r.data.connections : []);
+    else setError(r.error);
+    setLoading(false);
   }, []);
 
   React.useEffect(() => { load(); }, [load]);
@@ -76,7 +75,6 @@ export default function StoreConnectionsCard({ selectedId, onSelect, onSyncFinis
     setProgress({ staged: 0, failed: 0, page: 0 });
     try {
       let data = await call({ action: "startSync", connection_id: conn.id });
-      if (!data?.ok) throw new Error(data?.error?.message || data?.error || "Sync failed to start.");
       let staged = data.staged || 0;
       let failed = data.failed || 0;
       let page = 1;
@@ -84,7 +82,6 @@ export default function StoreConnectionsCard({ selectedId, onSelect, onSyncFinis
 
       while (data.has_more && page < MAX_PAGES) {
         data = await call({ action: "continueSync", connection_id: conn.id, run_id: data.run_id });
-        if (!data?.ok) throw new Error(data?.error?.message || data?.error || "Sync failed mid-run.");
         if (data.cancelled) break;
         staged += data.staged || 0;
         failed += data.failed || 0;

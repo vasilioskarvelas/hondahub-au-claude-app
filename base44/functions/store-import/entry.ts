@@ -132,11 +132,20 @@ async function fetchWooBatch(conn: any, cursor: string | null): Promise<{ mapped
  */
 async function fetchShopifyPublicBatch(conn: any, cursor: string | null): Promise<{ mapped: any[]; nextCursor: string | null; total: number | null }> {
   const page = cursor ? Number(cursor) : 1;
-  const origin = /^https?:\/\//i.test(conn.store_domain) ? conn.store_domain : `https://`;
+  const origin = /^https?:\/\//i.test(conn.store_domain) ? conn.store_domain : `https://${conn.store_domain}`;
   const res = await fetchWithTimeout(shopifyPublicPageUrl(origin, page), {
-    headers: { Accept: "application/json", "User-Agent": UA },
+    headers: {
+      Accept: "application/json, text/plain, */*",
+      "Accept-Language": "en-AU,en;q=0.9",
+      "User-Agent": UA,
+    },
   });
-  if (!res.ok) throw new Error(`store returned `);
+  if (!res.ok) {
+    // Include the response body: a bot-blocked or rate-limited store explains
+    // itself there, and a bare status sends you hunting for the wrong cause.
+    const body = await res.text().catch(() => "");
+    throw new Error(`store returned ${res.status}${body ? `: ${body.replace(/\s+/g, " ").slice(0, 200)}` : ""}`);
+  }
   const payload: any = await res.json();
   const list: any[] = Array.isArray(payload?.products) ? payload.products : [];
   // The feed carries no total, so a short page is what signals the end.
