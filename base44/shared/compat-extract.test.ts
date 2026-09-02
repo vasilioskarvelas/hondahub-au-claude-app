@@ -160,3 +160,62 @@ Deno.test("prompt tolerates a sparse item", () => {
   eq(typeof p, "string");
   eq(p.includes("Part"), true);
 });
+
+// --- universal parts vs other marques -------------------------------------------
+// A Holden manifold does not belong on a Honda marketplace. A universal
+// intercooler does. Conflating the two either floods the shop with the wrong
+// makes, or strands perfectly sellable generic parts in the review queue.
+
+Deno.test("a universal part is compatible, not unknown", () => {
+  eq(
+    deriveCompatStatus({
+      fits_honda: true, models: [], chassis_codes: [], engine_families: [],
+      confidence: 90, is_universal: true,
+    }),
+    "compatible",
+    "empty arrays are not a gap when the part fits everything",
+  );
+});
+
+Deno.test("a non-universal part with no fitment is still unknown", () => {
+  eq(
+    deriveCompatStatus({
+      fits_honda: true, models: [], chassis_codes: [], engine_families: [],
+      confidence: 90, is_universal: false,
+    }),
+    "unknown",
+    "confidence without fitment still earns nothing",
+  );
+});
+
+Deno.test("another marque's part stays incompatible even if flagged universal", () => {
+  eq(
+    deriveCompatStatus({
+      fits_honda: false, models: [], chassis_codes: [], engine_families: [],
+      confidence: 95, is_universal: true,
+    }),
+    "incompatible",
+  );
+});
+
+Deno.test("validateCompatResult carries is_universal through", () => {
+  const universal = validateCompatResult({
+    fits_honda: true, is_universal: true, models: [], confidence: 92,
+  })!;
+  eq(universal.honda_compatibility_status, "compatible");
+
+  const holden = validateCompatResult({
+    fits_honda: false, is_universal: false, models: [], confidence: 95,
+  })!;
+  eq(holden.honda_compatibility_status, "incompatible");
+
+  // A missing flag must not be read as universal.
+  const unset = validateCompatResult({ fits_honda: true, models: [], confidence: 92 })!;
+  eq(unset.honda_compatibility_status, "unknown");
+});
+
+Deno.test("the prompt distinguishes other makes from universal parts", () => {
+  const p = buildCompatPrompt({ title: "Universal Intercooler" }).toLowerCase();
+  eq(p.includes("universal"), true);
+  eq(p.includes("only when the part is specific to another make"), true);
+});

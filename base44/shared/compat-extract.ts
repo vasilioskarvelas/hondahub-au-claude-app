@@ -38,7 +38,14 @@ export const COMPAT_BATCH = 10;
 export const COMPAT_SCHEMA = {
   type: "object",
   properties: {
-    fits_honda: { type: "boolean", description: "False if this product has nothing to do with Hondas, or is universal-fit with no specific application." },
+    fits_honda: {
+      type: "boolean",
+      description: "True if this part CAN be fitted to a Honda — including universal parts that fit many cars. False ONLY when the part is specific to another make (a Holden manifold, a Ford strut, an RX-7 rotor housing).",
+    },
+    is_universal: {
+      type: "boolean",
+      description: "True for parts with no specific vehicle application — a universal intercooler, a generic oil catch can, tools and fluids. These still belong on a Honda marketplace.",
+    },
     models: { type: "array", items: { type: "string", enum: COMPAT_MODELS } },
     chassis_codes: { type: "array", items: { type: "string", enum: COMPAT_CHASSIS } },
     engine_families: { type: "array", items: { type: "string", enum: COMPAT_ENGINES } },
@@ -63,9 +70,12 @@ export function buildCompatPrompt(item: { title?: string; description?: string |
     "",
     "Rules:",
     "- Use ONLY what the text states or clearly implies. Do not use outside knowledge to widen fitment.",
-    "- If the text does not say what it fits, return empty arrays and a LOW confidence. Do not guess.",
-    "- fits_honda=false for products unrelated to Hondas, and for generic items (tools, fluids,",
-    "  batteries, cleaning products) that have no Honda-specific application.",
+    "- If the text does not say which Hondas it fits, return empty arrays and a LOW confidence. Do not guess.",
+    "- fits_honda=false ONLY when the part is specific to another make — a Holden manifold, a Ford",
+    "  strut, an RX-7 rotor housing. Those do not belong on a Honda marketplace.",
+    "- is_universal=true for parts with no specific vehicle application: a universal intercooler,",
+    "  a generic catch can, tools, fluids. Those DO belong here, so set fits_honda=true as well,",
+    "  leave the arrays empty, and give a HIGH confidence — you are confident it is universal.",
     "- Chassis codes: eg/ek are Civic generations, dc2/dc5 Integra, ep3/fn2/fk8/fl5 Civic Type R,",
     "  cl7/cl9 Accord Euro, fd2 Civic Type R sedan.",
     "- Engine families: b_series, d_series, k_series, j_series, f_series, h_series.",
@@ -116,10 +126,15 @@ export function deriveCompatStatus(result: {
   chassis_codes: string[];
   engine_families: string[];
   confidence: number;
+  is_universal?: boolean;
 }): string {
   if (!result.fits_honda) return HondaCompatibilityStatus.INCOMPATIBLE;
+  // A universal part is the one case where empty arrays are not a gap: it fits
+  // Hondas precisely BECAUSE it has no specific application. Treating it as
+  // unknown would strand generic intercoolers and catch cans in the review
+  // queue forever, alongside parts that genuinely belong to another make.
   const hasFitment = result.models.length > 0 || result.chassis_codes.length > 0 || result.engine_families.length > 0;
-  if (!hasFitment) return HondaCompatibilityStatus.UNKNOWN;
+  if (!hasFitment && !result.is_universal) return HondaCompatibilityStatus.UNKNOWN;
   if (result.confidence >= COMPATIBILITY_CONFIDENCE_THRESHOLD) return HondaCompatibilityStatus.COMPATIBLE;
   if (result.confidence >= LIKELY_THRESHOLD) return HondaCompatibilityStatus.LIKELY_COMPATIBLE;
   return HondaCompatibilityStatus.UNKNOWN;
@@ -147,6 +162,7 @@ export function validateCompatResult(raw: any): Record<string, any> | null {
     fits_honda: raw.fits_honda,
     models, chassis_codes: chassis, engine_families: engines,
     confidence,
+    is_universal: raw.is_universal === true,
   };
   const status = deriveCompatStatus(cleaned);
 
