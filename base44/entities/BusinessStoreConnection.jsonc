@@ -11,7 +11,8 @@
       "enum": [
         "shopify",
         "woocommerce",
-        "csv"
+        "csv",
+        "website"
       ],
       "description": "The e-commerce platform. Shopify uses OAuth ownership verification; WooCommerce uses REST API key validation."
     },

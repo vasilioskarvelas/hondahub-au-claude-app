@@ -58,9 +58,9 @@ export default function StoreImport() {
         </div>
       </header>
 
-      <WebsiteScanCard />
-
-      <CsvUploadCard onImported={() => setQueueKey((k) => k + 1)} />
+      {/* Order matters: automatic routes first, spreadsheet upload last. Most
+          businesses never need to see the CSV card at all. */}
+      <WebsiteScanCard onConnected={() => setQueueKey((k) => k + 1)} />
 
       <StoreConnectionsCard
         selectedId={selected?.id}
@@ -71,6 +71,15 @@ export default function StoreImport() {
       <ImportQueue key={`${selected?.id || "none"}-${queueKey}`} connection={selected} />
 
       <ConnectShopifyCard />
+
+      <details className="rounded-2xl border border-border bg-card">
+        <summary className="cursor-pointer p-5 text-sm font-bold">
+          Can't import automatically? Upload a spreadsheet instead
+        </summary>
+        <div className="border-t border-border">
+          <CsvUploadCard onImported={() => setQueueKey((k) => k + 1)} />
+        </div>
+      </details>
     </div>
   );
 }

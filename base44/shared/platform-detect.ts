@@ -20,6 +20,7 @@
 export const StoreImportMethod = Object.freeze({
   SHOPIFY_OAUTH: "shopify_oauth",
   WOOCOMMERCE_API: "woocommerce_api",
+  WEBSITE_SCAN: "website_scan",
   CSV_UPLOAD: "csv_upload",
 });
 
@@ -45,18 +46,24 @@ const ROUTE = {
   [DetectedPlatform.WOOCOMMERCE]: {
     method: StoreImportMethod.WOOCOMMERCE_API,
     effort: "automatic",
-    headline: "Automatic, one setup step",
-    detail: "Generate a read-only API key in your WooCommerce settings and paste it once. Everything imports from there.",
-    supported: false, // Section 3 — spec'd, not built yet.
+    headline: "Fully automatic",
+    detail: "We can read your product catalogue straight from your store. Nothing to install or set up.",
+    supported: true,
   },
 };
 
+/**
+ * Everything else falls back to reading the website itself: product pages are
+ * discovered from the sitemap and read one by one. It works on bespoke stores
+ * with no API, but it is slower and less exact than a real product feed, so it
+ * is described as such rather than promised as equivalent.
+ */
 const FALLBACK = {
-  method: StoreImportMethod.CSV_UPLOAD,
-  effort: "manual",
-  headline: "Spreadsheet upload",
-  detail: "We could not find a supported store platform, so export your products to CSV and upload the file. Most store software and accounting packages can export one.",
-  supported: false, // CSV importer not built yet.
+  method: StoreImportMethod.WEBSITE_SCAN,
+  effort: "automatic_slow",
+  headline: "Automatic, reads your website",
+  detail: "Your store doesn't use a platform we can read directly, so we'll go through your website page by page and pull out your products. This takes longer and may need a few corrections.",
+  supported: true,
 };
 
 /** Normalise a user-entered website into a bare https origin, or null. */

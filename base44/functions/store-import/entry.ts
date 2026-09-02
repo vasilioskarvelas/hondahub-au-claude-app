@@ -9,6 +9,15 @@ import {
 } from "../../shared/store-import.ts";
 import { normaliseWebsite, fingerprintPlatform, recommendImportMethod } from "../../shared/platform-detect.ts";
 import { parseCsv, detectColumns, mapCsvRow, previewCsv, CSV_MAX_BYTES, CSV_MAX_ROWS } from "../../shared/csv-import.ts";
+import { mapWooProduct, wooPageUrl, wooPagination } from "../../shared/woo-import.ts";
+import {
+  parseSitemapUrls, isSitemapIndexEntry, looksLikeProductUrl,
+  extractJsonLdBlocks, findJsonLdProduct, fromJsonLdProduct, fromMetaTags,
+  buildExtractionPrompt, mapExtractedProduct, EXTRACTION_SCHEMA, EXTRACT_MAX_PAGES,
+} from "../../shared/web-extract.ts";
+
+/** Identify honestly to the stores we read, rather than impersonating a browser. */
+const UA = "HondaHubStoreImport/1.0 (+https://hondahub-au-claude-app.base44.app)";
 import { decryptToken } from "../../shared/store-crypto.ts";
 import { createImportedListing } from "../../shared/marketplace.ts";
 
@@ -72,6 +81,99 @@ function nextPageInfo(linkHeader: string | null): string | null {
   } catch {
     return null;
   }
+}
+
+/** How many product pages one website-scan batch reads. Kept small: each page is
+ * a fetch and possibly an LLM call, so a large batch risks the function timeout. */
+const WEBSITE_BATCH = 8;
+
+/**
+ * Read one page of a WooCommerce catalogue via the public Store API.
+ * `cursor` is the page number as a string.
+ */
+async function fetchWooBatch(conn: any, cursor: string | null): Promise<{ mapped: any[]; nextCursor: string | null; total: number | null }> {
+  const page = cursor ? Number(cursor) : 1;
+  const origin = /^https?:\/\//i.test(conn.store_domain) ? conn.store_domain : `https://${conn.store_domain}`;
+  const res = await fetchWithTimeout(wooPageUrl(origin, page), {
+    headers: { Accept: "application/json", "User-Agent": UA },
+  });
+  if (!res.ok) throw new Error(`store returned ${res.status}`);
+  const products: any[] = await res.json();
+  const list = Array.isArray(products) ? products : [];
+  const { total, totalPages } = wooPagination(res.headers);
+  // Where the pagination headers are absent, stop on the first empty page
+  // rather than assuming a single page exists.
+  const more = totalPages !== null ? page < totalPages : list.length > 0;
+  return {
+    mapped: list.map((p) => mapWooProduct(p, conn)).filter(Boolean),
+    nextCursor: more ? String(page + 1) : null,
+    total,
+  };
+}
+
+/**
+ * Read one batch of product pages from a bespoke website.
+ *
+ * Product URLs come from sitemap.xml, which is re-fetched each batch and sliced
+ * by index. That costs one extra request per batch but avoids stashing hundreds
+ * of URLs in `sync_cursor`, which is a single string field.
+ *
+ * Each page is read in preference order — JSON-LD, then meta tags, then the
+ * model — so we only pay for an LLM call on pages that publish nothing
+ * structured.
+ */
+async function fetchWebsiteBatch(
+  base44: any, conn: any, cursor: string | null,
+): Promise<{ mapped: any[]; nextCursor: string | null; total: number | null }> {
+  const start = cursor ? Number(cursor) || 0 : 0;
+  const origin = /^https?:\/\//i.test(conn.store_domain) ? conn.store_domain : `https://${conn.store_domain}`;
+
+  const smRes = await fetchWithTimeout(`${origin.replace(/\/+$/, "")}/sitemap.xml`, {
+    headers: { Accept: "application/xml,text/xml", "User-Agent": UA },
+  });
+  if (!smRes.ok) throw new Error(`no sitemap at ${origin}/sitemap.xml (${smRes.status})`);
+  const urls = parseSitemapUrls(await smRes.text())
+    .filter((u) => !isSitemapIndexEntry(u))
+    .filter(looksLikeProductUrl)
+    .slice(0, EXTRACT_MAX_PAGES);
+  if (!urls.length) throw new Error("no product pages found in sitemap.xml");
+
+  const slice = urls.slice(start, start + WEBSITE_BATCH);
+  const mapped: any[] = [];
+
+  for (const pageUrl of slice) {
+    try {
+      const pRes = await fetchWithTimeout(pageUrl, { headers: { Accept: "text/html", "User-Agent": UA } });
+      if (!pRes.ok) continue;
+      const html = (await pRes.text()).slice(0, 400_000);
+
+      // 1. structured data the site published itself
+      let data = fromJsonLdProduct(findJsonLdProduct(extractJsonLdBlocks(html)));
+      let source = "json_ld";
+      // 2. meta tags
+      if (!data || data.price_cents === null) {
+        const meta = fromMetaTags(html);
+        if (meta && (meta.price_cents !== null || !data)) { data = meta; source = "meta_tags"; }
+      }
+      // 3. the model, only for pages that expose nothing usable
+      if (!data || data.price_cents === null) {
+        const llm = await base44.integrations.Core.InvokeLLM({
+          prompt: buildExtractionPrompt(pageUrl, html),
+          response_json_schema: EXTRACTION_SCHEMA,
+        }).catch(() => null);
+        const out = llm?.is_product_page === false ? null : llm;
+        if (out?.title) { data = out; source = "ai"; }
+      }
+      if (!data) continue;
+      const item = mapExtractedProduct(data, pageUrl, conn, source);
+      if (item) mapped.push(item);
+    } catch {
+      // Per-page isolation: one unreachable or malformed page must not end the run.
+    }
+  }
+
+  const next = start + WEBSITE_BATCH;
+  return { mapped, nextCursor: next < urls.length ? String(next) : null, total: urls.length };
 }
 
 /** Resolve the import poster: the business's active owner (ADR-046 Decision 1). */
@@ -145,12 +247,19 @@ Deno.serve(async (req) => {
       if (conn.connection_status !== ConnectionStatus.VERIFIED) {
         return err("CONNECTION_NOT_VERIFIED", 409, { connection_status: conn.connection_status });
       }
-      if (conn.platform !== StorePlatform.SHOPIFY) {
-        return err("PLATFORM_NOT_SUPPORTED", 422, { platform: conn.platform, supported: [StorePlatform.SHOPIFY] });
+      const SYNCABLE = [StorePlatform.SHOPIFY, StorePlatform.WOOCOMMERCE, StorePlatform.WEBSITE];
+      if (!SYNCABLE.includes(conn.platform)) {
+        // CSV connections are populated by upload, not by a sync run.
+        return err("PLATFORM_NOT_SYNCABLE", 422, { platform: conn.platform, syncable: SYNCABLE });
       }
-      const encKey = secrets.get("STORE_TOKEN_ENC_KEY");
-      if (!encKey) return err("ENCRYPTION_NOT_CONFIGURED", 503, { secret: "STORE_TOKEN_ENC_KEY" });
-      if (!conn.shopify_access_token) return err("CONNECTION_NOT_AUTHENTICATED", 409);
+      // Only Shopify holds a stored credential, so only Shopify needs the
+      // encryption key. WooCommerce and website scanning read public data.
+      let encKey: string | undefined;
+      if (conn.platform === StorePlatform.SHOPIFY) {
+        encKey = secrets.get("STORE_TOKEN_ENC_KEY");
+        if (!encKey) return err("ENCRYPTION_NOT_CONFIGURED", 503, { secret: "STORE_TOKEN_ENC_KEY" });
+        if (!conn.shopify_access_token) return err("CONNECTION_NOT_AUTHENTICATED", 409);
+      }
 
       let runId: string;
       let cursor: string | null;
@@ -184,41 +293,36 @@ Deno.serve(async (req) => {
         }
       }
 
-      // ---- fetch one page from Shopify ----
-      let token: string;
+      // ---- fetch one batch, however this store is read ----
+      let batch: { mapped: any[]; nextCursor: string | null; total: number | null };
       try {
-        token = await decryptToken(conn.shopify_access_token, encKey);
+        if (conn.platform === StorePlatform.SHOPIFY) {
+          const token = await decryptToken(conn.shopify_access_token, encKey!);
+          const url = `https://${conn.store_domain}/admin/api/${SHOPIFY_API_VERSION}/products.json?limit=${PAGE_SIZE}` +
+            (cursor ? `&page_info=${encodeURIComponent(cursor)}` : "");
+          const res = await fetchWithTimeout(url, { headers: { "X-Shopify-Access-Token": token, Accept: "application/json" } });
+          if (!res.ok) throw new Error(`store returned ${res.status}`);
+          const payload: any = await res.json();
+          const products: any[] = Array.isArray(payload?.products) ? payload.products : [];
+          batch = {
+            mapped: products.map((p) => mapShopifyProduct(p, conn)).filter((m) => m && m.external_id && m.title),
+            nextCursor: nextPageInfo(res.headers.get("link")),
+            total: null,
+          };
+        } else if (conn.platform === StorePlatform.WOOCOMMERCE) {
+          batch = await fetchWooBatch(conn, cursor);
+        } else {
+          batch = await fetchWebsiteBatch(base44, conn, cursor);
+        }
       } catch (e) {
         await S.BusinessStoreConnection.update(conn.id, {
           sync_status: SyncStatus.FAILED, current_sync_run_id: null,
-          last_sync_finished_at: nowIso(), last_error: `credential decrypt failed: ${e.message}`,
-        });
-        return err("CREDENTIAL_DECRYPT_FAILED", 500);
-      }
-
-      const url = `https://${conn.store_domain}/admin/api/${SHOPIFY_API_VERSION}/products.json?limit=${PAGE_SIZE}` +
-        (cursor ? `&page_info=${encodeURIComponent(cursor)}` : "");
-      let res: Response;
-      try {
-        res = await fetchWithTimeout(url, { headers: { "X-Shopify-Access-Token": token, Accept: "application/json" } });
-      } catch (e) {
-        await S.BusinessStoreConnection.update(conn.id, {
-          sync_status: SyncStatus.FAILED, current_sync_run_id: null,
-          last_sync_finished_at: nowIso(), last_error: `fetch failed: ${e.message}`,
+          last_sync_finished_at: nowIso(), last_error: String(e.message).slice(0, 300),
         });
         return err("STORE_FETCH_FAILED", 502, { message: String(e.message).slice(0, 200) });
       }
-      if (!res.ok) {
-        const txt = await res.text().catch(() => "");
-        await S.BusinessStoreConnection.update(conn.id, {
-          sync_status: SyncStatus.FAILED, current_sync_run_id: null,
-          last_sync_finished_at: nowIso(), last_error: `store returned ${res.status}`,
-        });
-        return err("STORE_FETCH_FAILED", 502, { status: res.status, body: txt.slice(0, 200) });
-      }
-      const payload: any = await res.json();
-      const products: any[] = Array.isArray(payload?.products) ? payload.products : [];
-      let nextCursor = nextPageInfo(res.headers.get("link"));
+      const products = batch.mapped;
+      let nextCursor = batch.nextCursor;
 
       // ---- stage the page ----
       // Existing items for this connection, used for the duplicate waterfall.
@@ -229,11 +333,10 @@ Deno.serve(async (req) => {
       let staged = 0;
       let skipped = 0;
 
-      for (const product of products) {
+      for (const mapped of products) {
         if (processed + failed >= SYNC_MAX_PRODUCTS) { nextCursor = null; break; }
         try {
-          const mapped = mapShopifyProduct(product, conn);
-          if (!mapped.external_id || !mapped.title) { failed++; continue; }
+          if (!mapped || !mapped.external_id || !mapped.title) { failed++; continue; }
           // Re-sync of a product we already staged: leave the existing row alone
           // rather than creating a second one or silently overwriting reviewer edits.
           const already = seen.find((e: any) => String(e.external_id) === mapped.external_id);
@@ -262,7 +365,9 @@ Deno.serve(async (req) => {
       const done = !nextCursor;
       await S.BusinessStoreConnection.update(conn.id, {
         sync_cursor: nextCursor,
-        sync_total: (fresh.sync_total || 0) + products.length,
+        // Woo and website scans know the real catalogue size up front; Shopify's
+        // cursor pagination does not, so there we accumulate what we have seen.
+        sync_total: batch.total !== null ? batch.total : (fresh.sync_total || 0) + products.length,
         sync_processed: processed,
         sync_failed: failed,
         ...(done
@@ -273,6 +378,69 @@ Deno.serve(async (req) => {
         ok: true, run_id: runId, has_more: !done, staged, skipped, failed,
         processed, page_size: products.length,
         capped: processed + failed >= SYNC_MAX_PRODUCTS,
+      });
+    }
+
+    // ---- connectWebsite ----
+    // One-step onboarding: the business gives their website and nothing else.
+    // We fingerprint it, pick the best route, and create a connection that is
+    // immediately syncable — no API key, no OAuth, no spreadsheet.
+    //
+    // Shopify is the exception: its Admin API needs OAuth, so a detected Shopify
+    // store is handed back for the OAuth flow rather than connected here.
+    //
+    // Ownership rests on the business already being verified by a moderator.
+    // Reading a public catalogue proves nothing about who owns it, so the method
+    // is recorded as self_declared, not as proved ownership.
+    if (action === "connectWebsite") {
+      const { business_id } = body;
+      if (!business_id) return err("VALIDATION_FAILED", 422, { business_id: "required" });
+      if (!canAccessBusiness(allowed, business_id)) return err("PERMISSION_DENIED", 403);
+      const site = normaliseWebsite(body.website);
+      if (!site) return err("VALIDATION_FAILED", 422, { website: "enter a valid website address" });
+      const business = await S.Business.get(business_id).catch(() => null);
+      if (!business) return err("RESOURCE_NOT_FOUND", 404, { business_id: "not found" });
+
+      let res: Response;
+      try {
+        res = await fetchWithTimeout(site, { redirect: "follow", headers: { "User-Agent": UA, Accept: "text/html" } });
+      } catch (e) {
+        return err("SITE_UNREACHABLE", 502, { website: site, message: String(e.message).slice(0, 200) });
+      }
+      if (!res.ok) return err("SITE_UNREACHABLE", 502, { website: site, status: res.status });
+      const html = (await res.text()).slice(0, 400_000);
+      const headers: Record<string, string> = {};
+      res.headers.forEach((v, k) => { headers[k] = v; });
+      const rec = recommendImportMethod(fingerprintPlatform(html, headers, res.url || site));
+
+      if (rec.platform === "shopify") {
+        return json({
+          ok: true, requires_oauth: true, ...rec,
+          message: "This is a Shopify store — connect it with the Shopify button so we can read it securely.",
+        });
+      }
+
+      const platform = rec.platform === "woocommerce" ? StorePlatform.WOOCOMMERCE : StorePlatform.WEBSITE;
+      const host = new URL(site).hostname;
+      const existing = (await S.BusinessStoreConnection.filter({ business_id, platform }))
+        .find((c: any) => c.connection_status !== ConnectionStatus.DISCONNECTED);
+      const now = nowIso();
+      const conn = existing
+        ? await S.BusinessStoreConnection.update(existing.id, { store_domain: host, sync_status: SyncStatus.IDLE, last_error: null })
+        : await S.BusinessStoreConnection.create({
+          business_id, platform, store_domain: host,
+          store_name: business.name || host,
+          connection_status: ConnectionStatus.VERIFIED,
+          ownership_verified_at: now,
+          ownership_verification_method: "self_declared",
+          sync_status: SyncStatus.IDLE,
+        });
+
+      return json({
+        ok: true, requires_oauth: false, connection_id: conn.id, ...rec,
+        message: rec.platform === "woocommerce"
+          ? "Connected. We can read your catalogue directly — start the import when you're ready."
+          : "Connected. We'll read your product pages one by one, which takes a little longer.",
       });
     }
 

@@ -93,31 +93,41 @@ Deno.test("Shopify routes to OAuth and is available today", () => {
   eq(r.coming_soon, null);
 });
 
-Deno.test("WooCommerce is recognised but flagged as not yet available", () => {
+Deno.test("WooCommerce routes to its API and is available today", () => {
   const r = recommendImportMethod(fingerprintPlatform(`<div class="woocommerce"><i class="wp-content"></i></div>`));
   eq(r.method, StoreImportMethod.WOOCOMMERCE_API);
-  eq(r.available_now, false, "Section 3 is spec'd, not built");
-  eq(r.coming_soon, DetectedPlatform.WOOCOMMERCE, "must say 'supported, not ready' — not 'unsupported'");
+  eq(r.effort, "automatic");
+  eq(r.available_now, true);
+  eq(r.coming_soon, null);
 });
 
-Deno.test("an unknown platform falls back to CSV rather than failing", () => {
+Deno.test("an unknown platform falls back to scanning the website, not to CSV", () => {
+  // A bespoke store still gets an automatic route; CSV is the manual last
+  // resort a business chooses, never what we push them to by default.
   const r = recommendImportMethod(fingerprintPlatform("<html><body>bespoke</body></html>"));
   eq(r.platform, DetectedPlatform.UNKNOWN);
-  eq(r.method, StoreImportMethod.CSV_UPLOAD);
-  eq(r.effort, "manual");
-  eq(r.coming_soon, null, "unknown is not 'coming soon' for a specific platform");
+  eq(r.method, StoreImportMethod.WEBSITE_SCAN);
+  eq(r.available_now, true);
+  eq(r.effort, "automatic_slow", "honest about being slower than a real feed");
+  eq(r.coming_soon, null);
 });
 
-Deno.test("a recognised-but-unbuilt platform never claims to be available", () => {
-  // Guards the failure mode where a business is routed down a dead end.
+Deno.test("every detected platform yields a route we can actually run", () => {
+  // Guards the failure mode where a business is routed down a dead end: any
+  // recommendation marked available must name an implemented method.
+  const IMPLEMENTED = new Set(Object.values(StoreImportMethod));
   for (const html of [
+    `<script src="https://cdn.shopify.com/x.js">`,
     `<div class="woocommerce wp-content"></div>`,
     `<script src="https://cdn11.bigcommerce.com/x.js">`,
     `<img src="https://static1.squarespace.com/x.png">`,
+    `<img src="https://wixstatic.com/x.png">`,
+    `<html><body>bespoke</body></html>`,
   ]) {
     const r = recommendImportMethod(fingerprintPlatform(html));
-    if (r.available_now && r.method !== StoreImportMethod.SHOPIFY_OAUTH) {
-      throw new Error(`unbuilt route claimed available: ${r.platform} → ${r.method}`);
+    eq(IMPLEMENTED.has(r.method), true, `unknown method for ${r.platform}: ${r.method}`);
+    if (!r.available_now && !r.coming_soon) {
+      throw new Error(`${r.platform} is neither available nor flagged coming soon — a dead end`);
     }
   }
 });

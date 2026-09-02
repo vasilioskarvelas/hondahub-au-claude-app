@@ -16,6 +16,7 @@ import { err } from "./http.ts";
 export const StorePlatform = Object.freeze({
   SHOPIFY: "shopify",
   WOOCOMMERCE: "woocommerce",
+  WEBSITE: "website",
   CSV: "csv",
 });
 export const STORE_PLATFORM_VALUES = Object.values(StorePlatform);
@@ -139,25 +140,39 @@ const CATEGORY_KEYWORDS: [string, string[]][] = [
   ["suspension", ["coilover", "suspension", "strut", "sway bar", "control arm", "bush", "shock absorber"]],
   ["wheels_tyres", ["wheel", "rim", "tyre", "tire", "hubcap"]],
   ["electronics", ["battery", "alternator", "starter motor", "ecu", "sensor", "wiring", "spark plug", "ignition coil", "fuse", "globe", "headlight"]],
-  ["engine", ["engine", "piston", "camshaft", "gasket", "oil pump", "timing belt", "cylinder head", "radiator"]],
+  ["engine", ["engine", "short block", "long block", "piston", "camshaft", "crankshaft", "conrod", "gasket", "oil pump", "timing belt", "cylinder head", "radiator"]],
   ["transmission", ["transmission", "gearbox", "clutch", "flywheel", "differential", "shifter"]],
   ["interior", ["seat", "steering wheel", "gauge", "harness", "floor mat", "dash"]],
   ["exterior", ["bumper", "spoiler", "body kit", "bonnet", "guard", "mirror", "grille"]],
   ["tools_equipment", ["tool", "jack", "charger", "tester", "spanner", "socket set"]],
-  ["performance_part", ["exhaust", "intake", "performance", "cat back", "header", "extractor"]],
+  // NB: no bare "performance" here. It shows up in marketing copy, tags and even
+  // business names ("A2R Batteries and Performance"), so it would hijack the
+  // category for products that are nothing of the sort.
+  ["performance_part", ["exhaust", "intake", "cat back", "header", "extractor", "turbo manifold"]],
 ];
 
 /**
  * Best-effort category inference from the product title/type/tags. Returns
- * `other` when nothing matches — never a guess. The result is always recorded
- * as ai_inferred provenance so a reviewer knows it was not source-confirmed.
+ * `other` when nothing matches — never a guess. Always recorded as ai_inferred
+ * provenance so a reviewer knows it was not source-confirmed.
+ *
+ * The LONGEST matching keyword wins, not the first category in the list. A more
+ * specific phrase beats a generic word appearing incidentally: "Stroker Turbo
+ * Forged Short Block" is an engine part described as turbo-suited, not a
+ * turbocharger, and "short block" (10 chars) outranks "turbo" (5). List order
+ * only breaks exact-length ties.
  */
 export function inferCategory(...text: unknown[]): string {
   const hay = text.map((t) => String(t || "")).join(" ").toLowerCase();
+  let best: { category: string; length: number } | null = null;
   for (const [category, keywords] of CATEGORY_KEYWORDS) {
-    if (keywords.some((k) => hay.includes(k))) return category;
+    for (const k of keywords) {
+      if (hay.includes(k) && (!best || k.length > best.length)) {
+        best = { category, length: k.length };
+      }
+    }
   }
-  return "other";
+  return best ? best.category : "other";
 }
 
 /**
