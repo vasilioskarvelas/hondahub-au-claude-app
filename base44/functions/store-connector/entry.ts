@@ -2,17 +2,20 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
 import { secrets } from 'base44:runtime';
 import { json, err } from "../../shared/http.ts";
 import {
-  requireStoreImportAdmin, StorePlatform, ConnectionStatus,
-  STORE_PLATFORM_VALUES,
+  requireBusinessStoreAccess, accessibleBusinessIds, canAccessBusiness,
+  StorePlatform, ConnectionStatus, STORE_PLATFORM_VALUES,
 } from "../../shared/store-import.ts";
 import { encryptToken } from "../../shared/store-crypto.ts";
 
 /**
  * StoreConnectorService (ADR-046 Phase 1, Section 2 — Shopify Connector). [redeploy]
  *
- * Admin-only (Phase 1 feature flag). Two surfaces:
+ * Business-scoped: a business partner manages their OWN store connections;
+ * admins may act on any. RLS on BusinessStoreConnection stays admin-only, so
+ * this function uses the service role behind its own membership gate
+ * (ADR-036 backend-functions-only). Two surfaces:
  *
- *  1. JSON action handlers (POST, admin-authenticated):
+ *  1. JSON action handlers (POST, business-member or admin):
  *     - connectStore: create a BusinessStoreConnection (unverified) + start the
  *       Shopify OAuth flow (generates oauth_state, returns the authorize URL).
  *     - listConnections / getConnection / disconnectStore.
@@ -22,7 +25,7 @@ import { encryptToken } from "../../shared/store-crypto.ts";
  *       fetches shop info, marks the connection verified.
  *
  * The callback is a webhook-style endpoint: anyone can reach it, so the oauth_state
- * token (a random UUID only the admin-initiated connectStore could have written)
+ * token (a random UUID only an authorised connectStore call could have written)
  * is the authenticity boundary — NOT user auth. A mismatched/missing state is
  * rejected before any secret is touched.
  *
@@ -224,11 +227,15 @@ Deno.serve(async (req) => {
       return new Response(htmlPage("Store connected", "Your Shopify store is now verified and ready for import.", false), { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } });
     }
 
-    // ============ JSON action handlers (POST, admin-only) ============
+    // ============ JSON action handlers (POST, business-scoped) ============
+    // Business partners manage their OWN store connections; admins may act on
+    // any. Membership is resolved server-side and every connection touched below
+    // is checked against it, so one business can never reach another's rows.
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
-    const guard = requireStoreImportAdmin(user);
+    const guard = await requireBusinessStoreAccess(base44, user);
     if (guard) return guard;
+    const allowed = await accessibleBusinessIds(base44, user);
 
     const body = await req.json().catch(() => ({}));
     const action = body.action;
@@ -237,6 +244,8 @@ Deno.serve(async (req) => {
     if (action === "connectStore") {
       const { business_id, platform, store_domain } = body;
       if (!business_id) return err("VALIDATION_FAILED", 422, { business_id: "required" });
+      // A business may only connect a store to itself.
+      if (!canAccessBusiness(allowed, business_id)) return err("PERMISSION_DENIED", 403);
       if (!STORE_PLATFORM_VALUES.includes(platform)) return err("VALIDATION_FAILED", 422, { platform: "invalid" });
       const domain = normalizeDomain(store_domain);
       if (!domain) return err("VALIDATION_FAILED", 422, { store_domain: "required" });
@@ -247,12 +256,12 @@ Deno.serve(async (req) => {
       const business = await base44.asServiceRole.entities.Business.get(business_id).catch(() => null);
       if (!business) return err("RESOURCE_NOT_FOUND", 404, { business_id: "not found" });
       // Duplicate check: one active (non-disconnected) connection per business+platform+domain.
-      const existing = await base44.entities.BusinessStoreConnection.filter({ business_id, platform, store_domain: domain });
+      const existing = await base44.asServiceRole.entities.BusinessStoreConnection.filter({ business_id, platform, store_domain: domain });
       const active = existing.find((c: any) => c.connection_status !== ConnectionStatus.DISCONNECTED);
       if (active) return err("CONNECTION_ALREADY_EXISTS", 409, { connection_id: active.id, connection_status: active.connection_status });
       // Create the unverified connection + start the OAuth flow.
       const oauthState = crypto.randomUUID();
-      const conn = await base44.entities.BusinessStoreConnection.create({
+      const conn = await base44.asServiceRole.entities.BusinessStoreConnection.create({
         business_id, platform, store_domain: domain,
         connection_status: ConnectionStatus.UNVERIFIED,
         sync_status: "idle",
@@ -278,9 +287,17 @@ Deno.serve(async (req) => {
     // ---- listConnections ----
     if (action === "listConnections") {
       const filter: any = {};
-      if (body.business_id) filter.business_id = body.business_id;
+      if (body.business_id) {
+        if (!canAccessBusiness(allowed, body.business_id)) return err("PERMISSION_DENIED", 403);
+        filter.business_id = body.business_id;
+      } else if (allowed !== "all" && allowed.length === 1) {
+        filter.business_id = allowed[0];
+      }
       if (body.platform && STORE_PLATFORM_VALUES.includes(body.platform)) filter.platform = body.platform;
-      const conns = await base44.entities.BusinessStoreConnection.filter(filter, "-created_date", 200);
+      const rows = await base44.asServiceRole.entities.BusinessStoreConnection.filter(filter, "-created_date", 200);
+      // Post-filter regardless: a member of several businesses cannot be
+      // narrowed by the single-business query above.
+      const conns = allowed === "all" ? rows : rows.filter((c: any) => canAccessBusiness(allowed, c.business_id));
       return json({ ok: true, connections: conns.map(sanitizeConnection) });
     }
 
@@ -288,8 +305,9 @@ Deno.serve(async (req) => {
     if (action === "getConnection") {
       const { connection_id } = body;
       if (!connection_id) return err("VALIDATION_FAILED", 422, { connection_id: "required" });
-      const conn = await base44.entities.BusinessStoreConnection.get(connection_id).catch(() => null);
+      const conn = await base44.asServiceRole.entities.BusinessStoreConnection.get(connection_id).catch(() => null);
       if (!conn) return err("RESOURCE_NOT_FOUND", 404);
+      if (!canAccessBusiness(allowed, conn.business_id)) return err("PERMISSION_DENIED", 403);
       return json({ ok: true, connection: sanitizeConnection(conn) });
     }
 
@@ -297,9 +315,10 @@ Deno.serve(async (req) => {
     if (action === "disconnectStore") {
       const { connection_id } = body;
       if (!connection_id) return err("VALIDATION_FAILED", 422, { connection_id: "required" });
-      const conn = await base44.entities.BusinessStoreConnection.get(connection_id).catch(() => null);
+      const conn = await base44.asServiceRole.entities.BusinessStoreConnection.get(connection_id).catch(() => null);
       if (!conn) return err("RESOURCE_NOT_FOUND", 404);
-      const updated = await base44.entities.BusinessStoreConnection.update(connection_id, {
+      if (!canAccessBusiness(allowed, conn.business_id)) return err("PERMISSION_DENIED", 403);
+      const updated = await base44.asServiceRole.entities.BusinessStoreConnection.update(connection_id, {
         connection_status: ConnectionStatus.DISCONNECTED,
         shopify_access_token: null,
         shopify_shop_id: null,

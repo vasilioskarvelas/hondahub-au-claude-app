@@ -281,3 +281,60 @@ export function stageStatus(
   }
   return ImportItemStatus.READY_FOR_APPROVAL;
 }
+
+// ============================================================================
+// Business self-serve access control
+//
+// Phase 1 was admin-only. Business partners now manage their OWN store import:
+// connect a site, run a sync, and approve their own products.
+//
+// RLS on BusinessStoreConnection and StoreImportItem deliberately stays
+// admin-only. Loosening it would expose every business's connection rows —
+// including credential fields — to direct entity access from any member of any
+// business. Instead the backend keeps using the service role and enforces
+// membership here, which is the ADR-036 backend-functions-only pattern: the
+// function gate is the boundary, RLS is defence in depth behind it.
+// ============================================================================
+
+/** Businesses this user may manage imports for. Admins get every business. */
+export async function accessibleBusinessIds(base44: any, user: any): Promise<string[] | "all"> {
+  if (!user) return [];
+  if (user.role === "admin") return "all";
+  const memberships = await base44.asServiceRole.entities.BusinessMembership.filter({
+    user_id: user.id, status: "active",
+  });
+  return memberships.map((m: any) => m.business_id).filter(Boolean);
+}
+
+/**
+ * Gate for every store-import action. Returns an error Response to return
+ * directly, or null when the caller may act on `businessId`.
+ *
+ * `businessId` omitted means "any business this user belongs to" — used by list
+ * actions, which then scope their own results.
+ *
+ * A user who is not a member gets PERMISSION_DENIED, never RESOURCE_NOT_FOUND
+ * with detail, so this cannot be used to probe which business ids exist.
+ */
+export async function requireBusinessStoreAccess(
+  base44: any,
+  user: any,
+  businessId?: string | null,
+): Promise<Response | null> {
+  if (!user) return err("AUTH_REQUIRED", 401);
+  if (user.account_status === "banned" || user.account_status === "suspended") {
+    return err("PERMISSION_DENIED", 403, { reason: "account not in good standing" });
+  }
+  const allowed = await accessibleBusinessIds(base44, user);
+  if (allowed === "all") return null;
+  if (!allowed.length) return err("PERMISSION_DENIED", 403, { reason: "not a member of any business" });
+  if (businessId && !allowed.includes(businessId)) {
+    return err("PERMISSION_DENIED", 403, { reason: "not a member of this business" });
+  }
+  return null;
+}
+
+/** True when this user may act on the given business. */
+export function canAccessBusiness(allowed: string[] | "all", businessId: string): boolean {
+  return allowed === "all" || allowed.includes(businessId);
+}

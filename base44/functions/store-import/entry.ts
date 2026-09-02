@@ -2,10 +2,12 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
 import { secrets } from 'base44:runtime';
 import { json, err } from "../../shared/http.ts";
 import {
-  requireStoreImportAdmin, ConnectionStatus, SyncStatus, ImportItemStatus,
+  requireBusinessStoreAccess, accessibleBusinessIds, canAccessBusiness,
+  ConnectionStatus, SyncStatus, ImportItemStatus,
   StorePlatform, SYNC_MAX_PRODUCTS, SYNC_FETCH_TIMEOUT_MS,
   mapShopifyProduct, detectDuplicate, stageStatus,
 } from "../../shared/store-import.ts";
+import { normaliseWebsite, fingerprintPlatform, recommendImportMethod } from "../../shared/platform-detect.ts";
 import { decryptToken } from "../../shared/store-crypto.ts";
 import { createImportedListing } from "../../shared/marketplace.ts";
 
@@ -84,12 +86,53 @@ Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
-    const guard = requireStoreImportAdmin(user);
+    const guard = await requireBusinessStoreAccess(base44, user);
     if (guard) return guard;
+    // Resolved once per request; every resource touched below is checked against
+    // it, so a member of business A can never reach business B's data.
+    const allowed = await accessibleBusinessIds(base44, user);
 
     const body = await req.json().catch(() => ({}));
     const action = body.action;
     const S = base44.asServiceRole.entities;
+
+    // ---- detectPlatform ----
+    // Scans a business's website and reports the fastest import route available.
+    // Read-only and side-effect free: it stores nothing and creates no connection.
+    if (action === "detectPlatform") {
+      const site = normaliseWebsite(body.website);
+      if (!site) return err("VALIDATION_FAILED", 422, { website: "enter a valid website address" });
+      let res: Response;
+      try {
+        res = await fetchWithTimeout(site, {
+          redirect: "follow",
+          headers: {
+            // Identify honestly rather than impersonating a browser.
+            "User-Agent": "HondaHubStoreImport/1.0 (+https://hondahub-au-claude-app.base44.app)",
+            Accept: "text/html,application/xhtml+xml",
+          },
+        });
+      } catch (e) {
+        return json({
+          ok: true, reachable: false, website: site,
+          message: `Could not reach ${site}. Check the address, or upload a product spreadsheet instead.`,
+          detail: String(e.message).slice(0, 200),
+        });
+      }
+      if (!res.ok) {
+        return json({
+          ok: true, reachable: false, website: site, status: res.status,
+          message: `${site} responded with ${res.status}. Check the address, or upload a product spreadsheet instead.`,
+        });
+      }
+      // Cap the body we read: fingerprints live in the head and early markup, and
+      // an unbounded read of an arbitrary URL is a memory risk.
+      const html = (await res.text()).slice(0, 400_000);
+      const headers: Record<string, string> = {};
+      res.headers.forEach((v, k) => { headers[k] = v; });
+      const fp = fingerprintPlatform(html, headers, res.url || site);
+      return json({ ok: true, reachable: true, website: site, ...recommendImportMethod(fp) });
+    }
 
     // ---- startSync / continueSync ----
     if (action === "startSync" || action === "continueSync") {
@@ -97,6 +140,7 @@ Deno.serve(async (req) => {
       if (!connection_id) return err("VALIDATION_FAILED", 422, { connection_id: "required" });
       const conn = await S.BusinessStoreConnection.get(connection_id).catch(() => null);
       if (!conn) return err("RESOURCE_NOT_FOUND", 404);
+      if (!canAccessBusiness(allowed, conn.business_id)) return err("PERMISSION_DENIED", 403);
       if (conn.connection_status !== ConnectionStatus.VERIFIED) {
         return err("CONNECTION_NOT_VERIFIED", 409, { connection_status: conn.connection_status });
       }
@@ -237,6 +281,7 @@ Deno.serve(async (req) => {
       if (!connection_id) return err("VALIDATION_FAILED", 422, { connection_id: "required" });
       const conn = await S.BusinessStoreConnection.get(connection_id).catch(() => null);
       if (!conn) return err("RESOURCE_NOT_FOUND", 404);
+      if (!canAccessBusiness(allowed, conn.business_id)) return err("PERMISSION_DENIED", 403);
       if (conn.sync_status !== SyncStatus.SYNCING) return err("NO_ACTIVE_SYNC", 409, { sync_status: conn.sync_status });
       await S.BusinessStoreConnection.update(conn.id, { sync_cancel_requested_at: nowIso() });
       return json({ ok: true, cancel_requested: true });
@@ -246,10 +291,19 @@ Deno.serve(async (req) => {
     if (action === "listImportItems") {
       const filter: any = {};
       if (body.connection_id) filter.connection_id = body.connection_id;
-      if (body.business_id) filter.business_id = body.business_id;
       if (body.status) filter.status = body.status;
+      if (body.business_id) {
+        if (!canAccessBusiness(allowed, body.business_id)) return err("PERMISSION_DENIED", 403);
+        filter.business_id = body.business_id;
+      } else if (allowed !== "all" && allowed.length === 1) {
+        // Narrow at the query rather than relying only on the post-filter below.
+        filter.business_id = allowed[0];
+      }
       const limit = Number.isInteger(body.limit) && body.limit > 0 && body.limit <= 200 ? body.limit : 50;
-      const items = await S.StoreImportItem.filter(filter, "-created_date", limit);
+      const rows = await S.StoreImportItem.filter(filter, "-created_date", limit);
+      // Post-filter regardless: a caller can pass any connection_id, and a member
+      // of several businesses cannot be narrowed by a single query above.
+      const items = allowed === "all" ? rows : rows.filter((r: any) => canAccessBusiness(allowed, r.business_id));
       return json({ ok: true, items });
     }
 
@@ -259,6 +313,7 @@ Deno.serve(async (req) => {
       if (!item_id) return err("VALIDATION_FAILED", 422, { item_id: "required" });
       const item = await S.StoreImportItem.get(item_id).catch(() => null);
       if (!item) return err("RESOURCE_NOT_FOUND", 404);
+      if (!canAccessBusiness(allowed, item.business_id)) return err("PERMISSION_DENIED", 403);
       return json({ ok: true, item });
     }
 
@@ -268,6 +323,7 @@ Deno.serve(async (req) => {
       if (!item_id) return err("VALIDATION_FAILED", 422, { item_id: "required" });
       const item = await S.StoreImportItem.get(item_id).catch(() => null);
       if (!item) return err("RESOURCE_NOT_FOUND", 404);
+      if (!canAccessBusiness(allowed, item.business_id)) return err("PERMISSION_DENIED", 403);
       if (item.status === ImportItemStatus.APPROVED || item.status === ImportItemStatus.REJECTED) {
         return err("ITEM_ALREADY_RESOLVED", 409, { status: item.status });
       }
@@ -321,6 +377,7 @@ Deno.serve(async (req) => {
       if (!item_id) return err("VALIDATION_FAILED", 422, { item_id: "required" });
       const item = await S.StoreImportItem.get(item_id).catch(() => null);
       if (!item) return err("RESOURCE_NOT_FOUND", 404);
+      if (!canAccessBusiness(allowed, item.business_id)) return err("PERMISSION_DENIED", 403);
       if (item.status === ImportItemStatus.APPROVED || item.status === ImportItemStatus.REJECTED) {
         return err("ITEM_ALREADY_RESOLVED", 409, { status: item.status });
       }

@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/AuthContext";
 import ConnectShopifyCard from "@/components/store-import/ConnectShopifyCard";
 import StoreConnectionsCard from "@/components/store-import/StoreConnectionsCard";
 import ImportQueue from "@/components/store-import/ImportQueue";
+import WebsiteScanCard from "@/components/store-import/WebsiteScanCard";
 
 /**
  * StoreImport — Phase 1 admin surface for Business Store Import (ADR-046).
@@ -21,13 +22,18 @@ export default function StoreImport() {
   const [selected, setSelected] = React.useState(null);
   const [queueKey, setQueueKey] = React.useState(0);
 
-  if (user?.role !== "admin") {
+  // Sign-in is the only gate rendered here. Whether this user may actually manage
+  // a store is decided server-side from their BusinessMembership — the backend is
+  // the boundary, and the cards below surface what it returns. Rendering an
+  // admin-only wall would now be wrong as well as unhelpful: business partners
+  // manage their own imports.
+  if (!user) {
     return (
       <div className="mx-auto max-w-md py-20 text-center">
         <ShieldAlert className="mx-auto mb-4 h-10 w-10 text-destructive" />
-        <h2 className="text-lg font-bold">Admin access required</h2>
+        <h2 className="text-lg font-bold">Sign in required</h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          Business Store Import is an admin-only test feature (ADR-046 Phase 1).
+          Sign in with the account linked to your business to manage store imports.
         </p>
         <Link to="/" className="mt-4 inline-block text-sm text-primary hover:underline">
           Go back home
@@ -45,10 +51,12 @@ export default function StoreImport() {
         <div>
           <h1 className="text-2xl font-black tracking-tight">Business Store Import</h1>
           <p className="text-sm text-muted-foreground">
-            ADR-046 Phase 1 — admin test build. Shopify only.
+            Bring your product catalogue into the Honda Hub marketplace.
           </p>
         </div>
       </header>
+
+      <WebsiteScanCard />
 
       <StoreConnectionsCard
         selectedId={selected?.id}
