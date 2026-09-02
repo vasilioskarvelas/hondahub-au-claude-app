@@ -14,7 +14,7 @@ import { mapShopifyProduct } from "./store-import.ts";
 import {
   parseSitemapUrls, isSitemapIndexEntry, looksLikeProductUrl, parsePriceText,
   extractJsonLdBlocks, findJsonLdProduct, fromJsonLdProduct, fromMetaTags,
-  htmlForExtraction, absolutiseUrl, mapExtractedProduct, fromHtmlHeuristics,
+  htmlForExtraction, absolutiseUrl, mapExtractedProduct, fromHtmlHeuristics, extractSiteLogo,
 } from "./web-extract.ts";
 
 function eq(actual: unknown, expected: unknown, msg?: string) {
@@ -351,4 +351,34 @@ Deno.test("results from the page are source-confirmed, not inferred", () => {
   const m = mapExtractedProduct(mustExtract(BESPOKE_PAGE, PAGE_URL), PAGE_URL, CONN, "html")!;
   eq(m.field_provenance.price_cents, "source_confirmed", "read from the page, not interpreted");
   eq(m.price_cents, 44000);
+});
+
+// --- business logo discovery -----------------------------------------------------
+
+Deno.test("prefers apple-touch-icon, which is purpose-made and square", () => {
+  const html = `<link rel="apple-touch-icon" href="/touch.png">
+    <meta property="og:image" content="https://a.com/banner-wide.jpg">
+    <img src="/images/logo.png">`;
+  eq(extractSiteLogo(html, "https://a.com/"), "https://a.com/touch.png");
+});
+
+Deno.test("falls back to the site's own logo image, then og:image", () => {
+  eq(
+    extractSiteLogo(`<img src="/images/logo.png"><meta property="og:image" content="/banner.jpg">`, "https://a.com/"),
+    "https://a.com/images/logo.png",
+  );
+  eq(
+    extractSiteLogo(`<meta property="og:image" content="https://a.com/share.jpg">`, "https://a.com/"),
+    "https://a.com/share.jpg",
+  );
+});
+
+Deno.test("falls back to the favicon when nothing better exists", () => {
+  eq(extractSiteLogo(`<link rel="shortcut icon" href="/favicon.ico">`, "https://a.com/"), "https://a.com/favicon.ico");
+});
+
+Deno.test("returns null rather than a data URI or nothing usable", () => {
+  eq(extractSiteLogo(`<link rel="icon" href="data:image/png;base64,iVBOR">`, "https://a.com/"), null);
+  eq(extractSiteLogo("<html><body>no images</body></html>", "https://a.com/"), null);
+  eq(extractSiteLogo("", "https://a.com/"), null);
 });

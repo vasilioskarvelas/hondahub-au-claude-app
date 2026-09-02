@@ -16,6 +16,7 @@ import {
   parseSitemapUrls, isSitemapIndexEntry, looksLikeProductUrl,
   extractJsonLdBlocks, findJsonLdProduct, fromJsonLdProduct, fromMetaTags,
   buildExtractionPrompt, mapExtractedProduct, EXTRACTION_SCHEMA, EXTRACT_MAX_PAGES,
+  extractSiteLogo,
   fromHtmlHeuristics,
 } from "../../shared/web-extract.ts";
 
@@ -478,11 +479,32 @@ Deno.serve(async (req) => {
       } catch (e) {
         return err("SITE_UNREACHABLE", 502, { website: site, message: String(e.message).slice(0, 200) });
       }
-      if (!res.ok) return err("SITE_UNREACHABLE", 502, { website: site, status: res.status });
+      if (!res.ok) {
+        // A site behind a bot-protection challenge returns 403 to any server,
+        // browser user-agent or not. Defeating that is not something we should
+        // attempt, so say what is happening and point at a route that works.
+        const challenged = res.headers.get("cf-mitigated") === "challenge" ||
+          (res.status === 403 && /cloudflare|sucuri|akamai/i.test(res.headers.get("server") || ""));
+        return err("SITE_UNREACHABLE", 502, {
+          website: site,
+          status: res.status,
+          message: challenged
+            ? `${site} is behind bot protection that blocks automated access, so we cannot read it directly. Ask them to allow our importer, or upload a product spreadsheet instead.`
+            : `${site} responded with ${res.status}. Check the address, or upload a product spreadsheet instead.`,
+        });
+      }
       const html = (await res.text()).slice(0, 400_000);
       const headers: Record<string, string> = {};
       res.headers.forEach((v, k) => { headers[k] = v; });
       const rec = recommendImportMethod(fingerprintPlatform(html, headers, res.url || site));
+
+      // Grab the logo while we already have their homepage open. Saves asking a
+      // partner to upload one, and a directory of named shops with no marks is
+      // just a list. Only set when empty, so a chosen logo is never overwritten.
+      const logo = extractSiteLogo(html, res.url || site);
+      if (logo && !business.logo_url) {
+        await S.Business.update(business_id, { logo_url: logo }).catch(() => {});
+      }
 
       // A Shopify store usually publishes /products.json openly. When it does we
       // connect it like any other feed — no Partner app, no OAuth round-trip and

@@ -95,11 +95,27 @@ export default function Businesses() {
               to={`/business/${b.id}`}
               className="rounded-2xl border border-border bg-card p-4 transition-colors hover:border-primary/50"
             >
-              <div className="flex items-start justify-between gap-2">
-                <h2 className="text-base font-bold">{b.name}</h2>
-                {b.verification_status === "verified" && (
-                  <BadgeCheck className="h-4 w-4 shrink-0 text-emerald-500" />
+              <div className="flex items-start gap-3">
+                {b.logo_url ? (
+                  <img
+                    src={b.logo_url}
+                    alt=""
+                    className="h-12 w-12 shrink-0 rounded-xl bg-white/5 object-contain p-1"
+                    onError={(e) => { e.currentTarget.style.display = "none"; }}
+                  />
+                ) : (
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+                    <Store className="h-5 w-5 text-primary" />
+                  </div>
                 )}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <h2 className="text-base font-bold">{b.name}</h2>
+                    {b.verification_status === "verified" && (
+                      <BadgeCheck className="h-4 w-4 shrink-0 text-emerald-500" />
+                    )}
+                  </div>
+                </div>
               </div>
               {b.category && (
                 <span className="mt-1 inline-block rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground">

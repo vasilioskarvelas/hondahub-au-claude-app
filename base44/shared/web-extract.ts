@@ -351,3 +351,42 @@ export function mapExtractedProduct(
     },
   };
 }
+
+/**
+ * Find a business's logo on their own homepage.
+ *
+ * Saves asking a partner to upload one during onboarding — we already fetch
+ * their homepage to detect the platform, so the logo comes free.
+ *
+ * Ordered by how likely each source is to be a clean, square mark rather than a
+ * marketing banner: apple-touch-icon is purpose-made and usually square; an
+ * <img> whose URL says "logo" is the site's own header mark; og:image is a
+ * social share card, often a wide banner, so it comes last among the images.
+ */
+export function extractSiteLogo(html: string, pageUrl: string): string | null {
+  const h = String(html || "");
+
+  const attr = (re: RegExp): string | null => {
+    const tag = h.match(re)?.[0];
+    if (!tag) return null;
+    return tag.match(/(?:href|content|src)\s*=\s*["']([^"']+)["']/i)?.[1] || null;
+  };
+
+  const candidates: (string | null)[] = [
+    attr(/<link[^>]+rel\s*=\s*["'][^"']*apple-touch-icon[^"']*["'][^>]*>/i),
+    attr(/<meta[^>]+(?:property|name)\s*=\s*["']og:logo["'][^>]*>/i),
+    // The site's own header mark: an <img> whose src or alt calls itself a logo.
+    (h.match(/<img[^>]+(?:src\s*=\s*["'][^"']*logo[^"']*["']|alt\s*=\s*["'][^"']*logo[^"']*["'])[^>]*>/i)?.[0] || "")
+      .match(/src\s*=\s*["']([^"']+)["']/i)?.[1] || null,
+    attr(/<meta[^>]+(?:property|name)\s*=\s*["']og:image["'][^>]*>/i),
+    attr(/<link[^>]+rel\s*=\s*["'][^"']*\bicon\b[^"']*["'][^>]*>/i),
+  ];
+
+  for (const c of candidates) {
+    if (!c) continue;
+    const abs = absolutiseUrl(c, pageUrl);
+    // Skip data: URIs — they bloat the record and are usually 1px trackers.
+    if (abs && !abs.startsWith("data:")) return abs;
+  }
+  return null;
+}

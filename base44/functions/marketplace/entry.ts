@@ -707,15 +707,23 @@ Deno.serve(async (req) => {
       // Filtered at the query rather than after it: with business catalogues
       // outnumbering member posts many times over, post-filtering one page of
       // results would leave members with almost nothing left to show.
+      //
+      // SEARCH is the exception. Someone typing "k24" wants every K24 on the
+      // site, not just the ones a member happened to post — hiding a shop's
+      // stock from a deliberate search would make the marketplace worse, not
+      // tidier. So business listings are excluded from BROWSING and included in
+      // SEARCH.
+      const searching = typeof body.search === "string" && body.search.trim().length > 0;
       if (body.business_id) {
         filter.business_id = String(body.business_id);
-      } else if (!body.include_business) {
+      } else if (!body.include_business && !searching) {
         filter.business_id = null;
       }
       let listings = await base44.asServiceRole.entities.MarketplaceListing.filter(filter, "-published_at", 500);
       // Belt and braces: if the backend ignores a null filter, drop business
-      // listings here too rather than flooding the page.
-      if (!body.business_id && !body.include_business) {
+      // listings here too rather than flooding the page. Not applied while
+      // searching, where business stock is deliberately included.
+      if (!body.business_id && !body.include_business && !searching) {
         listings = listings.filter((l: any) => !l.business_id);
       }
       if (body.price_min_cents != null) {

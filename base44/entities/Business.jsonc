@@ -22,7 +22,7 @@
         "tyre_shop",
         "other"
       ],
-      "description": "Fixed category enum (Phase 07 \u00a72.1)."
+      "description": "Fixed category enum (Phase 07 §2.1)."
     },
     "contact_email": {
       "type": "string",
@@ -36,9 +36,13 @@
       "type": "string",
       "description": "Nullable external URL."
     },
+    "logo_url": {
+      "type": "string",
+      "description": "Nullable. The business's logo, captured automatically from their website when a store is connected (apple-touch-icon, header logo, or og:image). Shown on the directory and storefront so shops are recognisable at a glance instead of a wall of text."
+    },
     "location_general": {
       "type": "string",
-      "description": "City/region only \u2014 same privacy-conscious pattern as User/Event. No precise address."
+      "description": "City/region only — same privacy-conscious pattern as User/Event. No precise address."
     },
     "services_offered": {
       "type": "string",
@@ -55,7 +59,7 @@
     "follower_count": {
       "type": "number",
       "default": 0,
-      "description": "Denormalized counter \u2014 Follow is the source of truth. Read-optimization only."
+      "description": "Denormalized counter — Follow is the source of truth. Read-optimization only."
     },
     "verification_status": {
       "type": "string",
@@ -76,7 +80,7 @@
         "removed_by_moderation"
       ],
       "default": "active",
-      "description": "active \u2192 suspended / removed_by_moderation (moderation-driven). NOTE: the reverse-transition mechanism is not specified in the locked architecture (Architecture Questions item 1) \u2014 not implemented in this phase."
+      "description": "active → suspended / removed_by_moderation (moderation-driven). NOTE: the reverse-transition mechanism is not specified in the locked architecture (Architecture Questions item 1) — not implemented in this phase."
     },
     "review_count": {
       "type": "number",
@@ -86,7 +90,7 @@
     "rating_sum": {
       "type": "number",
       "default": 0,
-      "description": "Denormalized sum of published BusinessReview ratings. No stored average_rating \u2014 always computed as rating_sum/review_count at display time (ADR-029)."
+      "description": "Denormalized sum of published BusinessReview ratings. No stored average_rating — always computed as rating_sum/review_count at display time (ADR-029)."
     }
   },
   "required": [

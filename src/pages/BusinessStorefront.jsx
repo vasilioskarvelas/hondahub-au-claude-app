@@ -90,7 +90,19 @@ export default function BusinessStorefront() {
       </Link>
 
       <header className="rounded-2xl border border-border bg-card p-5">
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-4">
+          {business.logo_url ? (
+            <img
+              src={business.logo_url}
+              alt=""
+              className="h-16 w-16 shrink-0 rounded-2xl bg-white/5 object-contain p-1.5"
+              onError={(e) => { e.currentTarget.style.display = "none"; }}
+            />
+          ) : (
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-primary/10">
+              <Store className="h-7 w-7 text-primary" />
+            </div>
+          )}
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-2xl font-black tracking-tight">{business.name}</h1>
