@@ -1,6 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { invokeFn } from "@/lib/invokeFn";
 import { useAuth } from "@/lib/AuthContext";
 import { User, Store, ArrowRight, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 
@@ -47,7 +47,7 @@ export default function Welcome() {
     setBusy(true);
     setError(null);
     try {
-      const res = await base44.functions.invoke("business", {
+      const r = await invokeFn("business", {
         action: "requestBusinessAccount",
         name: form.name.trim(),
         category: form.category,
@@ -55,14 +55,7 @@ export default function Welcome() {
         location_general: form.location_general.trim(),
         about: form.about.trim(),
       });
-      const data = res?.data || res;
-      if (!data?.ok) {
-        const d = data?.details || data?.error?.details;
-        if (data?.error === "BUSINESS_ALREADY_REQUESTED" || d?.business_id) {
-          throw new Error("You already have a business on this account.");
-        }
-        throw new Error(d?.name || d?.category || data?.error?.message || data?.error || "Could not submit your business.");
-      }
+      if (!r.ok) throw new Error(r.error || "Could not submit your business.");
       setSubmitted(true);
     } catch (e) {
       setError(String(e?.message || e));
