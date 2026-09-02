@@ -44,11 +44,18 @@ export const COMPAT_SCHEMA = {
     engine_families: { type: "array", items: { type: "string", enum: COMPAT_ENGINES } },
     year_from: { type: "number" },
     year_to: { type: "number" },
+    oem_or_aftermarket: {
+      type: "string",
+      enum: ["oem", "aftermarket", "not_applicable"],
+      description: "oem for genuine Honda parts, aftermarket for third-party brands (AEM, Skunk2, HKS...), not_applicable for fluids, tools and consumables. Omit if genuinely unclear.",
+    },
     confidence: { type: "number", description: "0-100. How certain the fitment is from the text ALONE." },
     reasoning: { type: "string", description: "One short sentence citing the wording relied on." },
   },
   required: ["fits_honda", "confidence"],
 };
+
+export const OEM_VALUES = ["oem", "aftermarket", "not_applicable"];
 
 export function buildCompatPrompt(item: { title?: string; description?: string | null; brand?: string | null }): string {
   return [
@@ -145,8 +152,17 @@ export function validateCompatResult(raw: any): Record<string, any> | null {
 
   // For a product that does not fit a Honda, storing a fitment would be worse
   // than storing none: clear the arrays rather than keeping a contradiction.
+  // ADR-042 requires oem_or_aftermarket on 8 of the 12 categories, and an import
+  // always leaves it null — so without a value here nothing can be approved.
+  // Suggested, never assumed: an unrecognised or absent reply stays null and the
+  // reviewer picks it, rather than a part being labelled genuine when it is not.
+  const oem = OEM_VALUES.includes(String(raw.oem_or_aftermarket || "").trim().toLowerCase())
+    ? String(raw.oem_or_aftermarket).trim().toLowerCase()
+    : null;
+
   const keep = raw.fits_honda;
   return {
+    oem_or_aftermarket: oem,
     compatible_models: keep ? models : [],
     compatible_chassis_codes: keep ? chassis : [],
     compatible_engine_families: keep ? engines : [],

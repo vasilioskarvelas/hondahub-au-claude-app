@@ -1,5 +1,5 @@
 import React from "react";
-import { base44 } from "@/api/base44Client";
+import { invokeFn } from "@/lib/invokeFn";
 import { Loader2, RefreshCw, Check, X, AlertCircle, Copy, PackageSearch, ExternalLink, Sparkles } from "lucide-react";
 
 /**
@@ -42,6 +42,9 @@ const CATEGORIES = [
   "tools_equipment", "other",
 ];
 const CONDITIONS = ["new", "used", "for_parts_or_repair"];
+// ADR-042 requires this on 8 of the 12 categories, so an import cannot be
+// approved without it. AI suggests a value; the reviewer confirms.
+const OEM_OPTIONS = ["", "aftermarket", "oem", "not_applicable"];
 const MODELS = ["civic", "integra", "accord", "crv", "s2000", "nsx", "other"];
 const CHASSIS = ["eg", "ek", "dc2", "dc5", "ep3", "fn2", "cl7", "cl9", "fd2", "fk8", "fl5", "other"];
 const ENGINES = ["d_series", "b_series", "k_series", "j_series", "f_series", "h_series", "other"];
@@ -84,6 +87,7 @@ function ItemRow({ item, onResolved }) {
     compatible_engine_families: item.compatible_engine_families || [],
     compatible_year_from: item.compatible_year_from ?? "",
     compatible_year_to: item.compatible_year_to ?? "",
+    oem_or_aftermarket: item.oem_or_aftermarket ?? "",
   });
 
   const resolved = item.status === "approved" || item.status === "rejected";
@@ -93,11 +97,6 @@ function ItemRow({ item, onResolved }) {
       ...f,
       [field]: f[field].includes(value) ? f[field].filter((v) => v !== value) : [...f[field], value],
     }));
-
-  const call = async (payload) => {
-    const res = await base44.functions.invoke("store-import", payload);
-    return res?.data || res;
-  };
 
   const approve = async () => {
     setBusy(true);
@@ -113,11 +112,9 @@ function ItemRow({ item, onResolved }) {
       if (form.price_cents !== "") overrides.price_cents = Number(form.price_cents);
       if (form.compatible_year_from !== "") overrides.compatible_year_from = Number(form.compatible_year_from);
       if (form.compatible_year_to !== "") overrides.compatible_year_to = Number(form.compatible_year_to);
-      const data = await call({ action: "approveItem", item_id: item.id, overrides });
-      if (!data?.ok) {
-        const d = data?.details || data?.error?.details;
-        throw new Error(d?.message || data?.error?.message || data?.error || "Approval failed.");
-      }
+      if (form.oem_or_aftermarket !== "") overrides.oem_or_aftermarket = form.oem_or_aftermarket;
+      const r = await invokeFn("store-import", { action: "approveItem", item_id: item.id, overrides });
+      if (!r.ok) throw new Error(r.error || "Approval failed.");
       onResolved?.();
     } catch (e) {
       setError(String(e?.message || e));
@@ -131,8 +128,8 @@ function ItemRow({ item, onResolved }) {
     setError(null);
     try {
       const reason = window.prompt("Reason for rejecting this product? (optional)") ?? "";
-      const data = await call({ action: "rejectItem", item_id: item.id, reason });
-      if (!data?.ok) throw new Error(data?.error?.message || data?.error || "Rejection failed.");
+      const r = await invokeFn("store-import", { action: "rejectItem", item_id: item.id, reason });
+      if (!r.ok) throw new Error(r.error || "Rejection failed.");
       onResolved?.();
     } catch (e) {
       setError(String(e?.message || e));
@@ -255,6 +252,23 @@ function ItemRow({ item, onResolved }) {
           </div>
 
           <div>
+            <label className="text-xs font-medium text-muted-foreground">OEM or aftermarket</label>
+            <select
+              value={form.oem_or_aftermarket}
+              onChange={(e) => setForm({ ...form, oem_or_aftermarket: e.target.value })}
+              className="mt-1 w-full rounded-lg border border-input bg-background px-2 py-1.5 text-sm"
+            >
+              {OEM_OPTIONS.map((o) => (
+                <option key={o || "unset"} value={o}>{o ? o.replace(/_/g, " ") : "— choose —"}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Required for most part categories. Genuine Honda is <em>oem</em>; brands like
+              AEM or Skunk2 are <em>aftermarket</em>; fluids and tools are <em>not applicable</em>.
+            </p>
+          </div>
+
+          <div>
             <label className="text-xs font-medium text-muted-foreground">Fits models</label>
             <div className="mt-1"><Chips options={MODELS} selected={form.compatible_models} onToggle={(v) => toggle("compatible_models", v)} /></div>
           </div>
@@ -326,21 +340,23 @@ export default function ImportQueue({ connection }) {
   const [error, setError] = React.useState(null);
   const [extracting, setExtracting] = React.useState(false);
   const [extractProgress, setExtractProgress] = React.useState(null);
+  const [approving, setApproving] = React.useState(false);
+  const [approveResult, setApproveResult] = React.useState(null);
+  const [readyCount, setReadyCount] = React.useState(0);
 
   const load = React.useCallback(async () => {
     if (!connection?.id) { setItems([]); return; }
     setLoading(true);
     setError(null);
     try {
-      const res = await base44.functions.invoke("store-import", {
+      const r = await invokeFn("store-import", {
         action: "listImportItems",
         connection_id: connection.id,
         ...(status ? { status } : {}),
         limit: 100,
       });
-      const data = res?.data || res;
-      if (!data?.ok) throw new Error(data?.error?.message || data?.error || "Could not load items.");
-      setItems(Array.isArray(data.items) ? data.items : []);
+      if (!r.ok) throw new Error(r.error || "Could not load items.");
+      setItems(Array.isArray(r.data.items) ? r.data.items : []);
     } catch (e) {
       setError(String(e?.message || e));
     } finally {
@@ -349,6 +365,33 @@ export default function ImportQueue({ connection }) {
   }, [connection?.id, status]);
 
   React.useEffect(() => { load(); }, [load]);
+
+  // Bulk approve, looping the server batches. Only items already marked ready
+  // are touched — see the backend note on why this is not "approve everything".
+  const approveAllReady = async () => {
+    if (approving) return;
+    setApproving(true);
+    setApproveResult(null);
+    setError(null);
+    try {
+      let approved = 0, failed = 0, rounds = 0;
+      let more = true;
+      while (more && rounds < 200) {
+        const r = await invokeFn("store-import", { action: "approveReady", connection_id: connection.id });
+        if (!r.ok) throw new Error(r.error || "Could not approve.");
+        approved += r.data.approved || 0;
+        failed += r.data.failed || 0;
+        more = !!r.data.has_more && (r.data.approved || 0) > 0;
+        rounds += 1;
+        setApproveResult({ approved, failed });
+      }
+      await load();
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally {
+      setApproving(false);
+    }
+  };
 
   // Extraction runs in server-side batches (one LLM call per product), so the
   // client loops until nothing is left. Bounded so a bad has_more cannot spin.
@@ -360,16 +403,15 @@ export default function ImportQueue({ connection }) {
       let updated = 0, skipped = 0, rounds = 0;
       let more = true;
       while (more && rounds < 100) {
-        const res = await base44.functions.invoke("store-import", {
+        const r = await invokeFn("store-import", {
           action: "extractCompatibility", connection_id: connection.id,
         });
-        const data = res?.data || res;
-        if (!data?.ok) throw new Error(data?.error?.message || data?.error || "Could not suggest fitment.");
-        updated += data.updated || 0;
-        skipped += data.skipped || 0;
-        more = !!data.has_more;
+        if (!r.ok) throw new Error(r.error || "Could not suggest fitment.");
+        updated += r.data.updated || 0;
+        skipped += r.data.skipped || 0;
+        more = !!r.data.has_more;
         rounds += 1;
-        setExtractProgress({ updated, skipped, remaining: data.remaining || 0 });
+        setExtractProgress({ updated, skipped, remaining: r.data.remaining || 0 });
       }
       await load();
     } catch (e) {
@@ -418,15 +460,40 @@ export default function ImportQueue({ connection }) {
               each product.
             </p>
           </div>
-          <button
-            onClick={runExtraction}
-            disabled={extracting}
-            className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground disabled:opacity-50"
-          >
-            {extracting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-            {extracting ? "Working…" : "Suggest fitment"}
-          </button>
+          <div className="flex shrink-0 gap-2">
+            <button
+              onClick={runExtraction}
+              disabled={extracting || approving}
+              className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground disabled:opacity-50"
+            >
+              {extracting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+              {extracting ? "Working…" : "Suggest fitment"}
+            </button>
+            <button
+              onClick={approveAllReady}
+              disabled={approving || extracting}
+              className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/40 px-3 py-1.5 text-xs font-bold text-emerald-500 disabled:opacity-50"
+            >
+              {approving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+              {approving ? "Approving…" : "Approve all ready"}
+            </button>
+          </div>
         </div>
+
+        {approveResult && (
+          <div className="mt-2 text-xs">
+            <span className="text-emerald-500">{approveResult.approved} approved as drafts</span>
+            {approveResult.failed > 0 && (
+              <span className="text-amber-500"> · {approveResult.failed} sent back for a look</span>
+            )}
+            {approveResult.approved === 0 && approveResult.failed === 0 && (
+              <span className="text-muted-foreground">
+                Nothing was ready. Only products marked <strong>ready</strong> are bulk-approved —
+                anything needing attention or flagged as a duplicate still wants your eyes.
+              </span>
+            )}
+          </div>
+        )}
         {extractProgress && (
           <p className="mt-2 text-xs text-sky-500">
             {extractProgress.updated} updated

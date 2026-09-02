@@ -100,6 +100,10 @@ function nextPageInfo(linkHeader: string | null): string | null {
  * a fetch and possibly an LLM call, so a large batch risks the function timeout. */
 const WEBSITE_BATCH = 8;
 
+/** Bulk approvals per invocation. Each one creates a listing, so keep it modest
+ * and let the client loop rather than risking a timeout mid-batch. */
+const APPROVE_BATCH = 25;
+
 /**
  * Read one page of a WooCommerce catalogue via the public Store API.
  * `cursor` is the page number as a string.
@@ -789,6 +793,64 @@ Deno.serve(async (req) => {
         sync_error: null,
       });
       return json({ ok: true, item: updated, listing_id: result.listing.id, listing_status: result.listing.status });
+    }
+
+    // ---- approveReady ----
+    // Bulk approve, deliberately limited to items already marked
+    // ready_for_approval. Approving everything would defeat the staging step:
+    // needs_attention means a product is missing something a listing requires,
+    // and possible_duplicate means it may already exist. Those still need a
+    // person. This just spares the reviewer clicking through hundreds of
+    // products that passed every check.
+    if (action === "approveReady") {
+      const { connection_id } = body;
+      if (!connection_id) return err("VALIDATION_FAILED", 422, { connection_id: "required" });
+      const conn = await S.BusinessStoreConnection.get(connection_id).catch(() => null);
+      if (!conn) return err("RESOURCE_NOT_FOUND", 404);
+      if (!canAccessBusiness(allowed, conn.business_id)) return err("PERMISSION_DENIED", 403);
+
+      const posterId = await resolvePosterId(base44, conn.business_id);
+      if (!posterId) {
+        return err("IMPORT_POSTER_UNRESOLVED", 422, {
+          message: "This business has no active owner, so listings cannot be attributed to anyone.",
+        });
+      }
+      const ready = (await S.StoreImportItem.filter(
+        { connection_id, status: ImportItemStatus.READY_FOR_APPROVAL }, "-created_date", 500,
+      )).slice(0, APPROVE_BATCH);
+
+      let approved = 0;
+      const failures: any[] = [];
+      for (const item of ready) {
+        try {
+          const result = await createImportedListing(base44, { item, connection: conn, posterId });
+          if (!result.ok) {
+            // Send it back for a human rather than silently skipping it.
+            await S.StoreImportItem.update(item.id, {
+              status: ImportItemStatus.NEEDS_ATTENTION,
+              sync_error: `${result.error.code}${result.error.field ? ` (${result.error.field})` : ""}: ${result.error.message}`,
+            });
+            failures.push({ item_id: item.id, title: item.title, error: result.error.code, field: result.error.field });
+            continue;
+          }
+          await S.StoreImportItem.update(item.id, {
+            status: ImportItemStatus.APPROVED,
+            approved_listing_id: result.listing.id,
+            approved_at: nowIso(),
+            sync_error: null,
+          });
+          approved++;
+        } catch (e) {
+          failures.push({ item_id: item.id, title: item.title, error: String(e.message).slice(0, 120) });
+        }
+      }
+      const remaining = await S.StoreImportItem.filter(
+        { connection_id, status: ImportItemStatus.READY_FOR_APPROVAL }, "-created_date", 500,
+      );
+      return json({
+        ok: true, approved, failed: failures.length, failures: failures.slice(0, 10),
+        remaining: remaining.length, has_more: remaining.length > 0,
+      });
     }
 
     // ---- rejectItem ----
