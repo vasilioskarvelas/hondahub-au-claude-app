@@ -28,8 +28,12 @@ export default function Businesses() {
       .finally(() => setLoading(false));
   }, []);
 
+  // `pending` is an unreviewed signup request and `rejected` was refused — neither
+  // belongs in a public directory, or a stranger could self-list simply by signing
+  // up. `unverified` businesses created by trusted members are still shown.
   const visible = businesses
-    .filter((b) => b.status !== "removed" && b.status !== "hidden_pending_review")
+    .filter((b) => b.status === "active")
+    .filter((b) => b.verification_status !== "pending" && b.verification_status !== "rejected")
     .filter((b) => {
       if (!q.trim()) return true;
       const hay = `${b.name || ""} ${b.category || ""} ${b.about || ""} ${b.location_general || ""}`.toLowerCase();
@@ -65,6 +69,16 @@ export default function Businesses() {
           <Loader2 className="h-4 w-4 animate-spin" /> Loading businesses…
         </p>
       )}
+
+      <div className="rounded-2xl border border-dashed border-border p-4 text-sm">
+        <p className="font-bold">Own a Honda business?</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Get a storefront and import your product catalogue.
+        </p>
+        <Link to="/welcome" className="mt-2 inline-block text-xs font-bold text-primary hover:underline">
+          List your business →
+        </Link>
+      </div>
 
       {!loading && visible.length === 0 && (
         <p className="text-sm text-muted-foreground">

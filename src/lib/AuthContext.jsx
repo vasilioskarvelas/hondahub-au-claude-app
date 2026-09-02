@@ -14,6 +14,10 @@ export const AuthProvider = ({ children }) => {
   const [authChecked, setAuthChecked] = useState(false);
   const [appPublicSettings, setAppPublicSettings] = useState(null); // Contains only { id, public_settings }
   const bootstrapIdRef = useRef(0);
+  // Business memberships for the signed-in user. The nav and business surfaces
+  // need to know whether this person represents a business; the backend remains
+  // the authority on what they may actually do.
+  const [businesses, setBusinesses] = useState([]);
 
   useEffect(() => {
     checkAppState();
@@ -152,6 +156,19 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  useEffect(() => {
+    let cancelled = false;
+    if (!isAuthenticated || !user) { setBusinesses([]); return; }
+    base44.functions.invoke('business', { action: 'myBusinesses' })
+      .then((res) => {
+        if (cancelled) return;
+        const data = res?.data || res;
+        setBusinesses(Array.isArray(data?.businesses) ? data.businesses : []);
+      })
+      .catch(() => { if (!cancelled) setBusinesses([]); });
+    return () => { cancelled = true; };
+  }, [isAuthenticated, user?.id]);
+
   const navigateToLogin = () => {
     // Route to the app's custom sign-in page
     window.location.assign('/signin');
@@ -160,6 +177,9 @@ export const AuthProvider = ({ children }) => {
   return (
     <AuthContext.Provider value={{
       user,
+      businesses,
+      hasBusiness: businesses.length > 0,
+      hasVerifiedBusiness: businesses.some((b) => b.verification_status === 'verified'),
       isAuthenticated,
       isLoadingAuth,
       isLoadingPublicSettings,

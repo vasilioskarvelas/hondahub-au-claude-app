@@ -52,6 +52,7 @@ import EntitlementOverrides from '@/pages/EntitlementOverrides';
 import JobStatusDashboard from '@/pages/JobStatusDashboard';
 import AdminDashboard from '@/pages/AdminDashboard';
 import BusinessVerificationQueue from '@/pages/BusinessVerificationQueue';
+import Welcome from '@/pages/Welcome';
 import Businesses from '@/pages/Businesses';
 import BusinessStorefront from '@/pages/BusinessStorefront';
 import StoreImport from '@/pages/StoreImport';
@@ -122,6 +123,7 @@ const AuthenticatedApp = () => {
 
         {/* Protected routes — authentication required */}
         <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/signin" replace />} />}>
+          <Route path="/welcome" element={<Welcome />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/garage" element={<Garage />} />

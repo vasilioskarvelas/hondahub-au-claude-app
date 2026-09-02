@@ -34,6 +34,13 @@ export default function BusinessStorefront() {
       try {
         const b = await base44.entities.Business.get(id);
         if (cancelled) return;
+        // Same rule as the directory: an unreviewed or refused business has no
+        // public storefront.
+        if (b && (b.verification_status === "pending" || b.verification_status === "rejected" || b.status !== "active")) {
+          setError("This business is not available.");
+          setBusiness(null);
+          return;
+        }
         setBusiness(b);
         const res = await base44.functions.invoke("marketplace", {
           action: "listListings",

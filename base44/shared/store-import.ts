@@ -297,14 +297,31 @@ export function stageStatus(
 // function gate is the boundary, RLS is defence in depth behind it.
 // ============================================================================
 
-/** Businesses this user may manage imports for. Admins get every business. */
+/**
+ * Businesses this user may manage imports for. Admins get every business.
+ *
+ * Membership alone is NOT enough — the business must also be verified and
+ * active. Anyone can sign up and request a business account (that path carries
+ * no trust-tier gate, deliberately), so verification is what stands between
+ * "signed up" and "can push a catalogue into the marketplace". A pending or
+ * rejected business yields no access, which is what makes the review step real
+ * rather than decorative.
+ */
 export async function accessibleBusinessIds(base44: any, user: any): Promise<string[] | "all"> {
   if (!user) return [];
   if (user.role === "admin") return "all";
   const memberships = await base44.asServiceRole.entities.BusinessMembership.filter({
     user_id: user.id, status: "active",
   });
-  return memberships.map((m: any) => m.business_id).filter(Boolean);
+  const ids: string[] = [];
+  for (const m of memberships) {
+    if (!m.business_id) continue;
+    const business = await base44.asServiceRole.entities.Business.get(m.business_id).catch(() => null);
+    if (!business) continue;
+    if (business.verification_status !== "verified" || business.status !== "active") continue;
+    ids.push(m.business_id);
+  }
+  return ids;
 }
 
 /**

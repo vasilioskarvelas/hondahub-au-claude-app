@@ -25,7 +25,7 @@ const moreNav = [
   { to: "/admin/audit", label: "Audit Log", icon: ScrollText, modOnly: true },
   { to: "/admin/entitlements", label: "Entitlements", icon: Crown, adminOnly: true },
   { to: "/admin/jobs", label: "Job Status", icon: Gauge, adminOnly: true },
-  { to: "/admin/store-import", label: "Store Import", icon: Store, adminOnly: true },
+  { to: "/admin/store-import", label: "Store Import", icon: Store, businessOrAdmin: true },
 ];
 
 export default function Layout() {
@@ -33,11 +33,14 @@ export default function Layout() {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [unread, setUnread] = React.useState(0);
   const [unreadConvos, setUnreadConvos] = React.useState(0);
-  const { user } = useAuth();
+  const { user, hasBusiness } = useAuth();
   const isMod = user?.role === 'admin' || user?.account_tier === 'moderator';
   const isAdmin = user?.role === 'admin';
-  const visibleMoreNav = moreNav.filter((item) => (!item.modOnly || isMod) && (!item.adminOnly || isAdmin));
-  const routeBlocked = moreNav.some((item) => (location.pathname === item.to || location.pathname.startsWith(item.to + "/")) && ((item.adminOnly && !isAdmin) || (item.modOnly && !isMod)));
+  const visibleMoreNav = moreNav.filter((item) =>
+    (!item.modOnly || isMod) &&
+    (!item.adminOnly || isAdmin) &&
+    (!item.businessOrAdmin || isAdmin || hasBusiness));
+  const routeBlocked = moreNav.some((item) => (location.pathname === item.to || location.pathname.startsWith(item.to + "/")) && ((item.adminOnly && !isAdmin) || (item.modOnly && !isMod) || (item.businessOrAdmin && !isAdmin && !hasBusiness)));
 
   React.useEffect(() => {
     setMenuOpen(false);

@@ -140,6 +140,86 @@ Deno.serve(async (req) => {
       return json({ ok: true, business_id: business.id, status: BusinessStatus.ACTIVE, verification_status: BusinessVerificationStatus.UNVERIFIED, business });
     }
 
+    // ============ requestBusinessAccount (signup path — NO tier gate) ============
+    // A partner signing up as a business cannot use createBusiness: that requires
+    // trusted_member (ADR-039), and a brand-new account is new_member at score 0.
+    // Making a business owner earn 25 trust points by posting before they can
+    // register the business you invited them to is obviously wrong.
+    //
+    // ADR-039's gate is NOT bypassed here so much as replaced by a stricter one:
+    // the business is created PENDING and is inert until a moderator approves it.
+    // Nothing self-serve is unlocked by calling this — no verified storefront and
+    // no catalogue import — so it cannot be used to spam businesses into
+    // existence, which is what the tier gate protects against.
+    if (action === "requestBusinessAccount") {
+      if (!user) return err("AUTH_REQUIRED", 401);
+      if (!accountInGoodStanding(user)) {
+        return err(user.account_status === "banned" ? "ACCOUNT_BANNED" : "ACCOUNT_SUSPENDED", 403);
+      }
+      const name = (body.name || "").trim();
+      if (!name || name.length > NAME_MAX) return err("VALIDATION_FAILED", 422, { name: "required, max 100 chars" });
+      const category = body.category;
+      if (!BUSINESS_CATEGORY_VALUES.includes(category)) return err("VALIDATION_FAILED", 422, { category: "invalid" });
+
+      // One owned business per account: stops a single user spraying pending
+      // requests into the moderation queue.
+      const mine = await base44.asServiceRole.entities.BusinessMembership.filter({
+        user_id: user.id, role: BusinessRole.OWNER, status: BusinessMembershipStatus.ACTIVE,
+      });
+      if (mine.length) return err("BUSINESS_ALREADY_REQUESTED", 409, { business_id: mine[0].business_id });
+
+      const business = await base44.asServiceRole.entities.Business.create({
+        name,
+        about: (body.about || "").trim() || null,
+        category,
+        contact_email: (body.contact_email || "").trim() || null,
+        contact_phone: (body.contact_phone || "").trim() || null,
+        website: (body.website || "").trim() || null,
+        location_general: (body.location_general || "").trim() || null,
+        services_offered: (body.services_offered || "").trim() || null,
+        follower_count: 0,
+        verification_status: BusinessVerificationStatus.PENDING,
+        status: BusinessStatus.ACTIVE,
+        review_count: 0,
+        rating_sum: 0,
+      });
+      await base44.asServiceRole.entities.BusinessMembership.create({
+        business_id: business.id, user_id: user.id,
+        role: BusinessRole.OWNER, status: BusinessMembershipStatus.ACTIVE,
+      });
+      await writeAuditLog(base44, {
+        action: AuditActionType.BUSINESS_STATUS_CHANGED, actor_type: actorTypeFor(user), actor_id: user.id,
+        target_type: "business", target_id: business.id,
+        context: JSON.stringify({ source: "signup_request", verification_to: BusinessVerificationStatus.PENDING }),
+      }).catch(() => {});
+      return json({
+        ok: true, business_id: business.id,
+        verification_status: BusinessVerificationStatus.PENDING,
+        message: "Your business has been submitted for review. You can import your catalogue once it's approved.",
+        business,
+      });
+    }
+
+    // ============ myBusinesses (which businesses this user belongs to) ============
+    // Small read the frontend needs to decide whether to show business surfaces
+    // at all. Returns only the caller's own memberships.
+    if (action === "myBusinesses") {
+      if (!user) return err("AUTH_REQUIRED", 401);
+      const memberships = await base44.asServiceRole.entities.BusinessMembership.filter({
+        user_id: user.id, status: BusinessMembershipStatus.ACTIVE,
+      });
+      const out = [];
+      for (const m of memberships) {
+        const b = await base44.asServiceRole.entities.Business.get(m.business_id).catch(() => null);
+        if (!b) continue;
+        out.push({
+          business_id: b.id, name: b.name, role: m.role,
+          verification_status: b.verification_status, status: b.status,
+        });
+      }
+      return json({ ok: true, businesses: out });
+    }
+
     // ============ updateBusiness (BizOwn/BizMgr) ============
     if (action === "updateBusiness") {
       if (!user) return err("AUTH_REQUIRED", 401);
