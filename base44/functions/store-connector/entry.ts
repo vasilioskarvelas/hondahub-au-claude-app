@@ -5,6 +5,7 @@ import {
   requireStoreImportAdmin, StorePlatform, ConnectionStatus,
   STORE_PLATFORM_VALUES,
 } from "../../shared/store-import.ts";
+import { encryptToken } from "../../shared/store-crypto.ts";
 
 /**
  * StoreConnectorService (ADR-046 Phase 1, Section 2 — Shopify Connector). [redeploy]
@@ -30,13 +31,30 @@ import {
  * still creates the connection but returns credentials_configured=false, and the
  * callback returns a 503 credentials-not-configured page — so the connector is
  * fully exercisable for credential-independent regression.
+ *
+ * The access token is encrypted with STORE_TOKEN_ENC_KEY before it is persisted
+ * (shared/store-crypto.ts), as BusinessStoreConnection's schema requires. The
+ * callback fails closed with a 503 when that secret is absent rather than
+ * falling back to storing the token in plaintext.
+ *
+ * OAuth state consumption is FAIL-CLOSED: the state is cleared BEFORE the
+ * authorization code is exchanged, so a failed exchange cannot leave a
+ * replayable state alive for the remainder of its TTL. The cost is that a
+ * transient exchange failure requires restarting the connection, which is one
+ * click. Base44 exposes no atomic compare-and-set, so two callbacks arriving in
+ * the same instant can both pass the state lookup before either clears it; that
+ * residual race is narrowed to the width of a single entity update, and
+ * Shopify's authorization codes are themselves single-use. It is not eliminated,
+ * and this comment exists so nobody assumes otherwise.
  */
 
 const SHOPIFY_SCOPES = "read_products"; // Read-only: product catalog access for Phase 1 import. No write scopes.
 const SHOPIFY_API_VERSION = "2024-01";
-// OAuth state must be short-lived (ADR-046 §2). 10 minutes from issuance
-// (connection created_date == state issuance, since connectStore creates both
-// atomically). Expired state is rejected in the callback before any secret use.
+// OAuth state must be short-lived (ADR-046 §2). 10 minutes measured from
+// `oauth_state_created_at` — the exact moment the state was generated — NOT from
+// the connection's created_date, which may predate the OAuth attempt whenever a
+// state is re-issued on an existing row. Expired state is rejected in the
+// callback before any secret is touched.
 const STATE_TTL_MS = 10 * 60 * 1000;
 
 function normalizeDomain(d: string): string {
@@ -66,7 +84,11 @@ async function verifyShopifyHmac(url: URL, apiSecret: string): Promise<boolean> 
   const params = new URLSearchParams(url.search);
   const hmac = params.get("hmac");
   if (!hmac) return false;
+  // Shopify excludes both `hmac` and the legacy `signature` from the signed
+  // canonical string; leaving `signature` in would fail verification whenever
+  // Shopify sends it.
   params.delete("hmac");
+  params.delete("signature");
   const queryString = [...params.keys()].sort().map((k) => `${k}=${params.get(k)}`).join("&");
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey("raw", enc.encode(apiSecret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
@@ -116,10 +138,12 @@ Deno.serve(async (req) => {
       if (!conn.oauth_state) {
         return new Response(htmlPage("Connection failed", "This OAuth state has already been used.", true), { status: 400, headers: { "Content-Type": "text/html; charset=utf-8" } });
       }
-      // Short-lived: reject state older than STATE_TTL_MS (issued at connection
-      // creation). Prevents stale/replayed state from ever reaching a secret.
-      const issuedAt = new Date(conn.created_date).getTime();
-      if (Date.now() - issuedAt > STATE_TTL_MS) {
+      // Short-lived: reject state older than STATE_TTL_MS, measured from the
+      // moment the state was generated. A row carrying a state but no
+      // oauth_state_created_at cannot have its age established, so it is
+      // rejected rather than falling back to created_date.
+      const issuedAtRaw = conn.oauth_state_created_at ? Date.parse(conn.oauth_state_created_at) : NaN;
+      if (!Number.isFinite(issuedAtRaw) || Date.now() - issuedAtRaw > STATE_TTL_MS) {
         return new Response(htmlPage("Connection failed", "OAuth state expired. Please restart the connection.", true), { status: 400, headers: { "Content-Type": "text/html; charset=utf-8" } });
       }
       // Bind the callback to the exact shop that initiated the flow — the
@@ -134,6 +158,13 @@ Deno.serve(async (req) => {
       if (!clientId || !clientSecret) {
         return new Response(htmlPage("Not configured", "Shopify credentials are not configured. Set SHOPIFY_CLIENT_ID and SHOPIFY_CLIENT_SECRET, then retry the connection.", true), { status: 503, headers: { "Content-Type": "text/html; charset=utf-8" } });
       }
+      // The access token must be encrypted at rest. Without the key we fail
+      // closed BEFORE the exchange rather than obtaining a live token we would
+      // have to store in plaintext.
+      const encKey = secrets.get("STORE_TOKEN_ENC_KEY");
+      if (!encKey) {
+        return new Response(htmlPage("Not configured", "Credential encryption is not configured. Set the STORE_TOKEN_ENC_KEY app secret, then retry the connection.", true), { status: 503, headers: { "Content-Type": "text/html; charset=utf-8" } });
+      }
       // Verify Shopify's HMAC signature over the callback params (official
       // mechanism) BEFORE exchanging the code. Tampered/unsigned requests are
       // rejected. Requires the secret (checked above).
@@ -141,6 +172,15 @@ Deno.serve(async (req) => {
       if (!hmacOk) {
         return new Response(htmlPage("Connection failed", "Invalid callback signature (HMAC verification failed).", true), { status: 400, headers: { "Content-Type": "text/html; charset=utf-8" } });
       }
+      // Consume the state BEFORE the exchange (fail-closed). Once cleared, this
+      // callback cannot be replayed even if the exchange below fails — the cost
+      // is that the admin restarts the connection, which is one click. Doing
+      // this after the exchange would leave a captured callback replayable for
+      // the remainder of the TTL.
+      await base44.asServiceRole.entities.BusinessStoreConnection.update(conn.id, {
+        oauth_state: null,
+        oauth_state_created_at: null,
+      });
       // Exchange the authorization code for a permanent access token.
       const tokenRes = await fetch(`https://${conn.store_domain}/admin/oauth/access_token`, {
         method: "POST",
@@ -174,10 +214,12 @@ Deno.serve(async (req) => {
         connection_status: ConnectionStatus.VERIFIED,
         ownership_verified_at: now,
         ownership_verification_method: "shopify_oauth",
-        shopify_access_token: accessToken,
+        // AES-GCM ciphertext, never the plaintext token (see store-crypto.ts).
+        shopify_access_token: await encryptToken(accessToken, encKey),
         shopify_shop_id: shopId,
         store_name: shopName,
         oauth_state: null,
+        oauth_state_created_at: null,
       });
       return new Response(htmlPage("Store connected", "Your Shopify store is now verified and ready for import.", false), { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } });
     }
@@ -215,6 +257,9 @@ Deno.serve(async (req) => {
         connection_status: ConnectionStatus.UNVERIFIED,
         sync_status: "idle",
         oauth_state: oauthState,
+        // Stamped at state generation — this, not created_date, is what the
+        // callback measures the 10-minute TTL against.
+        oauth_state_created_at: new Date().toISOString(),
       });
       // Build the Shopify authorize URL only if the client ID is configured.
       const clientId = secrets.get("SHOPIFY_CLIENT_ID");
@@ -261,6 +306,7 @@ Deno.serve(async (req) => {
         woocommerce_consumer_key: null,
         woocommerce_consumer_secret: null,
         oauth_state: null,
+        oauth_state_created_at: null,
       });
       return json({ ok: true, connection: sanitizeConnection(updated) });
     }
