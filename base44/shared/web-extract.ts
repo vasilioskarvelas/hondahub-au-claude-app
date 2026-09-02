@@ -280,7 +280,15 @@ export function buildExtractionPrompt(url: string, html: string): string {
 
 /** Resolve a possibly-relative image URL against the page it came from. */
 export function absolutiseUrl(candidate: unknown, pageUrl: string): string | null {
-  const s = String(candidate || "").trim();
+  // Attribute values arrive HTML-encoded, so a real CDN URL reads as
+  // "...?v=123&amp;width=1100". Left undecoded that requests a "amp;width"
+  // parameter and the image fails to load — a broken logo on every card.
+  const s = String(candidate || "")
+    .trim()
+    .replace(/&amp;/gi, "&")
+    .replace(/&#38;/g, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/g, "'");
   if (!s) return null;
   try {
     const u = new URL(s, pageUrl);

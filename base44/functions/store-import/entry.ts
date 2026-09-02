@@ -307,6 +307,25 @@ Deno.serve(async (req) => {
       const conn = await S.BusinessStoreConnection.get(connection_id).catch(() => null);
       if (!conn) return err("RESOURCE_NOT_FOUND", 404);
       if (!canAccessBusiness(allowed, conn.business_id)) return err("PERMISSION_DENIED", 403);
+      // Backfill the logo for stores connected before logo capture existed, so a
+      // partner never has to disconnect and reconnect just to get their mark.
+      // Only on the first page of a run, only when missing, and never allowed to
+      // fail a sync — a logo is not worth losing an import over.
+      if (action === "startSync") {
+        try {
+          const biz = await S.Business.get(conn.business_id).catch(() => null);
+          if (biz && !biz.logo_url && conn.store_domain) {
+            const origin = /^https?:\/\//i.test(conn.store_domain) ? conn.store_domain : `https://${conn.store_domain}`;
+            const home = await fetchWithTimeout(origin, { headers: { "User-Agent": UA, Accept: "text/html" } });
+            if (home.ok) {
+              const logo = extractSiteLogo((await home.text()).slice(0, 400_000), home.url || origin);
+              if (logo) await S.Business.update(biz.id, { logo_url: logo });
+            }
+          }
+        } catch {
+          // Ignored on purpose: see above.
+        }
+      }
       if (conn.connection_status !== ConnectionStatus.VERIFIED) {
         return err("CONNECTION_NOT_VERIFIED", 409, { connection_status: conn.connection_status });
       }

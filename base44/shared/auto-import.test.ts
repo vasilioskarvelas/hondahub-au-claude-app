@@ -382,3 +382,16 @@ Deno.test("returns null rather than a data URI or nothing usable", () => {
   eq(extractSiteLogo("<html><body>no images</body></html>", "https://a.com/"), null);
   eq(extractSiteLogo("", "https://a.com/"), null);
 });
+
+Deno.test("decodes HTML entities in extracted URLs", () => {
+  // Shopify CDN logos arrive as "...?v=175&amp;width=1100". Left encoded, the
+  // browser requests an "amp;width" parameter and the image fails to load.
+  eq(
+    absolutiseUrl("https://cdn.shopify.com/f/logo.png?v=175&amp;width=1100", "https://a.com/"),
+    "https://cdn.shopify.com/f/logo.png?v=175&width=1100",
+  );
+  eq(
+    extractSiteLogo(`<img src="/cdn/logo.png?v=1&amp;w=200">`, "https://a.com/"),
+    "https://a.com/cdn/logo.png?v=1&w=200",
+  );
+});
