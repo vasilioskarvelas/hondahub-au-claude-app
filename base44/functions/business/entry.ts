@@ -161,12 +161,26 @@ Deno.serve(async (req) => {
       const category = body.category;
       if (!BUSINESS_CATEGORY_VALUES.includes(category)) return err("VALIDATION_FAILED", 422, { category: "invalid" });
 
-      // One owned business per account: stops a single user spraying pending
-      // requests into the moderation queue.
-      const mine = await base44.asServiceRole.entities.BusinessMembership.filter({
-        user_id: user.id, role: BusinessRole.OWNER, status: BusinessMembershipStatus.ACTIVE,
-      });
-      if (mine.length) return err("BUSINESS_ALREADY_REQUESTED", 409, { business_id: mine[0].business_id });
+      // Anti-spam is about UNREVIEWED requests, not about owning one business.
+      // A person can legitimately run more than one, and blocking the second
+      // outright was wrong: what must not happen is one account queueing several
+      // requests for a moderator at once. So the limit is a single PENDING
+      // request, and an already-approved business does not block a new one.
+      // Moderators and admins are exempt — onboarding partners is their job.
+      if (!isModeratorOrAdmin(user)) {
+        const mine = await base44.asServiceRole.entities.BusinessMembership.filter({
+          user_id: user.id, role: BusinessRole.OWNER, status: BusinessMembershipStatus.ACTIVE,
+        });
+        for (const m of mine) {
+          const b = await base44.asServiceRole.entities.Business.get(m.business_id).catch(() => null);
+          if (b && b.verification_status === BusinessVerificationStatus.PENDING) {
+            return err("BUSINESS_REQUEST_PENDING", 409, {
+              message: "You already have a business waiting for review. We'll be in touch once it's approved.",
+              business_id: b.id,
+            });
+          }
+        }
+      }
 
       const business = await base44.asServiceRole.entities.Business.create({
         name,

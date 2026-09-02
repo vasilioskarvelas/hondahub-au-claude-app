@@ -41,9 +41,14 @@ function readError(body) {
   if (!body || typeof body !== "object") return null;
   const details = body.details || body.error?.details;
   if (details && typeof details === "object") {
-    const first = Object.entries(details).find(([, v]) => typeof v === "string" && v.trim());
-    if (first) return `${first[0]}: ${first[1]}`;
-    if (typeof details.message === "string") return details.message;
+    if (typeof details.message === "string" && details.message.trim()) return details.message;
+    // Only fields that carry an explanation. An identifier is not a reason:
+    // "business_id: 6a98112e..." tells a person nothing about what went wrong,
+    // and showing it buries the code that actually explains the failure.
+    const reason = Object.entries(details).find(
+      ([k, v]) => typeof v === "string" && v.trim() && !isIdentifier(k, v),
+    );
+    if (reason) return `${humanField(reason[0])}: ${reason[1]}`;
   }
   if (typeof body.error === "string") return prettyCode(body.error);
   if (typeof body.error?.message === "string") return body.error.message;
@@ -51,12 +56,21 @@ function readError(body) {
   return null;
 }
 
+/** True for fields whose value is an id or opaque token rather than a reason. */
+function isIdentifier(key, value) {
+  return /(^|_)id$/i.test(key) || /^[0-9a-f]{16,}$/i.test(String(value).trim());
+}
+
+function humanField(key) {
+  return String(key).replace(/_/g, " ");
+}
+
 /** Turn SCREAMING_CODES into something a person can read. */
 function prettyCode(code) {
   const known = {
     AUTH_REQUIRED: "You need to be signed in.",
     PERMISSION_DENIED: "You don't have access to that business.",
-    BUSINESS_ALREADY_REQUESTED: "You already have a business on this account.",
+    BUSINESS_REQUEST_PENDING: "You already have a business waiting for review.",
     CONNECTION_NOT_VERIFIED: "This store isn't verified yet.",
     ENCRYPTION_NOT_CONFIGURED: "Credential encryption isn't configured on the server.",
     SITE_UNREACHABLE: "We couldn't reach that website.",
