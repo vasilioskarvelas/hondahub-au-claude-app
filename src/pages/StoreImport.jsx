@@ -23,6 +23,9 @@ export default function StoreImport() {
   const { user } = useAuth();
   const [selected, setSelected] = React.useState(null);
   const [queueKey, setQueueKey] = React.useState(0);
+  // Bumped when a store is connected, so the connections list re-mounts and
+  // shows it without the user having to hit Refresh.
+  const [connKey, setConnKey] = React.useState(0);
 
   // Sign-in is the only gate rendered here. Whether this user may actually manage
   // a store is decided server-side from their BusinessMembership — the backend is
@@ -60,9 +63,10 @@ export default function StoreImport() {
 
       {/* Order matters: automatic routes first, spreadsheet upload last. Most
           businesses never need to see the CSV card at all. */}
-      <WebsiteScanCard onConnected={() => setQueueKey((k) => k + 1)} />
+      <WebsiteScanCard onConnected={() => { setConnKey((k) => k + 1); setQueueKey((k) => k + 1); }} />
 
       <StoreConnectionsCard
+        key={connKey}
         selectedId={selected?.id}
         onSelect={setSelected}
         onSyncFinished={() => setQueueKey((k) => k + 1)}

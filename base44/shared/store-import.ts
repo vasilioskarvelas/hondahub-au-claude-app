@@ -108,19 +108,47 @@ const DESCRIPTION_MAX = 4000;
 const PHOTO_URLS_MAX = 10;
 const SOURCE_RAW_MAX = 4000;
 
-/** Strip HTML tags and collapse whitespace from a source description. */
+// Named entities worth decoding. WordPress in particular emits typographic
+// punctuation as entities, so product titles arrive full of them.
+const NAMED_ENTITIES: Record<string, string> = {
+  nbsp: " ", amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", "#39": "'",
+  ndash: "–", mdash: "—", lsquo: "‘", rsquo: "’",
+  ldquo: "“", rdquo: "”", hellip: "…", trade: "™",
+  reg: "®", copy: "©", deg: "°", eacute: "é", middot: "·", bull: "•",
+};
+
+/**
+ * Strip HTML tags and decode entities from source text.
+ *
+ * Numeric entities matter as much as named ones: WooCommerce titles arrive as
+ * "NRG Innovations &#8211; Short Hub", and leaving that raw puts literal
+ * "&#8211;" in a product title on the marketplace. Both decimal (&#8211;) and
+ * hex (&#x2013;) forms are handled.
+ */
 export function stripHtml(html: unknown): string {
   return String(html || "")
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&quot;/gi, '"')
+    // Numeric entities first, so a decoded "&amp;#8211;" cannot be missed.
+    .replace(/&#(\d+);/g, (_m, d) => safeCodePoint(Number(d)))
+    .replace(/&#x([0-9a-f]+);/gi, (_m, h) => safeCodePoint(parseInt(h, 16)))
+    .replace(/&([a-z][a-z0-9]*);/gi, (m, name) => {
+      const v = NAMED_ENTITIES[String(name).toLowerCase()];
+      return v === undefined ? m : v;
+    })
     .replace(/[ \t]+/g, " ")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+/** Convert a code point, leaving anything out of range untouched. */
+function safeCodePoint(n: number): string {
+  if (!Number.isFinite(n) || n < 0 || n > 0x10ffff) return "";
+  try {
+    return String.fromCodePoint(n);
+  } catch {
+    return "";
+  }
 }
 
 /** Shopify prices are decimal strings ("129.95"). Convert to integer cents (ADR-018). */

@@ -196,3 +196,29 @@ Deno.test("a freshly mapped Shopify product always needs human attention today",
   const m = mapShopifyProduct(SHOPIFY_PRODUCT, CONNECTION);
   eq(stageStatus(m, null), ImportItemStatus.NEEDS_ATTENTION);
 });
+
+// --- HTML entity decoding (found in live WooCommerce data) ---------------------
+
+Deno.test("stripHtml decodes numeric entities", () => {
+  // Real title from elusiveracing.com.au. Left raw, "&#8211;" appears verbatim
+  // in a product title on the marketplace.
+  eq(
+    stripHtml("NRG Innovations &#8211; Short Hub BMW E36"),
+    "NRG Innovations – Short Hub BMW E36",
+  );
+  eq(stripHtml("Width &#x2013; 14&#8221;"), "Width – 14”", "hex entities too");
+});
+
+Deno.test("stripHtml decodes the named entities WordPress emits", () => {
+  eq(stripHtml("Tom &amp; Jerry&rsquo;s &ldquo;parts&rdquo;"), "Tom & Jerry’s “parts”");
+  eq(stripHtml("Skunk2&trade; 90&deg; bend"), "Skunk2™ 90° bend");
+});
+
+Deno.test("stripHtml leaves unknown entities alone rather than mangling them", () => {
+  eq(stripHtml("50 &widget; each"), "50 &widget; each");
+});
+
+Deno.test("stripHtml still strips tags and normalises whitespace", () => {
+  eq(stripHtml("<p>Front <strong>brake</strong></p>"), "Front brake");
+  eq(stripHtml(null), "");
+});
