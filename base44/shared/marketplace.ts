@@ -614,6 +614,9 @@ export async function createImportedListing(
     video_urls: [],
     additional_specifications: [],
     imported_from_connection_id: connection?.id ?? null,
+    // Attribution for the business storefront. Distinct from the traceability
+    // field above: this one is read by search and filtering.
+    business_id: connection?.business_id ?? null,
   };
   if (item?.description) fields.description = String(item.description).slice(0, DESCRIPTION_MAX);
 

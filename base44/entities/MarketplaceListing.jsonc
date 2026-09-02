@@ -299,6 +299,10 @@
       "type": "string",
       "description": "ADR-046 Phase 1: nullable FK\u2192BusinessStoreConnection. Traceability ONLY \u2014 set solely by the internal MarketplaceService import-approval path (Section 8), which derives the poster server-side from the connection's business owner. NEVER read by search, filtering, permissions, or any manual listing-creation flow. Null for all manually-created listings. Additive field \u2014 existing flows are completely unaffected."
     },
+    "business_id": {
+      "type": "string",
+      "description": "Nullable FK\u2192Business. Set when a listing belongs to a business storefront (currently by the import-approval path, taken from the connection's business). Unlike imported_from_connection_id, which is traceability only, this field IS read by search and filtering \u2014 it is what powers business storefront pages. Null for listings posted by individual members, which keeps member listings out of every storefront by default."
+    },
     "status": {
       "type": "string",
       "enum": [

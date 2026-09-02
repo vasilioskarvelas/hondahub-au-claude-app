@@ -52,6 +52,8 @@ import EntitlementOverrides from '@/pages/EntitlementOverrides';
 import JobStatusDashboard from '@/pages/JobStatusDashboard';
 import AdminDashboard from '@/pages/AdminDashboard';
 import BusinessVerificationQueue from '@/pages/BusinessVerificationQueue';
+import Businesses from '@/pages/Businesses';
+import BusinessStorefront from '@/pages/BusinessStorefront';
 import StoreImport from '@/pages/StoreImport';
 import ProfileLoadError from '@/pages/ProfileLoadError';
 
@@ -113,6 +115,8 @@ const AuthenticatedApp = () => {
         <Route path="/feed" element={<Feed />} />
         <Route path="/post/:id" element={<PostDetail />} />
         <Route path="/marketplace" element={<Marketplace />} />
+        <Route path="/businesses" element={<Businesses />} />
+        <Route path="/business/:id" element={<BusinessStorefront />} />
         <Route path="/marketplace/:id" element={<MarketplaceListingDetail />} />
         <Route path="/user/:name" element={<UserProfile />} />
 

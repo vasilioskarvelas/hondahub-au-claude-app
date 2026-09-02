@@ -696,6 +696,8 @@ Deno.serve(async (req) => {
       if (body.listing_type && LISTING_TYPE_VALUES.includes(body.listing_type)) filter.listing_type = body.listing_type;
       if (body.category && LISTING_CATEGORY_VALUES.includes(body.category)) filter.category = body.category;
       if (body.condition && LISTING_CONDITION_VALUES.includes(body.condition)) filter.condition = body.condition;
+      // Business storefront: only listings attributed to that business.
+      if (body.business_id) filter.business_id = String(body.business_id);
       let listings = await base44.asServiceRole.entities.MarketplaceListing.filter(filter, "-published_at", 500);
       if (body.price_min_cents != null) {
         const min = Number(body.price_min_cents);
