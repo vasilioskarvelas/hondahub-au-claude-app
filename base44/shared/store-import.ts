@@ -314,6 +314,23 @@ export function detectDuplicate(
 }
 
 /**
+ * What a product is missing before it could be listed at all.
+ *
+ * Photo, price and description are non-negotiable: a storefront of blank cards
+ * with no price reflects on the business, not on the import that produced them.
+ * Returned as a list so the reviewer is told exactly what to supply rather than
+ * just seeing "needs attention".
+ */
+export function missingEssentials(item: Record<string, any>): string[] {
+  const missing: string[] = [];
+  if (!item?.title || !String(item.title).trim()) missing.push("title");
+  if (item?.price_cents === null || item?.price_cents === undefined) missing.push("price");
+  if (!Array.isArray(item?.photo_urls) || item.photo_urls.length === 0) missing.push("photo");
+  if (!item?.description || !String(item.description).trim()) missing.push("description");
+  return missing;
+}
+
+/**
  * Decide the staged status for a freshly mapped item. A duplicate outranks
  * everything; otherwise anything missing what a listing requires — or lacking
  * confirmed Honda compatibility — needs a human before it can be approved.
@@ -323,7 +340,7 @@ export function stageStatus(
   duplicate: { duplicate_of_item_id: string } | null,
 ): string {
   if (duplicate) return ImportItemStatus.POSSIBLE_DUPLICATE;
-  if (!item.title || item.price_cents === null) return ImportItemStatus.NEEDS_ATTENTION;
+  if (missingEssentials(item).length) return ImportItemStatus.NEEDS_ATTENTION;
   const score = item.compatibility_confidence_score;
   if (typeof score !== "number" || score < COMPATIBILITY_CONFIDENCE_THRESHOLD) {
     return ImportItemStatus.NEEDS_ATTENTION;

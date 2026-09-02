@@ -14,7 +14,7 @@ import { mapShopifyProduct } from "./store-import.ts";
 import {
   parseSitemapUrls, isSitemapIndexEntry, looksLikeProductUrl, parsePriceText,
   extractJsonLdBlocks, findJsonLdProduct, fromJsonLdProduct, fromMetaTags,
-  htmlForExtraction, absolutiseUrl, mapExtractedProduct,
+  htmlForExtraction, absolutiseUrl, mapExtractedProduct, fromHtmlHeuristics,
 } from "./web-extract.ts";
 
 function eq(actual: unknown, expected: unknown, msg?: string) {
@@ -290,4 +290,65 @@ Deno.test("mapShopifyProduct handles the public feed shape", () => {
   eq(m.manufacturer_part_number, null, "public feed has no barcode");
   eq(m.description?.includes("Dayco Automatic Belt Tensioner – Honda K-Series K20 & K24"), true, "entities decoded");
   eq(m.category, "engine");
+});
+
+// --- reading a bespoke page's own markup ----------------------------------------
+// Fixture mirrors a real store: the price lives ONLY in a data-price attribute
+// and the photo ONLY in an <img src>. Both are destroyed by stripping tags, so
+// an extractor that works from text alone finds neither.
+
+const BESPOKE_PAGE = `<html><head>
+<title>Buy Optima 34 Red Top Battery Online | A2R Batteries &amp; Performance </title>
+<meta name="description" content="High performance AGM battery, 800 CCA.">
+</head><body>
+<img src="/images/logo.png">
+<h1 class="title">Optima 34 Red Top Battery</h1>
+<div class="price-wrap"><span class="price" data-price="440.00"></span></div>
+<img class="modal-popup" src="/images/cms/products/1548/products-1548-1.png">
+<img src="/images/icons/footer/amex-icon.png">
+</body></html>`;
+
+const PAGE_URL = "https://a2rbatteriesandperformance.com.au/product/1548/optima-34-red-top-battery";
+
+// fromHtmlHeuristics returns null for a page with no title; these cases expect a
+// result, so assert that rather than silencing the type.
+function mustExtract(html: string, url: string): Record<string, any> {
+  const r = fromHtmlHeuristics(html, url);
+  if (!r) throw new Error("expected an extraction, got null");
+  return r;
+}
+
+Deno.test("reads a price held only in a data-price attribute", () => {
+  eq(mustExtract(BESPOKE_PAGE, PAGE_URL).price_cents, 44000);
+});
+
+Deno.test("reads product images and skips site furniture", () => {
+  const r = mustExtract(BESPOKE_PAGE, PAGE_URL);
+  deepEq(r.photo_urls, ["https://a2rbatteriesandperformance.com.au/images/cms/products/1548/products-1548-1.png"]);
+});
+
+Deno.test("prefers the on-page heading and strips site branding from a title", () => {
+  eq(mustExtract(BESPOKE_PAGE, PAGE_URL).title, "Optima 34 Red Top Battery");
+  // Falling back to <title>, "Buy ... Online | Store" must lose the boilerplate.
+  const noH1 = BESPOKE_PAGE.replace(/<h1[\s\S]*?<\/h1>/, "");
+  eq(mustExtract(noH1, PAGE_URL).title, "Optima 34 Red Top Battery");
+});
+
+Deno.test("takes the description from the meta tag", () => {
+  eq(mustExtract(BESPOKE_PAGE, PAGE_URL).description, "High performance AGM battery, 800 CCA.");
+});
+
+Deno.test("falls back to a visible currency amount when there is no attribute", () => {
+  const visible = `<h1>Brake Kit</h1><span>Now $1,299.00 inc GST</span>`;
+  eq(mustExtract(visible, PAGE_URL).price_cents, 129900);
+});
+
+Deno.test("returns null when there is no title to work with", () => {
+  eq(fromHtmlHeuristics("<html><body><p>nothing</p></body></html>", PAGE_URL), null);
+});
+
+Deno.test("results from the page are source-confirmed, not inferred", () => {
+  const m = mapExtractedProduct(mustExtract(BESPOKE_PAGE, PAGE_URL), PAGE_URL, CONN, "html")!;
+  eq(m.field_provenance.price_cents, "source_confirmed", "read from the page, not interpreted");
+  eq(m.price_cents, 44000);
 });

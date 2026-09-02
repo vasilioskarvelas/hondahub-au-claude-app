@@ -12,7 +12,7 @@ import {
   stripHtml, priceToCents, inferCategory, mapShopifyProduct,
   detectDuplicate, stageStatus, ImportItemStatus, DuplicateMatchMethod,
   HondaCompatibilityStatus, FieldProvenance, COMPATIBILITY_CONFIDENCE_THRESHOLD,
-  detectOtherMarque,
+  detectOtherMarque, missingEssentials,
 } from "./store-import.ts";
 
 function eq(actual: unknown, expected: unknown, msg?: string) {
@@ -170,7 +170,10 @@ Deno.test("detectDuplicate never matches on empty/null identifiers", () => {
 // --- staged status routing -----------------------------------------------------
 
 Deno.test("stageStatus routes duplicates, gaps and unverified compatibility", () => {
-  const complete = { title: "X", price_cents: 100, compatibility_confidence_score: COMPATIBILITY_CONFIDENCE_THRESHOLD };
+  const complete = {
+    title: "X", price_cents: 100, photo_urls: ["https://a/1.jpg"], description: "A part.",
+    compatibility_confidence_score: COMPATIBILITY_CONFIDENCE_THRESHOLD,
+  };
   eq(
     stageStatus(complete, { duplicate_of_item_id: "a" }),
     ImportItemStatus.POSSIBLE_DUPLICATE,
@@ -269,4 +272,32 @@ Deno.test("a product with no marque signal at all is kept", () => {
 
 Deno.test("the brand field is searched too", () => {
   eq(detectOtherMarque({ title: "Short Hub", brand: "Toyota" }), "toyota");
+});
+
+// --- a listing must be worth showing a buyer -------------------------------------
+
+Deno.test("a product with no photo, price or description can never be ready", () => {
+  const base = {
+    title: "Optima Battery", price_cents: 44000,
+    photo_urls: ["https://a/1.jpg"], description: "AGM battery.",
+    compatibility_confidence_score: 95,
+  };
+  eq(stageStatus(base, null), ImportItemStatus.READY_FOR_APPROVAL, "complete item");
+  eq(stageStatus({ ...base, photo_urls: [] }, null), ImportItemStatus.NEEDS_ATTENTION, "no photo");
+  eq(stageStatus({ ...base, price_cents: null }, null), ImportItemStatus.NEEDS_ATTENTION, "no price");
+  eq(stageStatus({ ...base, description: "" }, null), ImportItemStatus.NEEDS_ATTENTION, "no description");
+  eq(stageStatus({ ...base, description: "   " }, null), ImportItemStatus.NEEDS_ATTENTION, "whitespace description");
+});
+
+Deno.test("missingEssentials names exactly what a reviewer has to supply", () => {
+  deepEq(
+    missingEssentials({ title: "X", price_cents: 100, photo_urls: ["https://a/1.jpg"], description: "d" }),
+    [],
+  );
+  deepEq(
+    missingEssentials({ title: "X" }),
+    ["price", "photo", "description"],
+    "so the queue can say what is needed, not just 'needs attention'",
+  );
+  deepEq(missingEssentials({}), ["title", "price", "photo", "description"]);
 });

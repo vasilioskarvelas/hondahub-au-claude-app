@@ -52,6 +52,17 @@ const ENGINES = ["d_series", "b_series", "k_series", "j_series", "f_series", "h_
 const money = (cents) =>
   cents === null || cents === undefined ? "—" : `$${(cents / 100).toFixed(2)}`;
 
+// Mirrors missingEssentials on the backend. A product without a photo, price or
+// description cannot be listed, so the reviewer is told exactly what to supply
+// rather than left to work out why an item says "needs attention".
+function missingBits(item) {
+  const missing = [];
+  if (item.price_cents === null || item.price_cents === undefined) missing.push("price");
+  if (!item.photo_urls?.length) missing.push("photo");
+  if (!item.description?.trim()) missing.push("description");
+  return missing;
+}
+
 function Chips({ options, selected, onToggle }) {
   return (
     <div className="flex flex-wrap gap-1.5">
@@ -166,6 +177,11 @@ function ItemRow({ item, onResolved }) {
             {item.sku ? ` · SKU ${item.sku}` : ""}
             {item.brand ? ` · ${item.brand}` : ""}
           </p>
+          {missingBits(item).length > 0 && !resolved && (
+            <p className="mt-1 text-xs text-amber-500">
+              Missing {missingBits(item).join(", ")} — needed before this can be listed.
+            </p>
+          )}
           {item.status === "possible_duplicate" && (
             <p className="mt-1 flex items-center gap-1.5 text-xs text-orange-500">
               <Copy className="h-3.5 w-3.5" />

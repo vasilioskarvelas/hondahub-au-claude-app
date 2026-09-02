@@ -16,6 +16,7 @@ import {
   parseSitemapUrls, isSitemapIndexEntry, looksLikeProductUrl,
   extractJsonLdBlocks, findJsonLdProduct, fromJsonLdProduct, fromMetaTags,
   buildExtractionPrompt, mapExtractedProduct, EXTRACTION_SCHEMA, EXTRACT_MAX_PAGES,
+  fromHtmlHeuristics,
 } from "../../shared/web-extract.ts";
 
 import { decryptToken } from "../../shared/store-crypto.ts";
@@ -207,7 +208,16 @@ async function fetchWebsiteBatch(
         const meta = fromMetaTags(html);
         if (meta && (meta.price_cents !== null || !data)) { data = meta; source = "meta_tags"; }
       }
-      // 3. the model, only for pages that expose nothing usable
+      // 3. the page markup itself — reads attributes (data-price, img src) that
+      //    the tag-stripped text handed to a model no longer contains.
+      if (!data || data.price_cents === null || !(data.photo_urls || []).length) {
+        const heur = fromHtmlHeuristics(html, pageUrl);
+        if (heur && (heur.price_cents !== null || (heur.photo_urls || []).length)) {
+          data = { ...(data || {}), ...heur, ...(data?.title ? { title: data.title } : {}) };
+          source = "html";
+        }
+      }
+      // 4. the model, only for pages that expose nothing usable
       if (!data || data.price_cents === null) {
         const llm = await base44.integrations.Core.InvokeLLM({
           prompt: buildExtractionPrompt(pageUrl, html),

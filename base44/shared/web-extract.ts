@@ -160,6 +160,75 @@ export function fromMetaTags(html: string): Record<string, any> | null {
   };
 }
 
+// Image paths that are never the product: site furniture, payment badges and
+// placeholders. Matched on the URL, which is where these give themselves away.
+const NON_PRODUCT_IMAGE = /(logo|icon|sprite|placeholder|banner|badge|payment|amex|visa|mastercard|paypal|afterpay|zip|footer|header|avatar|flag|spinner|loading)/i;
+
+/**
+ * Read a product straight out of the HTML.
+ *
+ * Sits between the structured sources and the model, and on many bespoke stores
+ * it is the one that actually works. Crucially it reads ATTRIBUTES, which the
+ * other paths cannot: a real store was found publishing its price only as
+ * `data-price="440.00"` and its photos only as `<img src>` — both of which are
+ * destroyed by stripping tags, so the model was being handed a page with the
+ * price and images already deleted and unsurprisingly returned neither.
+ *
+ * Everything here is read from the page as published, so results are
+ * source_confirmed rather than inferred.
+ */
+export function fromHtmlHeuristics(html: string, pageUrl: string): Record<string, any> | null {
+  const h = String(html || "");
+
+  // --- title: the on-page heading beats the tab title, which carries site branding
+  const h1 = h.match(/<h1[^>]*>([\s\S]{0,300}?)<\/h1>/i)?.[1];
+  const titleTag = h.match(/<title[^>]*>([\s\S]{0,300}?)<\/title>/i)?.[1];
+  const title = stripHtml(h1 || titleTag)
+    // "Buy X Online | Store Name" — keep the product, drop the boilerplate.
+    .replace(/^\s*buy\s+/i, "")
+    .split(/\s*[|]\s*/)[0]
+    .replace(/\s+online\s*$/i, "")
+    .trim();
+  if (!title) return null;
+
+  // --- price: attributes first, then visible currency text
+  let price: number | null = null;
+  const attrPrice =
+    h.match(/data-price\s*=\s*["']([0-9][0-9.,]*)["']/i)?.[1] ??
+    h.match(/itemprop\s*=\s*["']price["'][^>]*content\s*=\s*["']([0-9][0-9.,]*)["']/i)?.[1] ??
+    h.match(/content\s*=\s*["']([0-9][0-9.,]*)["'][^>]*itemprop\s*=\s*["']price["']/i)?.[1];
+  if (attrPrice) price = parsePriceText(attrPrice);
+  if (price === null) {
+    const text = stripHtml(h);
+    const money = text.match(/\$\s?([0-9][0-9,]*(?:\.[0-9]{2})?)/);
+    if (money) price = parsePriceText(money[1]);
+  }
+
+  // --- images: every <img src>, minus site furniture, made absolute
+  const images: string[] = [];
+  const imgRe = /<img[^>]+?src\s*=\s*["']([^"']+)["']/gi;
+  let m: RegExpExecArray | null;
+  while ((m = imgRe.exec(h)) !== null && images.length < 10) {
+    const raw = m[1].trim();
+    if (!raw || NON_PRODUCT_IMAGE.test(raw)) continue;
+    const abs = absolutiseUrl(raw, pageUrl);
+    if (abs && !images.includes(abs)) images.push(abs);
+  }
+
+  const metaDesc = h.match(/<meta[^>]+name\s*=\s*["']description["'][^>]*content\s*=\s*["']([^"']*)["']/i)?.[1];
+
+  return {
+    title: title.slice(0, 140),
+    description: stripHtml(metaDesc).slice(0, 4000) || null,
+    price_cents: price,
+    sku: null,
+    manufacturer_part_number: null,
+    brand: null,
+    photo_urls: images,
+    source: "html",
+  };
+}
+
 /**
  * Reduce a page to the markup worth sending to a model: strip scripts, styles,
  * SVG and comments, then take a budgeted slice. Keeps token cost bounded and
