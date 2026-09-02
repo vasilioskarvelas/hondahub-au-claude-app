@@ -16,6 +16,7 @@ import { err } from "./http.ts";
 export const StorePlatform = Object.freeze({
   SHOPIFY: "shopify",
   WOOCOMMERCE: "woocommerce",
+  CSV: "csv",
 });
 export const STORE_PLATFORM_VALUES = Object.values(StorePlatform);
 

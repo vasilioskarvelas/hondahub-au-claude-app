@@ -10,7 +10,8 @@
       "type": "string",
       "enum": [
         "shopify",
-        "woocommerce"
+        "woocommerce",
+        "csv"
       ],
       "description": "The e-commerce platform. Shopify uses OAuth ownership verification; WooCommerce uses REST API key validation."
     },
@@ -41,7 +42,8 @@
       "type": "string",
       "enum": [
         "shopify_oauth",
-        "woocommerce_api_key"
+        "woocommerce_api_key",
+        "self_declared"
       ],
       "description": "How ownership was verified."
     },

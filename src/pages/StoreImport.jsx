@@ -6,12 +6,14 @@ import ConnectShopifyCard from "@/components/store-import/ConnectShopifyCard";
 import StoreConnectionsCard from "@/components/store-import/StoreConnectionsCard";
 import ImportQueue from "@/components/store-import/ImportQueue";
 import WebsiteScanCard from "@/components/store-import/WebsiteScanCard";
+import CsvUploadCard from "@/components/store-import/CsvUploadCard";
 
 /**
- * StoreImport — Phase 1 admin surface for Business Store Import (ADR-046).
- * The feature flag is admin-only: this page renders an access-restricted state
- * for non-admins (the frontend gate is supplemental; the backend + RLS are the
- * real boundary).
+ * StoreImport — Business Store Import (ADR-046).
+ *
+ * Business partners manage their own catalogue here; admins may act on any
+ * business. Who may do what is decided server-side from BusinessMembership —
+ * this page only gates on being signed in.
  *
  * Flow: connect a store (OAuth ownership verification) → sync its catalogue into
  * staging → review each product and set Honda compatibility → approve, which
@@ -57,6 +59,8 @@ export default function StoreImport() {
       </header>
 
       <WebsiteScanCard />
+
+      <CsvUploadCard onImported={() => setQueueKey((k) => k + 1)} />
 
       <StoreConnectionsCard
         selectedId={selected?.id}

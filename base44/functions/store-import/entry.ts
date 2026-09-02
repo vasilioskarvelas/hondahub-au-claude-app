@@ -8,6 +8,7 @@ import {
   mapShopifyProduct, detectDuplicate, stageStatus,
 } from "../../shared/store-import.ts";
 import { normaliseWebsite, fingerprintPlatform, recommendImportMethod } from "../../shared/platform-detect.ts";
+import { parseCsv, detectColumns, mapCsvRow, previewCsv, CSV_MAX_BYTES, CSV_MAX_ROWS } from "../../shared/csv-import.ts";
 import { decryptToken } from "../../shared/store-crypto.ts";
 import { createImportedListing } from "../../shared/marketplace.ts";
 
@@ -272,6 +273,108 @@ Deno.serve(async (req) => {
         ok: true, run_id: runId, has_more: !done, staged, skipped, failed,
         processed, page_size: products.length,
         capped: processed + failed >= SYNC_MAX_PRODUCTS,
+      });
+    }
+
+    // ---- previewCsv ----
+    // Dry run: parse and summarise an uploaded file without staging anything, so
+    // a business can confirm their columns mapped correctly before committing.
+    if (action === "previewCsv") {
+      const text = typeof body.csv === "string" ? body.csv : "";
+      if (!text) return err("VALIDATION_FAILED", 422, { csv: "required" });
+      if (text.length > CSV_MAX_BYTES) {
+        return err("FILE_TOO_LARGE", 413, { max_bytes: CSV_MAX_BYTES, got: text.length });
+      }
+      return json({ ok: true, ...previewCsv(text) });
+    }
+
+    // ---- importCsv ----
+    // The universal route: a business uploads their own catalogue export. No API
+    // and no scraping, so it works whatever their site runs on.
+    //
+    // Ownership here is `self_declared`: the uploader is an active member of the
+    // business and is asserting this is their own catalogue. That is a weaker
+    // claim than Shopify OAuth, which is why it is recorded as a distinct
+    // verification method rather than being passed off as verified ownership.
+    if (action === "importCsv") {
+      const { business_id } = body;
+      if (!business_id) return err("VALIDATION_FAILED", 422, { business_id: "required" });
+      if (!canAccessBusiness(allowed, business_id)) return err("PERMISSION_DENIED", 403);
+      const text = typeof body.csv === "string" ? body.csv : "";
+      if (!text) return err("VALIDATION_FAILED", 422, { csv: "required" });
+      if (text.length > CSV_MAX_BYTES) {
+        return err("FILE_TOO_LARGE", 413, { max_bytes: CSV_MAX_BYTES, got: text.length });
+      }
+      const business = await S.Business.get(business_id).catch(() => null);
+      if (!business) return err("RESOURCE_NOT_FOUND", 404, { business_id: "not found" });
+
+      const rows = parseCsv(text);
+      if (rows.length < 2) return err("VALIDATION_FAILED", 422, { csv: "no data rows found" });
+      const headers = rows[0].map((h: string) => String(h || "").trim());
+      const { mapping } = detectColumns(headers);
+      if (mapping.title === undefined) {
+        return err("VALIDATION_FAILED", 422, { csv: "no product name column (Title, Name or Product)" });
+      }
+      const dataRows = rows.slice(1).filter((r: string[]) => r.some((c) => String(c || "").trim() !== ""));
+      if (dataRows.length > CSV_MAX_ROWS) {
+        return err("TOO_MANY_ROWS", 413, { max_rows: CSV_MAX_ROWS, got: dataRows.length });
+      }
+
+      // One CSV connection per business: re-uploading updates the same source
+      // rather than accumulating a new connection per upload.
+      const label = String(body.source_label || business.name || "Spreadsheet upload").slice(0, 120);
+      const existing = (await S.BusinessStoreConnection.filter({ business_id, platform: StorePlatform.CSV }))
+        .find((c: any) => c.connection_status !== ConnectionStatus.DISCONNECTED);
+      const now = nowIso();
+      const conn = existing || await S.BusinessStoreConnection.create({
+        business_id,
+        platform: StorePlatform.CSV,
+        store_domain: normaliseWebsite(body.website) || `csv:${business_id}`,
+        store_name: label,
+        connection_status: ConnectionStatus.VERIFIED,
+        ownership_verified_at: now,
+        ownership_verification_method: "self_declared",
+        sync_status: SyncStatus.IDLE,
+      });
+
+      const seen = await S.StoreImportItem.filter({ connection_id: conn.id }, "-created_date", 1000);
+      const pool = seen.slice();
+      let staged = 0, skipped = 0, failed = 0;
+
+      for (let i = 0; i < dataRows.length; i++) {
+        try {
+          const mapped = mapCsvRow(dataRows[i], mapping, conn, i + 1);
+          if (!mapped) { skipped++; continue; }
+          // Re-upload of a product already staged: leave the existing row alone
+          // rather than duplicating it or discarding a reviewer's edits.
+          if (pool.find((e: any) => String(e.external_id) === mapped.external_id)) { skipped++; continue; }
+          const dup = detectDuplicate(mapped, pool);
+          const created = await S.StoreImportItem.create({
+            ...mapped,
+            status: stageStatus(mapped, dup),
+            ...(dup ? { duplicate_of_item_id: dup.duplicate_of_item_id, duplicate_match_method: dup.duplicate_match_method } : {}),
+            last_scanned_at: now,
+          });
+          pool.push(created);
+          staged++;
+        } catch {
+          failed++; // per-row isolation: one bad row must not abort the upload
+        }
+      }
+
+      await S.BusinessStoreConnection.update(conn.id, {
+        sync_status: SyncStatus.COMPLETED,
+        last_sync_started_at: now,
+        last_sync_finished_at: nowIso(),
+        sync_total: dataRows.length,
+        sync_processed: staged + skipped,
+        sync_failed: failed,
+        last_error: null,
+      });
+      return json({
+        ok: true, connection_id: conn.id, total_rows: dataRows.length,
+        staged, skipped, failed,
+        unmapped_columns: detectColumns(headers).unmapped,
       });
     }
 
