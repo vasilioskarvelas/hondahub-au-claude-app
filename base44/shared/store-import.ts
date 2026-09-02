@@ -94,3 +94,190 @@ export function requireStoreImportAdmin(user: any): Response | null {
   if (user.role !== "admin") return err("PERMISSION_DENIED", 403, { reason: "admin only" });
   return null;
 }
+// ============================================================================
+// Product staging — pure helpers (ADR-046 §6–§8)
+//
+// Kept free of SDK/network calls so they are unit-testable; the service layer
+// (functions/store-import) does the fetching and persistence.
+// ============================================================================
+
+const TITLE_MAX = 140;
+const DESCRIPTION_MAX = 4000;
+const PHOTO_URLS_MAX = 10;
+const SOURCE_RAW_MAX = 4000;
+
+/** Strip HTML tags and collapse whitespace from a source description. */
+export function stripHtml(html: unknown): string {
+  return String(html || "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/** Shopify prices are decimal strings ("129.95"). Convert to integer cents (ADR-018). */
+export function priceToCents(price: unknown): number | null {
+  if (price === null || price === undefined || price === "") return null;
+  const n = Number(price);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return Math.round(n * 100);
+}
+
+// Keyword → MarketplaceListing category. Deliberately conservative: anything
+// that does not match a specific bucket falls to `other` rather than guessing,
+// because a wrong category is worse than an unset one an admin can fix.
+const CATEGORY_KEYWORDS: [string, string[]][] = [
+  ["forced_induction", ["turbo", "supercharger", "intercooler", "blow off", "wastegate", "manifold boost"]],
+  ["brakes", ["brake", "rotor", "caliper", "brake pad", "disc pad"]],
+  ["suspension", ["coilover", "suspension", "strut", "sway bar", "control arm", "bush", "shock absorber"]],
+  ["wheels_tyres", ["wheel", "rim", "tyre", "tire", "hubcap"]],
+  ["electronics", ["battery", "alternator", "starter motor", "ecu", "sensor", "wiring", "spark plug", "ignition coil", "fuse", "globe", "headlight"]],
+  ["engine", ["engine", "piston", "camshaft", "gasket", "oil pump", "timing belt", "cylinder head", "radiator"]],
+  ["transmission", ["transmission", "gearbox", "clutch", "flywheel", "differential", "shifter"]],
+  ["interior", ["seat", "steering wheel", "gauge", "harness", "floor mat", "dash"]],
+  ["exterior", ["bumper", "spoiler", "body kit", "bonnet", "guard", "mirror", "grille"]],
+  ["tools_equipment", ["tool", "jack", "charger", "tester", "spanner", "socket set"]],
+  ["performance_part", ["exhaust", "intake", "performance", "cat back", "header", "extractor"]],
+];
+
+/**
+ * Best-effort category inference from the product title/type/tags. Returns
+ * `other` when nothing matches — never a guess. The result is always recorded
+ * as ai_inferred provenance so a reviewer knows it was not source-confirmed.
+ */
+export function inferCategory(...text: unknown[]): string {
+  const hay = text.map((t) => String(t || "")).join(" ").toLowerCase();
+  for (const [category, keywords] of CATEGORY_KEYWORDS) {
+    if (keywords.some((k) => hay.includes(k))) return category;
+  }
+  return "other";
+}
+
+/**
+ * Map one Shopify product (Admin API shape) to StoreImportItem fields.
+ *
+ * Compatibility (ADR-043 arrays, confidence score, honda_compatibility_status)
+ * is deliberately NOT inferred here. ADR-046 §7 specifies AI extraction for
+ * those; until that exists, emitting a fabricated score would be worse than
+ * emitting none. Items are staged with empty arrays, `unknown` status and a null
+ * confidence score, which routes them to needs_attention for a human to fill in.
+ */
+export function mapShopifyProduct(product: any, connection: any): Record<string, any> {
+  const variant = Array.isArray(product?.variants) && product.variants.length ? product.variants[0] : {};
+  const title = String(product?.title || "").trim().slice(0, TITLE_MAX);
+  const description = stripHtml(product?.body_html).slice(0, DESCRIPTION_MAX);
+  const photos = (Array.isArray(product?.images) ? product.images : [])
+    .map((i: any) => i?.src)
+    .filter((s: any) => typeof s === "string" && s)
+    .slice(0, PHOTO_URLS_MAX);
+  const handle = product?.handle ? String(product.handle) : null;
+  const externalUrl = handle && connection?.store_domain ? `https://${connection.store_domain}/products/${handle}` : null;
+
+  // Only the fields we actually use downstream, capped — never the full payload.
+  const sourceRaw = JSON.stringify({
+    id: product?.id ?? null,
+    handle,
+    product_type: product?.product_type ?? null,
+    vendor: product?.vendor ?? null,
+    tags: product?.tags ?? null,
+    status: product?.status ?? null,
+    variant_sku: variant?.sku ?? null,
+    variant_price: variant?.price ?? null,
+    variant_barcode: variant?.barcode ?? null,
+  }).slice(0, SOURCE_RAW_MAX);
+
+  return {
+    connection_id: connection?.id ?? null,
+    business_id: connection?.business_id ?? null,
+    external_id: product?.id != null ? String(product.id) : "",
+    external_url: externalUrl,
+    sku: variant?.sku ? String(variant.sku) : null,
+    manufacturer_part_number: variant?.barcode ? String(variant.barcode) : null,
+    title,
+    description: description || null,
+    price_cents: priceToCents(variant?.price),
+    currency: "AUD",
+    condition: "new", // A connected retail store sells new stock; a reviewer can change it.
+    category: inferCategory(title, product?.product_type, product?.tags),
+    brand: product?.vendor ? String(product.vendor).slice(0, 80) : null,
+    oem_or_aftermarket: null,
+    photo_urls: photos,
+    source_raw: sourceRaw,
+    // ADR-043 compatibility — not inferred; see the note above.
+    compatible_models: [],
+    compatible_chassis_codes: [],
+    compatible_engine_families: [],
+    compatible_year_from: null,
+    compatible_year_to: null,
+    compatibility_confidence_score: null,
+    honda_compatibility_status: HondaCompatibilityStatus.UNKNOWN,
+    field_provenance: {
+      title: FieldProvenance.SOURCE_CONFIRMED,
+      description: FieldProvenance.SOURCE_CONFIRMED,
+      price_cents: FieldProvenance.SOURCE_CONFIRMED,
+      sku: FieldProvenance.SOURCE_CONFIRMED,
+      photo_urls: FieldProvenance.SOURCE_CONFIRMED,
+      brand: FieldProvenance.SOURCE_CONFIRMED,
+      category: FieldProvenance.AI_INFERRED,
+      condition: FieldProvenance.AI_INFERRED,
+    },
+  };
+}
+
+/** Normalise a value for duplicate comparison: trimmed, lowercased, or null. */
+function dupKey(v: unknown): string | null {
+  const s = String(v ?? "").trim().toLowerCase();
+  return s || null;
+}
+
+/**
+ * Duplicate-detection waterfall (ADR-046 §8), highest confidence first:
+ * external_id → sku → manufacturer_part_number → canonical_url.
+ *
+ * `ai_similarity` is the specified final fallback and is NOT implemented here —
+ * it needs the same AI layer as compatibility extraction. Its absence means
+ * some near-duplicates with differing identifiers will not be caught; that is a
+ * missed detection (a reviewer sees two similar items), never a false match.
+ */
+export function detectDuplicate(
+  candidate: Record<string, any>,
+  existing: Record<string, any>[],
+): { duplicate_of_item_id: string; duplicate_match_method: string } | null {
+  const waterfall: [string, string][] = [
+    ["external_id", DuplicateMatchMethod.EXTERNAL_ID],
+    ["sku", DuplicateMatchMethod.SKU],
+    ["manufacturer_part_number", DuplicateMatchMethod.MANUFACTURER_PART_NUMBER],
+    ["external_url", DuplicateMatchMethod.CANONICAL_URL],
+  ];
+  for (const [field, method] of waterfall) {
+    const key = dupKey(candidate[field]);
+    if (!key) continue;
+    const hit = existing.find((e) => e && e.id && dupKey(e[field]) === key);
+    if (hit) return { duplicate_of_item_id: hit.id, duplicate_match_method: method };
+  }
+  return null;
+}
+
+/**
+ * Decide the staged status for a freshly mapped item. A duplicate outranks
+ * everything; otherwise anything missing what a listing requires — or lacking
+ * confirmed Honda compatibility — needs a human before it can be approved.
+ */
+export function stageStatus(
+  item: Record<string, any>,
+  duplicate: { duplicate_of_item_id: string } | null,
+): string {
+  if (duplicate) return ImportItemStatus.POSSIBLE_DUPLICATE;
+  if (!item.title || item.price_cents === null) return ImportItemStatus.NEEDS_ATTENTION;
+  const score = item.compatibility_confidence_score;
+  if (typeof score !== "number" || score < COMPATIBILITY_CONFIDENCE_THRESHOLD) {
+    return ImportItemStatus.NEEDS_ATTENTION;
+  }
+  return ImportItemStatus.READY_FOR_APPROVAL;
+}

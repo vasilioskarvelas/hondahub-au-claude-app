@@ -551,3 +551,84 @@ export async function onMarketplaceMessageSent(
   }
   return { ok: true };
 }
+/**
+ * createImportedListing — THE approved creation path for store-imported
+ * listings (ADR-046). The Store Import service calls this; nothing else may
+ * write a MarketplaceListing on an import's behalf.
+ *
+ * Two things it does that createListingDraft deliberately cannot:
+ *
+ *  1. `poster_id` is passed in, derived server-side by the caller from
+ *     BusinessStoreConnection → Business → active owner BusinessMembership
+ *     (ADR-046 Decision 1). It is NEVER the approving admin, and never comes
+ *     from a request body.
+ *  2. `imported_from_connection_id` is stamped so an imported listing is always
+ *     traceable back to the connection that produced it.
+ *
+ * The listing is created as DRAFT. Approving a staged item means "this product
+ * is fit to become a listing", not "publish it" — publication stays a separate,
+ * explicit act via publishListing, so an import can never put a live listing on
+ * the marketplace on its own.
+ *
+ * Category/compatibility/attribute validation reuses the same validators as the
+ * user-facing path, so an imported listing cannot bypass rules a hand-written
+ * one must satisfy. Returns { ok: false, error } rather than throwing so the
+ * caller can mark the item needs_attention instead of failing a whole sync.
+ */
+export async function createImportedListing(
+  base44: any,
+  opts: { item: any; connection: any; posterId: string },
+): Promise<{ ok: true; listing: any } | { ok: false; error: { code: string; field?: string; message: string } }> {
+  const { item, connection, posterId } = opts;
+  if (!posterId) {
+    return { ok: false, error: { code: "IMPORT_POSTER_UNRESOLVED", message: "no active owner membership for this business" } };
+  }
+  const title = String(item?.title || "").trim().slice(0, TITLE_MAX);
+  if (!title) return { ok: false, error: { code: "VALIDATION_FAILED", field: "title", message: "required" } };
+
+  const category = LISTING_CATEGORY_VALUES.includes(item?.category) ? item.category : ListingCategory.OTHER;
+  // An imported product is never a vehicle listing: those must wrap an owned
+  // Garage Vehicle (ADR-020), which an import has no way to supply.
+  if (category === ListingCategory.VEHICLE) {
+    return { ok: false, error: { code: "CATEGORY_NOT_IMPORTABLE", field: "category", message: "vehicle listings cannot be imported" } };
+  }
+  const price_cents = Number.isInteger(item?.price_cents) && item.price_cents >= 0 ? item.price_cents : null;
+  if (price_cents === null) {
+    return { ok: false, error: { code: "VALIDATION_FAILED", field: "price_cents", message: "required for an imported listing" } };
+  }
+  const condition = LISTING_CONDITION_VALUES.includes(item?.condition) ? item.condition : ListingCondition.USED;
+
+  const fields: any = {
+    title,
+    listing_type: ListingType.FOR_SALE,
+    category,
+    poster_id: posterId,
+    price_type: PriceType.FIXED,
+    price_cents,
+    condition,
+    quantity: 1,
+    status: ListingStatus.DRAFT,
+    view_count: 0,
+    conversation_count: 0,
+    photo_urls: Array.isArray(item?.photo_urls) ? item.photo_urls.filter((u: any) => typeof u === "string").slice(0, 10) : [],
+    video_urls: [],
+    additional_specifications: [],
+    imported_from_connection_id: connection?.id ?? null,
+  };
+  if (item?.description) fields.description = String(item.description).slice(0, DESCRIPTION_MAX);
+
+  for (const f of ["compatible_year_from", "compatible_year_to"]) {
+    const y = Number(item?.[f]);
+    if (item?.[f] !== null && item?.[f] !== undefined && Number.isInteger(y) && y >= 1900 && y <= 2100) fields[f] = y;
+  }
+  const compatRes = validateCompatibilityFields(category, item || {});
+  if (!compatRes.ok) return { ok: false, error: compatRes.error };
+  Object.assign(fields, compatRes.fields);
+
+  const catAttr = validateCategoryAttributes(category, item || {}, {});
+  if (!catAttr.ok) return { ok: false, error: catAttr.error };
+  Object.assign(fields, catAttr.fields);
+
+  const listing = await base44.asServiceRole.entities.MarketplaceListing.create(fields);
+  return { ok: true, listing };
+}
