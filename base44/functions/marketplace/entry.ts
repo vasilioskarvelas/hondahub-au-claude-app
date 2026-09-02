@@ -696,9 +696,28 @@ Deno.serve(async (req) => {
       if (body.listing_type && LISTING_TYPE_VALUES.includes(body.listing_type)) filter.listing_type = body.listing_type;
       if (body.category && LISTING_CATEGORY_VALUES.includes(body.category)) filter.category = body.category;
       if (body.condition && LISTING_CONDITION_VALUES.includes(body.condition)) filter.condition = body.condition;
-      // Business storefront: only listings attributed to that business.
-      if (body.business_id) filter.business_id = String(body.business_id);
+      // Business listings live in shops, not the main marketplace.
+      //
+      // One partner can import thousands of products, which would bury the
+      // handful of cars and parts members post and stop the marketplace being a
+      // community board. So business listings are EXCLUDED by default and
+      // surfaced through /businesses instead. `include_business` opts back in;
+      // `business_id` narrows to one shop.
+      //
+      // Filtered at the query rather than after it: with business catalogues
+      // outnumbering member posts many times over, post-filtering one page of
+      // results would leave members with almost nothing left to show.
+      if (body.business_id) {
+        filter.business_id = String(body.business_id);
+      } else if (!body.include_business) {
+        filter.business_id = null;
+      }
       let listings = await base44.asServiceRole.entities.MarketplaceListing.filter(filter, "-published_at", 500);
+      // Belt and braces: if the backend ignores a null filter, drop business
+      // listings here too rather than flooding the page.
+      if (!body.business_id && !body.include_business) {
+        listings = listings.filter((l: any) => !l.business_id);
+      }
       if (body.price_min_cents != null) {
         const min = Number(body.price_min_cents);
         listings = listings.filter((l: any) => l.price_cents != null && l.price_cents >= min);

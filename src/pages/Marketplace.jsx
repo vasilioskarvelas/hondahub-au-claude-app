@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { Search, Plus, Package, SlidersHorizontal, X } from "lucide-react";
+import { Search, Plus, Package, SlidersHorizontal, X, Store } from "lucide-react";
 
 const ENGINE_CODES = [
   { v: "d_series", l: "D" },
@@ -90,6 +90,27 @@ export default function Marketplace() {
           <Plus className="h-4 w-4" /> Post
         </button>
       </div>
+
+      {/* Business catalogues live in shops, not here — a single partner can list
+          thousands of products and would bury member posts. This keeps them one
+          tap away without crowding the board. */}
+      <Link
+        to="/businesses"
+        className="flex items-center justify-between rounded-2xl border border-border bg-card px-4 py-3 transition-colors hover:border-primary/50"
+      >
+        <div className="flex items-center gap-3">
+          <div className="rounded-xl bg-primary/15 p-2">
+            <Store className="h-4 w-4 text-primary" />
+          </div>
+          <div>
+            <p className="text-sm font-bold">Shop the businesses</p>
+            <p className="text-xs text-muted-foreground">
+              Parts suppliers, workshops and tuners — browse their full catalogues.
+            </p>
+          </div>
+        </div>
+        <span className="text-xs font-bold text-primary">Browse →</span>
+      </Link>
 
       {/* Search */}
       <div className="relative">
