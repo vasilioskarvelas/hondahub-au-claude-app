@@ -9,7 +9,8 @@
  * pricing, which is the field most likely to be mis-read by 100x.
  */
 
-import { mapWooProduct, wooPriceToCents, wooPageUrl, wooPagination } from "./woo-import.ts";
+import { mapWooProduct, wooPriceToCents, wooPageUrl, wooPagination, shopifyPublicPageUrl } from "./woo-import.ts";
+import { mapShopifyProduct } from "./store-import.ts";
 import {
   parseSitemapUrls, isSitemapIndexEntry, looksLikeProductUrl, parsePriceText,
   extractJsonLdBlocks, findJsonLdProduct, fromJsonLdProduct, fromMetaTags,
@@ -256,4 +257,37 @@ Deno.test("absolutiseUrl resolves and rejects safely", () => {
   eq(absolutiseUrl("https://cdn.com/a.jpg", "https://x.com/p/1"), "https://cdn.com/a.jpg");
   eq(absolutiseUrl("javascript:alert(1)", "https://x.com/p/1"), null, "non-http scheme rejected");
   eq(absolutiseUrl("", "https://x.com/p/1"), null);
+});
+
+// --- Shopify public storefront feed ---------------------------------------------
+
+Deno.test("shopifyPublicPageUrl builds a public feed URL", () => {
+  eq(shopifyPublicPageUrl("https://www.spoolup.com.au/", 1), "https://www.spoolup.com.au/products.json?limit=250&page=1");
+  eq(shopifyPublicPageUrl("https://shop.com", 3), "https://shop.com/products.json?limit=250&page=3");
+  eq(shopifyPublicPageUrl("https://shop.com", 0), "https://shop.com/products.json?limit=250&page=1", "page floors at 1");
+});
+
+Deno.test("mapShopifyProduct handles the public feed shape", () => {
+  // Real shape from spoolup.com.au/products.json. Note tags is an ARRAY here,
+  // where the Admin API sends a comma-joined string, and there is no barcode.
+  const publicProduct = {
+    id: 10520327815455,
+    title: "K20 AND K24 AUTO BELT TENSIONER",
+    handle: "k20-and-k24-auto-belt-tensioner",
+    body_html: "<p><strong>Dayco Automatic Belt Tensioner &#8211; Honda K-Series K20 &amp; K24</strong></p>",
+    vendor: "Dayco",
+    product_type: "Engine",
+    tags: ["honda", "k-series"],
+    variants: [{ sku: "DAY-89642", price: "165.00" }],
+    images: [{ src: "https://cdn.shopify.com/s/files/1/x.jpg" }],
+  };
+  const m = mapShopifyProduct(publicProduct, { id: "c1", business_id: "b1", store_domain: "www.spoolup.com.au" });
+  eq(m.external_id, "10520327815455");
+  eq(m.title, "K20 AND K24 AUTO BELT TENSIONER");
+  eq(m.price_cents, 16500);
+  eq(m.sku, "DAY-89642");
+  eq(m.brand, "Dayco");
+  eq(m.manufacturer_part_number, null, "public feed has no barcode");
+  eq(m.description?.includes("Dayco Automatic Belt Tensioner – Honda K-Series K20 & K24"), true, "entities decoded");
+  eq(m.category, "engine");
 });

@@ -10,7 +10,7 @@ import {
 } from "../../shared/store-import.ts";
 import { normaliseWebsite, fingerprintPlatform, recommendImportMethod } from "../../shared/platform-detect.ts";
 import { parseCsv, detectColumns, mapCsvRow, previewCsv, CSV_MAX_BYTES, CSV_MAX_ROWS } from "../../shared/csv-import.ts";
-import { mapWooProduct, wooPageUrl, wooPagination } from "../../shared/woo-import.ts";
+import { mapWooProduct, wooPageUrl, wooPagination, shopifyPublicPageUrl, SHOPIFY_PUBLIC_PAGE_SIZE } from "../../shared/woo-import.ts";
 import { buildCompatPrompt, validateCompatResult, COMPAT_SCHEMA, COMPAT_BATCH } from "../../shared/compat-extract.ts";
 import {
   parseSitemapUrls, isSitemapIndexEntry, looksLikeProductUrl,
@@ -121,6 +121,30 @@ async function fetchWooBatch(conn: any, cursor: string | null): Promise<{ mapped
     mapped: list.map((p) => mapWooProduct(p, conn)).filter(Boolean),
     nextCursor: more ? String(page + 1) : null,
     total,
+  };
+}
+
+/**
+ * Read one page of a Shopify catalogue from the PUBLIC storefront feed.
+ *
+ * No credentials involved. Used whenever the store exposes /products.json,
+ * which most do; the OAuth path remains for stores that have disabled it.
+ */
+async function fetchShopifyPublicBatch(conn: any, cursor: string | null): Promise<{ mapped: any[]; nextCursor: string | null; total: number | null }> {
+  const page = cursor ? Number(cursor) : 1;
+  const origin = /^https?:\/\//i.test(conn.store_domain) ? conn.store_domain : `https://`;
+  const res = await fetchWithTimeout(shopifyPublicPageUrl(origin, page), {
+    headers: { Accept: "application/json", "User-Agent": UA },
+  });
+  if (!res.ok) throw new Error(`store returned `);
+  const payload: any = await res.json();
+  const list: any[] = Array.isArray(payload?.products) ? payload.products : [];
+  // The feed carries no total, so a short page is what signals the end.
+  const more = list.length >= SHOPIFY_PUBLIC_PAGE_SIZE;
+  return {
+    mapped: list.map((p) => mapShopifyProduct(p, conn)).filter((m) => m && m.external_id && m.title),
+    nextCursor: more ? String(page + 1) : null,
+    total: null,
   };
 }
 
@@ -268,10 +292,9 @@ Deno.serve(async (req) => {
       // Only Shopify holds a stored credential, so only Shopify needs the
       // encryption key. WooCommerce and website scanning read public data.
       let encKey: string | undefined;
-      if (conn.platform === StorePlatform.SHOPIFY) {
+      if (conn.platform === StorePlatform.SHOPIFY && conn.shopify_access_token) {
         encKey = secrets.get("STORE_TOKEN_ENC_KEY");
         if (!encKey) return err("ENCRYPTION_NOT_CONFIGURED", 503, { secret: "STORE_TOKEN_ENC_KEY" });
-        if (!conn.shopify_access_token) return err("CONNECTION_NOT_AUTHENTICATED", 409);
       }
 
       let runId: string;
@@ -309,7 +332,11 @@ Deno.serve(async (req) => {
       // ---- fetch one batch, however this store is read ----
       let batch: { mapped: any[]; nextCursor: string | null; total: number | null };
       try {
-        if (conn.platform === StorePlatform.SHOPIFY) {
+        if (conn.platform === StorePlatform.SHOPIFY && !conn.shopify_access_token) {
+          // No stored credential means this store was connected via its public
+          // feed rather than OAuth.
+          batch = await fetchShopifyPublicBatch(conn, cursor);
+        } else if (conn.platform === StorePlatform.SHOPIFY) {
           const token = await decryptToken(conn.shopify_access_token, encKey!);
           const url = `https://${conn.store_domain}/admin/api/${SHOPIFY_API_VERSION}/products.json?limit=${PAGE_SIZE}` +
             (cursor ? `&page_info=${encodeURIComponent(cursor)}` : "");
@@ -432,14 +459,34 @@ Deno.serve(async (req) => {
       res.headers.forEach((v, k) => { headers[k] = v; });
       const rec = recommendImportMethod(fingerprintPlatform(html, headers, res.url || site));
 
+      // A Shopify store usually publishes /products.json openly. When it does we
+      // connect it like any other feed — no Partner app, no OAuth round-trip and
+      // nothing for the business to configure. OAuth is only needed when that
+      // feed has been disabled.
       if (rec.platform === "shopify") {
-        return json({
-          ok: true, requires_oauth: true, ...rec,
-          message: "This is a Shopify store — connect it with the Shopify button so we can read it securely.",
-        });
+        let publicFeed = false;
+        try {
+          const probe = await fetchWithTimeout(shopifyPublicPageUrl(site, 1, 1), {
+            headers: { Accept: "application/json", "User-Agent": UA },
+          });
+          if (probe.ok) {
+            const body: any = await probe.json();
+            publicFeed = Array.isArray(body?.products);
+          }
+        } catch {
+          publicFeed = false;
+        }
+        if (!publicFeed) {
+          return json({
+            ok: true, requires_oauth: true, ...rec,
+            message: "This Shopify store does not publish a public product feed, so it has to be connected with the Shopify button instead.",
+          });
+        }
       }
 
-      const platform = rec.platform === "woocommerce" ? StorePlatform.WOOCOMMERCE : StorePlatform.WEBSITE;
+      const platform = rec.platform === "shopify"
+        ? StorePlatform.SHOPIFY
+        : rec.platform === "woocommerce" ? StorePlatform.WOOCOMMERCE : StorePlatform.WEBSITE;
       const host = new URL(site).hostname;
       const existing = (await S.BusinessStoreConnection.filter({ business_id, platform }))
         .find((c: any) => c.connection_status !== ConnectionStatus.DISCONNECTED);
@@ -457,9 +504,9 @@ Deno.serve(async (req) => {
 
       return json({
         ok: true, requires_oauth: false, connection_id: conn.id, ...rec,
-        message: rec.platform === "woocommerce"
-          ? "Connected. We can read your catalogue directly — start the import when you're ready."
-          : "Connected. We'll read your product pages one by one, which takes a little longer.",
+        message: rec.platform === "website"
+          ? "Connected. We'll read your product pages one by one, which takes a little longer."
+          : "Connected. We can read your catalogue directly — start the import when you're ready.",
       });
     }
 

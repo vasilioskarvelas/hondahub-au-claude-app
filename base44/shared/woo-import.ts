@@ -129,3 +129,32 @@ export function wooPagination(headers: { get(name: string): string | null }): { 
     totalPages: num(headers.get("x-wp-totalpages")),
   };
 }
+
+// ============================================================================
+// Shopify public storefront feed
+//
+// Most Shopify stores expose /products.json publicly — the same feed that powers
+// their own storefront. It carries title, body_html, vendor, tags, variants with
+// prices and SKUs, and images: everything the import needs.
+//
+// That matters a lot for onboarding. The Admin API needs a Partner app and an
+// OAuth round-trip; this needs nothing at all, so a Shopify partner is connected
+// by pasting their website, exactly like WooCommerce. OAuth stays as the
+// fallback for stores that have the public feed disabled, and for anything
+// needing data the public feed omits.
+//
+// The payload shape matches the Admin API closely enough that mapShopifyProduct
+// handles both. Two differences worth knowing: `tags` is an array here and a
+// comma-joined string on the Admin API (the mapper stringifies either), and
+// variant `barcode` is admin-only, so manufacturer_part_number stays null.
+// ============================================================================
+
+export const SHOPIFY_PUBLIC_PATH = "/products.json";
+/** Shopify caps products.json at 250 per page. */
+export const SHOPIFY_PUBLIC_PAGE_SIZE = 250;
+
+/** Build the public feed URL for a given 1-based page. */
+export function shopifyPublicPageUrl(origin: string, page: number, perPage = SHOPIFY_PUBLIC_PAGE_SIZE): string {
+  const base = String(origin || "").replace(/\/+$/, "");
+  return `${base}${SHOPIFY_PUBLIC_PATH}?limit=${perPage}&page=${Math.max(1, page)}`;
+}
