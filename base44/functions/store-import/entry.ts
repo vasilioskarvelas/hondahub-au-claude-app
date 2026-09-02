@@ -4,35 +4,43 @@ import { json, err } from "../../shared/http.ts";
 import {
   requireBusinessStoreAccess, accessibleBusinessIds, canAccessBusiness,
   ConnectionStatus, SyncStatus, ImportItemStatus,
+  FieldProvenance,
   StorePlatform, SYNC_MAX_PRODUCTS, SYNC_FETCH_TIMEOUT_MS,
   mapShopifyProduct, detectDuplicate, stageStatus,
 } from "../../shared/store-import.ts";
 import { normaliseWebsite, fingerprintPlatform, recommendImportMethod } from "../../shared/platform-detect.ts";
 import { parseCsv, detectColumns, mapCsvRow, previewCsv, CSV_MAX_BYTES, CSV_MAX_ROWS } from "../../shared/csv-import.ts";
 import { mapWooProduct, wooPageUrl, wooPagination } from "../../shared/woo-import.ts";
+import { buildCompatPrompt, validateCompatResult, COMPAT_SCHEMA, COMPAT_BATCH } from "../../shared/compat-extract.ts";
 import {
   parseSitemapUrls, isSitemapIndexEntry, looksLikeProductUrl,
   extractJsonLdBlocks, findJsonLdProduct, fromJsonLdProduct, fromMetaTags,
   buildExtractionPrompt, mapExtractedProduct, EXTRACTION_SCHEMA, EXTRACT_MAX_PAGES,
 } from "../../shared/web-extract.ts";
 
-/** Identify honestly to the stores we read, rather than impersonating a browser. */
-const UA = "HondaHubStoreImport/1.0 (+https://hondahub-au-claude-app.base44.app)";
 import { decryptToken } from "../../shared/store-crypto.ts";
 import { createImportedListing } from "../../shared/marketplace.ts";
+
+/** Identify honestly to the stores we read, rather than impersonating a browser. */
+const UA = "HondaHubStoreImport/1.0 (+https://hondahub-au-claude-app.base44.app)";
 
 /**
  * StoreImportService (ADR-046 Phase 1 — product import pipeline).
  *
- * Admin-only (Phase 1 feature flag), same gate as StoreConnectorService.
+ * Business-scoped: partners manage their own catalogue, admins may act on any.
  *
  * Actions:
- *   - startSync     : begin a sync on a VERIFIED connection; stages the first page.
- *   - continueSync  : stage the next page of an in-progress sync.
- *   - cancelSync    : request cancellation; the next batch stops cleanly.
+ *   - detectPlatform / connectWebsite : identify a store and connect it in one step
+ *   - startSync / continueSync / cancelSync : paginated catalogue import
+ *   - previewCsv / importCsv          : the manual fallback route
+ *   - extractCompatibility            : AI fitment suggestions for staged items
  *   - listImportItems / getImportItem
- *   - approveItem   : create a DRAFT MarketplaceListing via the approved path.
+ *   - approveItem                     : create a DRAFT MarketplaceListing
  *   - rejectItem
+ *
+ * Import routes, in the order a business should meet them: a platform API
+ * (Shopify OAuth, WooCommerce Store API), then reading the website page by
+ * page, and only then a spreadsheet. Automation first; CSV is the last resort.
  *
  * Sync is PAGINATED ACROSS INVOCATIONS rather than looping to completion in one
  * request. A store with hundreds of products would otherwise risk hitting the
@@ -53,6 +61,11 @@ import { createImportedListing } from "../../shared/marketplace.ts";
 
 const SHOPIFY_API_VERSION = "2024-01";
 const PAGE_SIZE = 250;
+
+/** Parse a stored JSON blob without throwing on malformed content. */
+function safeJson(s: unknown): Record<string, any> {
+  try { const v = JSON.parse(String(s || "{}")); return v && typeof v === "object" ? v : {}; } catch { return {}; }
+}
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -556,6 +569,80 @@ Deno.serve(async (req) => {
       if (conn.sync_status !== SyncStatus.SYNCING) return err("NO_ACTIVE_SYNC", 409, { sync_status: conn.sync_status });
       await S.BusinessStoreConnection.update(conn.id, { sync_cancel_requested_at: nowIso() });
       return json({ ok: true, cancel_requested: true });
+    }
+
+    // ---- extractCompatibility ----
+    // Works out which Hondas each staged product fits, so a reviewer confirms a
+    // suggestion instead of filling every field by hand. Run in batches: each
+    // item is one LLM call, so a whole catalogue cannot go through in one
+    // request. The caller repeats while has_more is true.
+    //
+    // This NEVER approves anything. At best it moves an item from
+    // needs_attention to ready_for_approval — a human still approves every
+    // product before it can be listed. Fitment is exactly the kind of claim that
+    // hurts someone when it is wrong, so the model advises and a person decides.
+    if (action === "extractCompatibility") {
+      const { connection_id } = body;
+      if (!connection_id) return err("VALIDATION_FAILED", 422, { connection_id: "required" });
+      const conn = await S.BusinessStoreConnection.get(connection_id).catch(() => null);
+      if (!conn) return err("RESOURCE_NOT_FOUND", 404);
+      if (!canAccessBusiness(allowed, conn.business_id)) return err("PERMISSION_DENIED", 403);
+
+      // Only items still awaiting a decision, and only those not already scored.
+      const pool = await S.StoreImportItem.filter({ connection_id }, "-created_date", 500);
+      const pending = pool.filter((i: any) =>
+        i.status !== ImportItemStatus.APPROVED &&
+        i.status !== ImportItemStatus.REJECTED &&
+        (i.compatibility_confidence_score === null || i.compatibility_confidence_score === undefined)
+      );
+      const batch = pending.slice(0, COMPAT_BATCH);
+
+      let updated = 0, skipped = 0, failed = 0;
+      for (const item of batch) {
+        try {
+          const raw = await base44.integrations.Core.InvokeLLM({
+            prompt: buildCompatPrompt(item),
+            response_json_schema: COMPAT_SCHEMA,
+          }).catch(() => null);
+          const result = validateCompatResult(raw);
+          // A reply we cannot trust leaves the item untouched rather than
+          // overwriting it with nothing.
+          if (!result) { skipped++; continue; }
+
+          const { reasoning, ...fields } = result;
+          const merged = { ...item, ...fields };
+          const provenance = { ...(item.field_provenance || {}) };
+          for (const f of [
+            "compatible_models", "compatible_chassis_codes", "compatible_engine_families",
+            "compatible_year_from", "compatible_year_to", "honda_compatibility_status",
+          ]) provenance[f] = FieldProvenance.AI_INFERRED;
+
+          await S.StoreImportItem.update(item.id, {
+            ...fields,
+            field_provenance: provenance,
+            // A flagged duplicate stays flagged: compatibility does not resolve that.
+            status: item.status === ImportItemStatus.POSSIBLE_DUPLICATE
+              ? item.status
+              : stageStatus(merged, null),
+            // Deliberately NOT written to sync_error: reasoning is not a failure,
+            // and the UI renders that field as one. The reviewer sees the derived
+            // status and confidence instead, which is the actionable part.
+            source_raw: JSON.stringify({
+              ...(safeJson(item.source_raw)),
+              ai_fitment_reasoning: reasoning || null,
+            }).slice(0, 4000),
+          });
+          updated++;
+        } catch {
+          failed++; // per-item isolation
+        }
+      }
+
+      return json({
+        ok: true, updated, skipped, failed,
+        remaining: Math.max(0, pending.length - batch.length),
+        has_more: pending.length > batch.length,
+      });
     }
 
     // ---- listImportItems ----

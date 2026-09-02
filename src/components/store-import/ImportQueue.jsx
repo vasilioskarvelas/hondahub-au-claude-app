@@ -1,16 +1,17 @@
 import React from "react";
 import { base44 } from "@/api/base44Client";
-import { Loader2, RefreshCw, Check, X, AlertCircle, Copy, PackageSearch, ExternalLink } from "lucide-react";
+import { Loader2, RefreshCw, Check, X, AlertCircle, Copy, PackageSearch, ExternalLink, Sparkles } from "lucide-react";
 
 /**
  * ImportQueue — review, correct and resolve staged StoreImportItems
  * (ADR-046 Phase 1, Section 7).
  *
- * Every item currently stages as needs_attention because compatibility is not
- * auto-extracted (no AI layer exists — a fabricated confidence score would be
- * worse than none). So this queue is not a rubber stamp: the reviewer sets
- * Honda compatibility themselves before approving, and anything they change is
- * recorded as business_edited provenance by the backend.
+ * "Suggest fitment" asks the model which Hondas each product fits and fills the
+ * ADR-043 arrays. That is a SUGGESTION: it can move an item from needs_attention
+ * to ready_for_approval, never to approved. The reviewer confirms or corrects
+ * every product, and anything they change is recorded as business_edited
+ * provenance. Fitment is the kind of claim that hurts a buyer when it is wrong,
+ * so a person stays in the loop by design.
  *
  * Approving creates a DRAFT MarketplaceListing. It does not publish.
  */
@@ -174,6 +175,13 @@ function ItemRow({ item, onResolved }) {
               Possible duplicate — matched on {item.duplicate_match_method?.replace(/_/g, " ")}
             </p>
           )}
+          {item.honda_compatibility_status && item.honda_compatibility_status !== "unknown" && (
+            <p className="mt-1 text-xs text-sky-500">
+              Suggested fit: {item.honda_compatibility_status.replace(/_/g, " ")}
+              {item.compatibility_confidence_score != null ? ` (${item.compatibility_confidence_score}% confidence)` : ""}
+              {item.compatible_models?.length ? ` · ${item.compatible_models.join(", ")}` : ""}
+            </p>
+          )}
           {item.sync_error && (
             <p className="mt-1 text-xs text-destructive">{item.sync_error}</p>
           )}
@@ -316,6 +324,8 @@ export default function ImportQueue({ connection }) {
   const [status, setStatus] = React.useState("needs_attention");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState(null);
+  const [extracting, setExtracting] = React.useState(false);
+  const [extractProgress, setExtractProgress] = React.useState(null);
 
   const load = React.useCallback(async () => {
     if (!connection?.id) { setItems([]); return; }
@@ -339,6 +349,35 @@ export default function ImportQueue({ connection }) {
   }, [connection?.id, status]);
 
   React.useEffect(() => { load(); }, [load]);
+
+  // Extraction runs in server-side batches (one LLM call per product), so the
+  // client loops until nothing is left. Bounded so a bad has_more cannot spin.
+  const runExtraction = async () => {
+    if (extracting) return;
+    setExtracting(true);
+    setExtractProgress(null);
+    try {
+      let updated = 0, skipped = 0, rounds = 0;
+      let more = true;
+      while (more && rounds < 100) {
+        const res = await base44.functions.invoke("store-import", {
+          action: "extractCompatibility", connection_id: connection.id,
+        });
+        const data = res?.data || res;
+        if (!data?.ok) throw new Error(data?.error?.message || data?.error || "Could not suggest fitment.");
+        updated += data.updated || 0;
+        skipped += data.skipped || 0;
+        more = !!data.has_more;
+        rounds += 1;
+        setExtractProgress({ updated, skipped, remaining: data.remaining || 0 });
+      }
+      await load();
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally {
+      setExtracting(false);
+    }
+  };
 
   if (!connection) {
     return (
@@ -368,6 +407,34 @@ export default function ImportQueue({ connection }) {
         {connection.store_name || connection.store_domain} · approving creates a{" "}
         <strong>draft</strong> listing, which still has to be published separately.
       </p>
+
+      <div className="rounded-xl border border-border bg-background/50 p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-sm font-bold">Suggest Honda fitment</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Reads each product and suggests which Hondas it fits, so you confirm
+              rather than fill in every field. Suggestions only — you still approve
+              each product.
+            </p>
+          </div>
+          <button
+            onClick={runExtraction}
+            disabled={extracting}
+            className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground disabled:opacity-50"
+          >
+            {extracting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+            {extracting ? "Working…" : "Suggest fitment"}
+          </button>
+        </div>
+        {extractProgress && (
+          <p className="mt-2 text-xs text-sky-500">
+            {extractProgress.updated} updated
+            {extractProgress.skipped ? ` · ${extractProgress.skipped} unclear` : ""}
+            {extractProgress.remaining ? ` · ${extractProgress.remaining} to go` : " · done"}
+          </p>
+        )}
+      </div>
 
       <div className="flex flex-wrap gap-1.5">
         {STATUS_FILTERS.map((f) => (
