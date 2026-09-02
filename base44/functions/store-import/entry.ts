@@ -19,7 +19,7 @@ import {
 } from "../../shared/web-extract.ts";
 
 import { decryptToken } from "../../shared/store-crypto.ts";
-import { createImportedListing } from "../../shared/marketplace.ts";
+import { createImportedListing, publishImportedListing } from "../../shared/marketplace.ts";
 
 /** Identify honestly to the stores we read, rather than impersonating a browser. */
 const UA = "HondaHubStoreImport/1.0 (+https://hondahub-au-claude-app.base44.app)";
@@ -103,6 +103,8 @@ const WEBSITE_BATCH = 8;
 /** Bulk approvals per invocation. Each one creates a listing, so keep it modest
  * and let the client loop rather than risking a timeout mid-batch. */
 const APPROVE_BATCH = 25;
+/** Publishes per invocation. Same reasoning as APPROVE_BATCH. */
+const PUBLISH_BATCH = 50;
 
 /**
  * Read one page of a WooCommerce catalogue via the public Store API.
@@ -850,6 +852,49 @@ Deno.serve(async (req) => {
       return json({
         ok: true, approved, failed: failures.length, failures: failures.slice(0, 10),
         remaining: remaining.length, has_more: remaining.length > 0,
+      });
+    }
+
+    // ---- publishApproved ----
+    // Approving an item creates a DRAFT, which is invisible on the storefront by
+    // design. This is the separate, explicit step that makes those drafts live —
+    // the last human decision before products reach buyers.
+    //
+    // Publishing goes through the same shared path as a member publishing their
+    // own listing, including tier routing, so a bulk run cannot acquire looser
+    // rules than the single-listing flow.
+    if (action === "publishApproved") {
+      const { connection_id } = body;
+      if (!connection_id) return err("VALIDATION_FAILED", 422, { connection_id: "required" });
+      const conn = await S.BusinessStoreConnection.get(connection_id).catch(() => null);
+      if (!conn) return err("RESOURCE_NOT_FOUND", 404);
+      if (!canAccessBusiness(allowed, conn.business_id)) return err("PERMISSION_DENIED", 403);
+
+      const posterId = await resolvePosterId(base44, conn.business_id);
+      if (!posterId) return err("IMPORT_POSTER_UNRESOLVED", 422, { message: "This business has no active owner." });
+      const poster = await S.User.get(posterId).catch(() => null);
+      if (!poster) return err("IMPORT_POSTER_UNRESOLVED", 422, { message: "The business owner's account could not be loaded." });
+
+      // Only drafts this connection produced — never a listing posted by hand.
+      const drafts = (await S.MarketplaceListing.filter(
+        { imported_from_connection_id: connection_id, status: "draft" }, "-created_date", 500,
+      )).slice(0, PUBLISH_BATCH);
+
+      let published = 0, pendingReview = 0;
+      const failures: any[] = [];
+      for (const listing of drafts) {
+        const r = await publishImportedListing(base44, { listing, poster });
+        if (!r.ok) { failures.push({ listing_id: listing.id, title: listing.title, error: r.error.code }); continue; }
+        if (r.status === "pending_review") pendingReview++;
+        else published++;
+      }
+      const left = await S.MarketplaceListing.filter(
+        { imported_from_connection_id: connection_id, status: "draft" }, "-created_date", 500,
+      );
+      return json({
+        ok: true, published, pending_review: pendingReview,
+        failed: failures.length, failures: failures.slice(0, 10),
+        remaining: left.length, has_more: left.length > 0,
       });
     }
 

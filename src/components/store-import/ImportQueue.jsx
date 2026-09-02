@@ -1,6 +1,6 @@
 import React from "react";
 import { invokeFn } from "@/lib/invokeFn";
-import { Loader2, RefreshCw, Check, X, AlertCircle, Copy, PackageSearch, ExternalLink, Sparkles } from "lucide-react";
+import { Loader2, RefreshCw, Check, X, AlertCircle, Copy, PackageSearch, ExternalLink, Sparkles, Rocket } from "lucide-react";
 
 /**
  * ImportQueue — review, correct and resolve staged StoreImportItems
@@ -183,9 +183,12 @@ function ItemRow({ item, onResolved }) {
             <p className="mt-1 text-xs text-destructive">{item.sync_error}</p>
           )}
           {item.approved_listing_id && (
-            <p className="mt-1 text-xs text-emerald-500">
-              Draft listing created ({item.approved_listing_id})
-            </p>
+            <a
+              href={`/marketplace/`}
+              className="mt-1 inline-flex items-center gap-1 text-xs text-emerald-500 hover:underline"
+            >
+              <ExternalLink className="h-3 w-3" /> View listing
+            </a>
           )}
         </div>
 
@@ -341,6 +344,8 @@ export default function ImportQueue({ connection }) {
   const [extracting, setExtracting] = React.useState(false);
   const [extractProgress, setExtractProgress] = React.useState(null);
   const [approving, setApproving] = React.useState(false);
+  const [publishing, setPublishing] = React.useState(false);
+  const [publishResult, setPublishResult] = React.useState(null);
   const [approveResult, setApproveResult] = React.useState(null);
   const [readyCount, setReadyCount] = React.useState(0);
 
@@ -365,6 +370,34 @@ export default function ImportQueue({ connection }) {
   }, [connection?.id, status]);
 
   React.useEffect(() => { load(); }, [load]);
+
+  // Publishing is the step that actually puts products in front of buyers, so it
+  // is separate from approving and never implied by it.
+  const publishAll = async () => {
+    if (publishing) return;
+    setPublishing(true);
+    setPublishResult(null);
+    setError(null);
+    try {
+      let published = 0, pending = 0, failed = 0, rounds = 0;
+      let more = true;
+      while (more && rounds < 200) {
+        const r = await invokeFn("store-import", { action: "publishApproved", connection_id: connection.id });
+        if (!r.ok) throw new Error(r.error || "Could not publish.");
+        published += r.data.published || 0;
+        pending += r.data.pending_review || 0;
+        failed += r.data.failed || 0;
+        more = !!r.data.has_more && ((r.data.published || 0) + (r.data.pending_review || 0)) > 0;
+        rounds += 1;
+        setPublishResult({ published, pending, failed });
+      }
+      await load();
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally {
+      setPublishing(false);
+    }
+  };
 
   // Bulk approve, looping the server batches. Only items already marked ready
   // are touched — see the backend note on why this is not "approve everything".
@@ -477,8 +510,36 @@ export default function ImportQueue({ connection }) {
               {approving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
               {approving ? "Approving…" : "Approve all ready"}
             </button>
+            <button
+              onClick={publishAll}
+              disabled={publishing || approving || extracting}
+              className="inline-flex items-center gap-2 rounded-lg border border-sky-500/40 px-3 py-1.5 text-xs font-bold text-sky-500 disabled:opacity-50"
+            >
+              {publishing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Rocket className="h-3.5 w-3.5" />}
+              {publishing ? "Publishing…" : "Publish approved"}
+            </button>
           </div>
         </div>
+
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          Approving creates <strong>drafts</strong>, which stay invisible on the storefront.
+          <strong> Publish approved</strong> is what puts them in front of buyers.
+        </p>
+
+        {publishResult && (
+          <div className="mt-1 text-xs">
+            <span className="text-sky-500">{publishResult.published} now live</span>
+            {publishResult.pending > 0 && (
+              <span className="text-amber-500"> · {publishResult.pending} sent to review</span>
+            )}
+            {publishResult.failed > 0 && (
+              <span className="text-destructive"> · {publishResult.failed} failed</span>
+            )}
+            {publishResult.published === 0 && publishResult.pending === 0 && publishResult.failed === 0 && (
+              <span className="text-muted-foreground"> — no approved drafts waiting.</span>
+            )}
+          </div>
+        )}
 
         {approveResult && (
           <div className="mt-2 text-xs">

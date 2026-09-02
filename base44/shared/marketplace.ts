@@ -28,6 +28,8 @@
  * removals, via ModerationService.applyAction (Phase 05).
  */
 
+import { meetsCreationTier, accountInGoodStanding } from "./community.ts";
+
 import { awardSignalToUser } from "./trust-score.ts";
 import { SignalType, NotificationType } from "./identity.ts";
 import { createNotification } from "./notifications.ts";
@@ -634,4 +636,53 @@ export async function createImportedListing(
 
   const listing = await base44.asServiceRole.entities.MarketplaceListing.create(fields);
   return { ok: true, listing };
+}
+
+/**
+ * publishImportedListing — the one place a store-imported DRAFT becomes visible.
+ *
+ * Mirrors marketplace.publishListing exactly, including the tier routing: a
+ * poster below Trusted Member goes to pending_review rather than active, never
+ * rejected outright. It exists so bulk publishing cannot quietly acquire looser
+ * rules than the single-listing path a member uses.
+ *
+ * `poster` is the business owner the listing is attributed to — NOT the admin
+ * clicking publish. The tier decision must follow whoever is named as seller.
+ *
+ * Returns a result rather than throwing so a bulk run can report per-listing
+ * outcomes and keep going.
+ */
+export async function publishImportedListing(
+  base44: any,
+  opts: { listing: any; poster: any },
+): Promise<{ ok: true; status: string } | { ok: false; error: { code: string; message: string } }> {
+  const { listing, poster } = opts;
+  if (!listing) return { ok: false, error: { code: "RESOURCE_NOT_FOUND", message: "listing missing" } };
+  if (listing.status !== ListingStatus.DRAFT) {
+    return { ok: false, error: { code: "INVALID_STATE_TRANSITION", message: `already ${listing.status}` } };
+  }
+  if (!poster) {
+    return { ok: false, error: { code: "IMPORT_POSTER_UNRESOLVED", message: "no poster to publish as" } };
+  }
+  if (!accountInGoodStanding(poster)) {
+    return { ok: false, error: { code: "ACCOUNT_NOT_IN_GOOD_STANDING", message: "the seller's account is suspended or banned" } };
+  }
+
+  const now = new Date();
+  if (!meetsCreationTier(poster)) {
+    // Same routing as the member path: review, not refusal.
+    await base44.asServiceRole.entities.MarketplaceListing.update(listing.id, { status: ListingStatus.PENDING_REVIEW });
+    return { ok: true, status: ListingStatus.PENDING_REVIEW };
+  }
+  const upd: any = {
+    status: ListingStatus.ACTIVE,
+    published_at: listing.published_at || now.toISOString(),
+    expires_at: new Date(now.getTime() + LISTING_LIFETIME_MS).toISOString(),
+  };
+  if (listing.price_type === PriceType.AUCTION && listing.auction_duration_days) {
+    const pubAt = new Date(listing.published_at || now.toISOString());
+    upd.auction_ends_at = new Date(pubAt.getTime() + listing.auction_duration_days * 24 * 60 * 60 * 1000).toISOString();
+  }
+  await base44.asServiceRole.entities.MarketplaceListing.update(listing.id, upd);
+  return { ok: true, status: ListingStatus.ACTIVE };
 }
