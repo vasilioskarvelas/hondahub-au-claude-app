@@ -25,7 +25,7 @@ const b = (base44: any) => base44.asServiceRole;
 
 export interface JobResult {
   job_name: string;
-  status: "success" | "failure";
+  status: "success" | "failure" | "partial";
   alerts: number;
   alert_details?: string;
   summary: string;
@@ -154,12 +154,37 @@ export async function orphanedMediaCleanup(base44: any): Promise<JobResult> {
   const e = b(base44).entities;
   const referenced = new Set<string>();
   const collect = (rows: any[], ...fields: string[]) => { for (const r of rows) for (const f of fields) { const v = r[f]; if (v) referenced.add(v); } };
-  collect(await e.Post.list("-created_date", 1000), "media_id");
-  collect(await e.Vehicle.list("-created_date", 1000), "cover_media_id");
-  collect(await e.Event.list("-created_date", 1000), "cover_media_id");
-  collect(await e.Group.list("-created_date", 1000), "cover_media_id");
-  collect(await e.User.list("-created_date", 1000), "avatar_media_id", "cover_media_id");
-  const media = await e.Media.list("-created_date", 500);
+  const POSTS_L = 1000, VEHICLE_L = 1000, EVENT_L = 1000, GROUP_L = 1000, USER_L = 1000, MEDIA_L = 500;
+  const posts = await e.Post.list("-created_date", POSTS_L);
+  const vehicles = await e.Vehicle.list("-created_date", VEHICLE_L);
+  const events = await e.Event.list("-created_date", EVENT_L);
+  const groups = await e.Group.list("-created_date", GROUP_L);
+  const users = await e.User.list("-created_date", USER_L);
+  const media = await e.Media.list("-created_date", MEDIA_L);
+  // Fail safe: if any source list is truncated (returned exactly its limit), the
+  // referenced set may be incomplete and we could delete media still in use. Skip
+  // deletion for this run and report partial. Do not paginate in this change.
+  const truncated: string[] = [];
+  if (posts.length === POSTS_L) truncated.push("Post");
+  if (vehicles.length === VEHICLE_L) truncated.push("Vehicle");
+  if (events.length === EVENT_L) truncated.push("Event");
+  if (groups.length === GROUP_L) truncated.push("Group");
+  if (users.length === USER_L) truncated.push("User");
+  if (media.length === MEDIA_L) truncated.push("Media");
+  if (truncated.length > 0) {
+    return {
+      job_name: "orphaned_media_cleanup",
+      status: "partial",
+      alerts: 0,
+      summary: `skipped deletion: source list(s) possibly truncated (${truncated.join(", ")} returned exactly their limit); rerun after pagination is added`,
+      counts: { posts: posts.length, vehicles: vehicles.length, events: events.length, groups: groups.length, users: users.length, media: media.length, truncated_lists: truncated.length },
+    };
+  }
+  collect(posts, "media_id");
+  collect(vehicles, "cover_media_id");
+  collect(events, "cover_media_id");
+  collect(groups, "cover_media_id");
+  collect(users, "avatar_media_id", "cover_media_id");
   const graceMs = 7 * 24 * 60 * 60 * 1000;
   const now = Date.now();
   const orphanIds: string[] = [];

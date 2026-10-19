@@ -117,10 +117,6 @@
     {
       "function_name": "data-manager",
       "description": "Full CRUD operations across all Honda Hub entities \u2014 create, update, delete, bulk_create, bulk_update, bulk_delete, and upsert records on any entity. Use for fixing data issues, seeding test data, and maintaining platform health."
-    },
-    {
-      "function_name": "auto-sweep",
-      "description": "Automatically scans all platform entities for data quality issues (missing fields, null values, broken references), applies safe fixes, and saves a database_health report. Use to proactively detect and resolve data integrity problems."
     }
   ],
   "context_files": [],

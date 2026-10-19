@@ -24,7 +24,8 @@ Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
-    if (user && user.role !== "admin") return fail("PERMISSION_DENIED", 403);
+    if (!user) return fail("AUTH_REQUIRED", 401);
+    if (user.role !== "admin") return fail("PERMISSION_DENIED", 403);
 
     const body = await req.json().catch(() => ({}));
     const action = body.action;

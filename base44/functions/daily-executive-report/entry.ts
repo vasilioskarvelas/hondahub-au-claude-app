@@ -3,6 +3,9 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.38';
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
+    const user = await base44.auth.me().catch(() => null);
+    if (!user) return Response.json({ error: { code: "AUTH_REQUIRED" } }, { status: 401 });
+    if (user.role !== "admin") return Response.json({ error: { code: "PERMISSION_DENIED" } }, { status: 403 });
     const b = base44.asServiceRole;
 
     // Gather metrics from all entities
@@ -208,7 +211,6 @@ ${report.suggested_improvements?.map((i, idx) => `${idx + 1}. ${i}`).join('\n') 
       summary: report.executive_summary
     });
   } catch (error) {
-    console.error('Daily executive report error:', error);
-    return Response.json({ error: error.message, stack: error.stack }, { status: 500 });
+    return Response.json({ error: "INTERNAL_ERROR" }, { status: 500 });
   }
 });

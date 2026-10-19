@@ -10,6 +10,9 @@ import { runNotificationRetry } from "../../shared/notification-delivery.ts";
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
+    const user = await base44.auth.me().catch(() => null);
+    if (!user) return Response.json({ ok: false, error: { code: "AUTH_REQUIRED" } }, { status: 401 });
+    if (user.role !== "admin") return Response.json({ ok: false, error: { code: "PERMISSION_DENIED" } }, { status: 403 });
     const result = await runNotificationRetry(base44);
     return Response.json(result);
   } catch (error) {
